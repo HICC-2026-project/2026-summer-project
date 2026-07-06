@@ -4,7 +4,7 @@ AI 기반 커리어 추천 서비스의 Spring Boot 백엔드 프로젝트입니
 
 ## 기술 스택
 - Java 17 / Spring Boot 3.2
-- PostgreSQL 15 / Spring Data JPA / Flyway
+- PostgreSQL 16 / Spring Data JPA / Flyway
 - Spring Security + JWT + OAuth2 (카카오·구글)
 - Claude API (Anthropic) — 활동 추천 및 로드맵 생성
 - SpringDoc (Swagger UI)
@@ -20,9 +20,9 @@ AI 기반 커리어 추천 서비스의 Spring Boot 백엔드 프로젝트입니
 
 ```bash
 # 1. PostgreSQL 실행 후 DB 생성
-# - Docker로 실행 (권장, 설치 불필요):
+# - Docker로 실행 (권장, 설치 불필요) — 호스트 포트 5433 사용 (로컬 기존 Postgres와 충돌 방지):
 docker compose up -d
-# - 로컬에 PostgreSQL 15가 직접 설치되어 있다면:
+# - 로컬에 PostgreSQL이 이미 설치되어 있다면 (5432 사용 중):
 psql -U postgres -c "CREATE DATABASE career_db;"
 
 # 2. 시크릿 값 설정 — src/main/resources/application-local.yml 파일을
@@ -36,7 +36,8 @@ psql -U postgres -c "CREATE DATABASE career_db;"
 CLAUDE_API_KEY: sk-ant-발급받은키
 KAKAO_CLIENT_ID: 카카오_앱_REST_API_키
 KAKAO_CLIENT_SECRET: 카카오_클라이언트_시크릿
-DB_PASSWORD: 본인_로컬_postgres_비밀번호   # docker-compose 사용 시 1234
+DB_URL: jdbc:postgresql://localhost:5433/career_db   # docker-compose 사용 시 (로컬 설치 postgres는 5432 그대로 사용 가능)
+DB_PASSWORD: 본인_postgres_비밀번호   # docker-compose 사용 시 1234
 ```
 
 ```bash

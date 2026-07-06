@@ -1,13 +1,13 @@
 services:
   postgres:
-    image: postgres:15
+    image: postgres:16
     container_name: career-db
     environment:
       POSTGRES_DB: career_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 1234
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - career-db-data:/var/lib/postgresql/data
 
