@@ -78,14 +78,10 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- Flyway (DB 마이그레이션) -->
+        <!-- Flyway (DB 마이그레이션) - Spring Boot 3.2.5 관리 버전(9.22.3)은 PostgreSQL 지원이 flyway-core에 내장되어 있어 flyway-database-postgresql 모듈이 불필요 -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
 
         <!-- Lombok -->

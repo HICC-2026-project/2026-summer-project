@@ -1,0 +1,20 @@
+# Secrets (Notion 원칙: API 키는 절대 GitHub에 올리지 않는다)
+.env
+**/application-local.yml
+**/application-secret.yml
+
+# Maven build output
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
