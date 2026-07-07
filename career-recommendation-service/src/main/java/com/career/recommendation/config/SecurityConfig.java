@@ -1,8 +1,12 @@
 package com.career.recommendation.config;
 
+import com.career.recommendation.security.JwtAccessDeniedHandler;
+import com.career.recommendation.security.JwtAuthenticationEntryPoint;
+import com.career.recommendation.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -18,11 +22,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+    private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
+
     private static final String[] PUBLIC_URLS = {
             "/api/v1/auth/**",
             "/api/v1/activities/**",
             "/swagger-ui/**",
-            "/api-docs/**"
+            "/api-docs/**",
+            "/error"
     };
 
     @Bean
@@ -35,7 +44,11 @@ public class SecurityConfig {
                         .requestMatchers(PUBLIC_URLS).permitAll()
                         .anyRequest().authenticated()
                 )
-                // TODO: BE-3 — JwtAuthenticationFilter 추가 예정
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler(jwtAccessDeniedHandler)
+                )
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 

@@ -32,6 +32,7 @@ public class JwtTokenProvider {
 
     public String createAccessToken(UUID userId, String role) {
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(userId.toString())
                 .claim("role", role)
                 .issuedAt(new Date())
@@ -42,6 +43,7 @@ public class JwtTokenProvider {
 
     public String createRefreshToken(UUID userId) {
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(userId.toString())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + refreshTokenExpiration))
@@ -51,6 +53,14 @@ public class JwtTokenProvider {
 
     public UUID getUserIdFromToken(String token) {
         return UUID.fromString(parseClaims(token).getSubject());
+    }
+
+    public String getRoleFromToken(String token) {
+        return parseClaims(token).get("role", String.class);
+    }
+
+    public long getRefreshTokenExpiration() {
+        return refreshTokenExpiration;
     }
 
     public boolean validateToken(String token) {
