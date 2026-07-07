@@ -1,6 +1,6 @@
-# 커리어 추천 서비스 — Backend
+# Spec Road — Backend
 
-AI 기반 커리어 추천 서비스의 Spring Boot 백엔드 프로젝트입니다.
+AI 기반 커리어 추천 서비스 **Spec Road**의 Spring Boot 백엔드 프로젝트입니다.
 
 ## 기술 스택
 - Java 17 / Spring Boot 3.2

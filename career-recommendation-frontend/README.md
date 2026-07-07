@@ -1,6 +1,6 @@
-# 커리어 추천 서비스 — Frontend
+# Spec Road — Frontend
 
-Next.js(App Router) + Tailwind + shadcn/ui 기반 프론트엔드입니다.
+**Spec Road**의 Next.js(App Router) + Tailwind + shadcn/ui 기반 프론트엔드입니다.
 
 ## 기술 스택
 - Next.js 16 (App Router) / React 19 / TypeScript

@@ -16,7 +16,7 @@
     <artifactId>career-recommendation-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>career-recommendation-service</name>
-    <description>AI-based career recommendation service</description>
+    <description>Spec Road — AI-based career recommendation service</description>
 
     <properties>
         <java.version>17</java.version>
