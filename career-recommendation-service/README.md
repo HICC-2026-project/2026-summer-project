@@ -10,11 +10,11 @@ AI 기반 커리어 추천 서비스의 Spring Boot 백엔드 프로젝트입니
 - SpringDoc (Swagger UI)
 
 ## 팀 역할
-| 역할 | 담당 |
-|---|---|
-| BE-1 | AI/추천 엔진 (ClaudeService, RecommendationService, RoadmapService) |
-| BE-2 | DB/코어 (Entity, Repository, UserService, ActivityService, PasserService) |
-| BE-3 | API/인프라 (Controller, Security, JWT, OAuth2, 배포) |
+| 역할 | 담당자 | GitHub | 업무 |
+|---|---|---|---|
+| BE-1 | 최서영 | [@choiseoyoungo](https://github.com/choiseoyoungo) | AI/추천 엔진 (ClaudeService, RecommendationService, RoadmapService) |
+| BE-2 | 조재성 | [@wbfkr0980-tech](https://github.com/wbfkr0980-tech) | DB/코어 (Entity, Repository, UserService, ActivityService, PasserService) |
+| BE-3 | 이지우 | [@011201Leejiwoo](https://github.com/011201Leejiwoo) | API/인프라 (Controller, Security, JWT, OAuth2, 배포) |
 
 ## 로컬 실행
 
