@@ -10,6 +10,7 @@ AI 기반 커리어 추천 서비스 **Spec Road**입니다.
 - Spring Security + JWT + OAuth2 (카카오·구글)
 - Claude API (Anthropic) — 활동 추천 및 로드맵 생성
 - SpringDoc (Swagger UI)
+- Next.js 
 
 ## 팀 역할
 | 역할 | 담당자 | GitHub | 업무 |
