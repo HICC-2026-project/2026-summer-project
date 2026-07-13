@@ -5,7 +5,7 @@
 ## 기술 스택
 - Next.js 16 (App Router) / React 19 / TypeScript
 - Tailwind CSS v4 / shadcn/ui
-- 백엔드: `career-recommendation-service` (Spring Boot, 기본 `http://localhost:8080`)
+- 백엔드: `backend` (Spring Boot, 기본 `http://localhost:8080`)
 
 ## 로컬 실행
 
@@ -19,7 +19,7 @@ cp .env.local.example .env.local
 npm run dev
 ```
 
-http://localhost:3000 에서 확인. 백엔드(`career-recommendation-service`)를 먼저 띄워둬야 API 연동 화면이 정상 동작합니다.
+http://localhost:3000 에서 확인. 백엔드(`backend`)를 먼저 띄워둬야 API 연동 화면이 정상 동작합니다.
 
 ## 구조
 - `src/app` — 페이지 (App Router)
