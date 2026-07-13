@@ -128,3 +128,53 @@
     @apply font-sans;
   }
 }
+
+/* Spec Road prototype animations */
+.cf-scroll {
+  scrollbar-width: none;
+}
+.cf-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+@keyframes cfUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes cfSheet {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes cfFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes cfSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes cfGrow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
