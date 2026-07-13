@@ -16,7 +16,7 @@ export function LoginScreen({ onLoginKakao, onLoginDemo }: LoginScreenProps) {
         display: "flex",
         flexDirection: "column",
         padding: "0 28px",
-        background: "linear-gradient(180deg, #FBFBFE 0%, #F1EFFC 100%)",
+        background: "linear-gradient(180deg, #FBFBFE 0%, #EAF1FE 100%)",
         animation: "cfFade .5s ease both",
       }}
     >
@@ -26,7 +26,7 @@ export function LoginScreen({ onLoginKakao, onLoginDemo }: LoginScreenProps) {
             width: 60,
             height: 60,
             borderRadius: 18,
-            background: `linear-gradient(145deg, ${PRIMARY}, color-mix(in srgb, ${PRIMARY} 60%, #9d7bff))`,
+            background: `linear-gradient(145deg, ${PRIMARY}, color-mix(in srgb, ${PRIMARY} 60%, #7FA6FF))`,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

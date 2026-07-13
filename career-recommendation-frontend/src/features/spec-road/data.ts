@@ -1,6 +1,6 @@
 import type { CompareRow, Recommendation, RoadmapMilestone } from "./types";
 
-export const PRIMARY = "#5B4EE6";
+export const PRIMARY = "#2F6FED";
 
 export const RECOMMENDATIONS: Recommendation[] = [
   {
@@ -153,6 +153,19 @@ export const SIZE_OPTIONS: [string, string][] = [
 ];
 export const INDUSTRY_OPTIONS = ["IT·플랫폼", "금융", "제조", "게임"];
 export const LANG_TYPES = ["TOEIC", "OPIc", "TOEFL"];
+
+// 학교마다 학점 만점 기준(4.5/4.3/4.0)이 달라, 학교명 대신 만점 기준 자체를 직접 고르게 한다.
+// (학교명 수집·매핑 없이도 정확한 백분율 환산이 가능해 개인정보 이슈를 원천적으로 피할 수 있다.)
+export const GPA_SCALE_OPTIONS = [4.5, 4.3, 4.0];
+
+// TOEIC(LC+RC)·TOEFL(iBT) 만점. OPIc은 점수가 아닌 등급제라 만점 개념이 없다.
+export const LANG_MAX: Record<string, number | null> = {
+  TOEIC: 990,
+  TOEFL: 120,
+  OPIc: null,
+};
+
+export const OPIC_GRADES = ["NL", "NM", "NH", "IL", "IM1", "IM2", "IM3", "IH", "AL"];
 
 export const TODAY = new Date("2026-07-07");
 export const COMPARE_TARGET = "삼성 청년 SW 아카데미";

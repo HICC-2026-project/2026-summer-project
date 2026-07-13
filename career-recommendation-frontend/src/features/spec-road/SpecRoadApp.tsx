@@ -9,9 +9,10 @@ import { OnboardingScreen } from "./screens/OnboardingScreen";
 import type { OnboardStep, Screen, Spec, Tab, Target } from "./types";
 
 const INITIAL_SPEC: Spec = {
-  gpa: 3.8,
+  gpa: "3.8",
+  gpaScale: 4.5,
   langType: "TOEIC",
-  langScore: 850,
+  langScore: "850",
   certs: ["정보처리기사", "SQLD"],
   exps: ["스타트업 인턴 3개월", "교내 개발 동아리"],
 };
@@ -71,8 +72,8 @@ export function SpecRoadApp() {
 
   return (
     <div
+      className="min-h-dvh sm:p-6"
       style={{
-        minHeight: "100vh",
         display: "flex",
         justifyContent: "center",
         alignItems: "stretch",
@@ -82,15 +83,13 @@ export function SpecRoadApp() {
       }}
     >
       <div
+        className="h-dvh max-h-dvh sm:h-[min(100dvh,900px)] sm:rounded-[28px] sm:shadow-[0_30px_80px_rgba(24,22,44,0.16)]"
         style={{
           position: "relative",
           width: "100%",
-          maxWidth: 430,
-          height: "100vh",
-          maxHeight: "100vh",
+          maxWidth: 480,
           background: "#F6F6F9",
           overflow: "hidden",
-          boxShadow: "0 30px 80px rgba(24,22,44,0.16)",
         }}
       >
         {screen === "login" && (
@@ -114,7 +113,10 @@ export function SpecRoadApp() {
             onBack={handleOnboardBack}
             onNext={handleOnboardNext}
             onSetGpa={(v) => setSpec((s) => ({ ...s, gpa: v }))}
-            onSetLangType={(v) => setSpec((s) => ({ ...s, langType: v }))}
+            onSetGpaScale={(v) =>
+              setSpec((s) => ({ ...s, gpaScale: v, gpa: Number(s.gpa) > v ? String(v) : s.gpa }))
+            }
+            onSetLangType={(v) => setSpec((s) => ({ ...s, langType: v, langScore: "" }))}
             onSetLangScore={(v) => setSpec((s) => ({ ...s, langScore: v }))}
             onToggleCert={toggleCert}
             onToggleExp={toggleExp}

@@ -27,7 +27,7 @@ export function HomeTab({ target, onOpenDetail }: HomeTabProps) {
 
       <div
         style={{
-          background: `linear-gradient(140deg, ${PRIMARY}, color-mix(in srgb, ${PRIMARY} 62%, #a07dff))`,
+          background: `linear-gradient(140deg, ${PRIMARY}, color-mix(in srgb, ${PRIMARY} 62%, #7FA6FF))`,
           borderRadius: 22,
           padding: "20px 22px",
           color: "#fff",
