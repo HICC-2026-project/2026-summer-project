@@ -5,9 +5,12 @@ import { Chip } from "../components/Chip";
 import {
   CERT_OPTIONS,
   EXP_OPTIONS,
+  GPA_SCALE_OPTIONS,
   INDUSTRY_OPTIONS,
   JOB_OPTIONS,
+  LANG_MAX,
   LANG_TYPES,
+  OPIC_GRADES,
   PRIMARY,
   SIZE_OPTIONS,
 } from "../data";
@@ -20,9 +23,10 @@ interface OnboardingScreenProps {
   target: Target;
   onBack: () => void;
   onNext: () => void;
-  onSetGpa: (v: number) => void;
+  onSetGpa: (v: string) => void;
+  onSetGpaScale: (v: number) => void;
   onSetLangType: (v: string) => void;
-  onSetLangScore: (v: number) => void;
+  onSetLangScore: (v: string) => void;
   onToggleCert: (v: string) => void;
   onToggleExp: (v: string) => void;
   onSetJob: (v: string) => void;
@@ -57,6 +61,25 @@ const numberInputStyle: CSSProperties = {
   outline: "none",
 };
 
+// Sanitizes free-typed numeric input: strips invalid characters, keeps at most
+// one decimal point, and collapses leading zeros (e.g. "03" -> "3") without
+// blocking in-progress input like "" or "0.".
+function sanitizeNumericInput(raw: string, allowDecimal: boolean): string {
+  let value = raw.replace(allowDecimal ? /[^0-9.]/g : /[^0-9]/g, "");
+  if (allowDecimal) {
+    const firstDot = value.indexOf(".");
+    if (firstDot !== -1) {
+      value = value.slice(0, firstDot + 1) + value.slice(firstDot + 1).replace(/\./g, "");
+    }
+  }
+  return value.replace(/^0+(?=\d)/, "");
+}
+
+function clampToMax(value: string, max: number): string {
+  const num = Number(value);
+  return value !== "" && value !== "." && !Number.isNaN(num) && num > max ? String(max) : value;
+}
+
 export function OnboardingScreen({
   step,
   spec,
@@ -64,6 +87,7 @@ export function OnboardingScreen({
   onBack,
   onNext,
   onSetGpa,
+  onSetGpaScale,
   onSetLangType,
   onSetLangScore,
   onToggleCert,
@@ -74,6 +98,7 @@ export function OnboardingScreen({
 }: OnboardingScreenProps) {
   const onboardPct = step === 0 ? "50%" : "100%";
   const onboardCta = step === 0 ? "다음" : "분석 시작하기";
+  const langMax = LANG_MAX[spec.langType] ?? null;
 
   return (
     <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", background: "#F6F6F9" }}>
@@ -123,15 +148,30 @@ export function OnboardingScreen({
 
           <div style={cardStyle}>
             <label style={fieldLabelStyle}>학점 (GPA)</label>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 12 }}>
               <input
                 value={spec.gpa}
-                onChange={(e) => onSetGpa(Number(e.target.value))}
-                type="number"
-                step="0.01"
+                onChange={(e) => {
+                  const sanitized = clampToMax(sanitizeNumericInput(e.target.value, true), spec.gpaScale);
+                  onSetGpa(sanitized);
+                }}
+                type="text"
+                inputMode="decimal"
                 style={{ ...numberInputStyle, width: 92 }}
               />
-              <span style={{ fontSize: 17, fontWeight: 700, color: "#9797A1" }}>/ 4.5</span>
+              <span style={{ fontSize: 17, fontWeight: 700, color: "#9797A1" }}>/ {spec.gpaScale}</span>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {GPA_SCALE_OPTIONS.map((scale) => (
+                <Chip
+                  key={scale}
+                  selected={spec.gpaScale === scale}
+                  onClick={() => onSetGpaScale(scale)}
+                  style={{ flex: 1, height: 34, fontSize: 12.5, borderRadius: 10 }}
+                >
+                  {scale} 만점
+                </Chip>
+              ))}
             </div>
           </div>
 
@@ -149,15 +189,36 @@ export function OnboardingScreen({
                 </Chip>
               ))}
             </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-              <input
-                value={spec.langScore}
-                onChange={(e) => onSetLangScore(Number(e.target.value))}
-                type="number"
-                style={{ ...numberInputStyle, width: 120 }}
-              />
-              <span style={{ fontSize: 15, fontWeight: 600, color: "#9797A1" }}>점</span>
-            </div>
+            {spec.langType === "OPIc" ? (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {OPIC_GRADES.map((grade) => (
+                  <Chip
+                    key={grade}
+                    selected={spec.langScore === grade}
+                    onClick={() => onSetLangScore(grade)}
+                    style={{ minWidth: 52 }}
+                  >
+                    {grade}
+                  </Chip>
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                <input
+                  value={spec.langScore}
+                  onChange={(e) => {
+                    const sanitized = sanitizeNumericInput(e.target.value, false);
+                    onSetLangScore(langMax != null ? clampToMax(sanitized, langMax) : sanitized);
+                  }}
+                  type="text"
+                  inputMode="numeric"
+                  style={{ ...numberInputStyle, width: 120 }}
+                />
+                <span style={{ fontSize: 15, fontWeight: 600, color: "#9797A1" }}>
+                  {langMax != null ? `/ ${langMax}점` : "점"}
+                </span>
+              </div>
+            )}
           </div>
 
           <div style={cardStyle}>

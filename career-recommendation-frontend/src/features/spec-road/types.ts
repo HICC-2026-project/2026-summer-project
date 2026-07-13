@@ -4,9 +4,10 @@ export type Tab = "home" | "roadmap" | "compare" | "profile";
 export type Priority = "HIGH" | "MEDIUM" | "LOW";
 
 export interface Spec {
-  gpa: number;
+  gpa: string;
+  gpaScale: number;
   langType: string;
-  langScore: number;
+  langScore: string;
   certs: string[];
   exps: string[];
 }

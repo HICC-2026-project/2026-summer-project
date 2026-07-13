@@ -19,12 +19,12 @@ export function AnalyzingScreen() {
         alignItems: "center",
         justifyContent: "center",
         padding: "0 40px",
-        background: "linear-gradient(180deg, #FBFBFE, #F1EFFC)",
+        background: "linear-gradient(180deg, #FBFBFE, #EAF1FE)",
         animation: "cfFade .3s ease both",
       }}
     >
       <div style={{ position: "relative", width: 84, height: 84, marginBottom: 28 }}>
-        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "4px solid #E4E1F6" }} />
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "4px solid #DCE7FE" }} />
         <div
           style={{
             position: "absolute",

@@ -34,7 +34,7 @@ export function ProfileTab({ spec, target, onEditSpec, onLogout }: ProfileTabPro
             width: 60,
             height: 60,
             borderRadius: 20,
-            background: `linear-gradient(145deg, ${PRIMARY}, color-mix(in srgb, ${PRIMARY} 60%, #9d7bff))`,
+            background: `linear-gradient(145deg, ${PRIMARY}, color-mix(in srgb, ${PRIMARY} 60%, #7FA6FF))`,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -55,7 +55,7 @@ export function ProfileTab({ spec, target, onEditSpec, onLogout }: ProfileTabPro
       <div style={{ background: "#fff", border: "1px solid #EDEDF2", borderRadius: 20, padding: "6px 18px", marginBottom: 16 }}>
         <div style={rowStyle(true)}>
           <span style={{ fontSize: 14, color: "#61616C", fontWeight: 500 }}>학점</span>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#15141B" }}>{spec.gpa} / 4.5</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "#15141B" }}>{spec.gpa} / {spec.gpaScale}</span>
         </div>
         <div style={rowStyle(true)}>
           <span style={{ fontSize: 14, color: "#61616C", fontWeight: 500 }}>어학</span>

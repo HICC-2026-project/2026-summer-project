@@ -77,7 +77,7 @@ export function DetailSheet({ recommendationId, onClose, onCompare }: DetailShee
                 height: 84,
                 flexShrink: 0,
                 borderRadius: "50%",
-                background: `conic-gradient(${PRIMARY} ${scoreDeg}deg, #E7E5F3 0)`,
+                background: `conic-gradient(${PRIMARY} ${scoreDeg}deg, #DCE7FE 0)`,
               }}
             >
               <div
