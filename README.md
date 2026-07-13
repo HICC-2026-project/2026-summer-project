@@ -1,7 +1,7 @@
 # Spec Road
 
 AI 기반 커리어 추천 서비스 **Spec Road**입니다.
-- Backend: [`career-recommendation-service`](./career-recommendation-service) — Spring Boot
+- Backend: [`backend`](./backend) — Spring Boot
 - Frontend: [`frontend`](./frontend) — Next.js
 
 ## 기술 스택
