@@ -143,8 +143,6 @@ export const COMPARE_ROWS: CompareRow[] = [
   { label: "경험", weight: "25%", myVal: "2건", avgVal: "3.1건", myPct: 40, avgPct: 62, status: "부족" },
 ];
 
-export const CERT_OPTIONS = ["정보처리기사", "SQLD", "ADsP", "토익스피킹", "정보보안기사", "리눅스마스터"];
-export const EXP_OPTIONS = ["스타트업 인턴 3개월", "교내 개발 동아리", "SW 공모전 참가", "오픈소스 기여", "개인 프로젝트"];
 export const JOB_OPTIONS = ["SW 개발", "데이터 엔지니어", "AI/ML", "기획/PM", "보안"];
 export const SIZE_OPTIONS: [string, string][] = [
   ["대기업", "공채 중심"],

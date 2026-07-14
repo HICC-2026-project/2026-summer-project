@@ -11,10 +11,8 @@ import type { OnboardStep, Screen, Spec, Tab, Target } from "./types";
 const INITIAL_SPEC: Spec = {
   gpa: "3.8",
   gpaScale: 4.5,
-  langType: "TOEIC",
-  langScore: "850",
+  langScores: { TOEIC: "850" },
   certs: ["정보처리기사", "SQLD"],
-  exps: ["스타트업 인턴 3개월", "교내 개발 동아리"],
 };
 
 const INITIAL_TARGET: Target = {
@@ -40,18 +38,12 @@ export function SpecRoadApp() {
     return () => clearTimeout(timer);
   }, [screen]);
 
-  function toggleCert(value: string) {
-    setSpec((s) => ({
-      ...s,
-      certs: s.certs.includes(value) ? s.certs.filter((c) => c !== value) : [...s.certs, value],
-    }));
+  function addCert(value: string) {
+    setSpec((s) => (s.certs.includes(value) ? s : { ...s, certs: [...s.certs, value] }));
   }
 
-  function toggleExp(value: string) {
-    setSpec((s) => ({
-      ...s,
-      exps: s.exps.includes(value) ? s.exps.filter((e) => e !== value) : [...s.exps, value],
-    }));
+  function removeCert(value: string) {
+    setSpec((s) => ({ ...s, certs: s.certs.filter((c) => c !== value) }));
   }
 
   function handleOnboardNext() {
@@ -116,10 +108,11 @@ export function SpecRoadApp() {
             onSetGpaScale={(v) =>
               setSpec((s) => ({ ...s, gpaScale: v, gpa: Number(s.gpa) > v ? String(v) : s.gpa }))
             }
-            onSetLangType={(v) => setSpec((s) => ({ ...s, langType: v, langScore: "" }))}
-            onSetLangScore={(v) => setSpec((s) => ({ ...s, langScore: v }))}
-            onToggleCert={toggleCert}
-            onToggleExp={toggleExp}
+            onSetLangScore={(type, v) =>
+              setSpec((s) => ({ ...s, langScores: { ...s.langScores, [type]: v } }))
+            }
+            onAddCert={addCert}
+            onRemoveCert={removeCert}
             onSetJob={(v) => setTarget((t) => ({ ...t, job: v }))}
             onSetSize={(v) => setTarget((t) => ({ ...t, size: v }))}
             onSetIndustry={(v) => setTarget((t) => ({ ...t, industry: v }))}
