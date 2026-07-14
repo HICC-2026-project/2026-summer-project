@@ -31,16 +31,13 @@ public class UserSpec {
     @Builder.Default
     private BigDecimal gpaMax = new BigDecimal("4.5");
 
-    // {"type":"TOEIC","score":850}
+    // {"TOEIC":"850","OPIc":"IM2"} — one entry per language test type the user filled in
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "language_score", columnDefinition = "jsonb")
-    private Map<String, Object> languageScore;
+    @Column(name = "language_scores", columnDefinition = "jsonb")
+    private Map<String, String> languageScores;
 
     @Column(columnDefinition = "text[]")
     private String[] certifications;
-
-    @Column(columnDefinition = "text[]")
-    private String[] experiences;
 
     @Column(name = "github_url")
     private String githubUrl;

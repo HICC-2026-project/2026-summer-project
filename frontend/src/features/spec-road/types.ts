@@ -6,10 +6,8 @@ export type Priority = "HIGH" | "MEDIUM" | "LOW";
 export interface Spec {
   gpa: string;
   gpaScale: number;
-  langType: string;
-  langScore: string;
+  langScores: Record<string, string>;
   certs: string[];
-  exps: string[];
 }
 
 export interface Target {

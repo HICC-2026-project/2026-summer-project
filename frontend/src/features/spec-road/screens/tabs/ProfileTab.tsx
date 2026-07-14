@@ -24,7 +24,8 @@ function rowStyle(hasBorder: boolean): CSSProperties {
 export function ProfileTab({ spec, target, onEditSpec, onLogout }: ProfileTabProps) {
   const targetSummary = `${target.size} ${target.job}`;
   const certLabel = spec.certs.length ? spec.certs.join(", ") : "없음";
-  const expLabel = spec.exps.length ? spec.exps.join(", ") : "없음";
+  const langEntries = Object.entries(spec.langScores).filter(([, score]) => score);
+  const langLabel = langEntries.length ? langEntries.map(([type, score]) => `${type} ${score}`).join(", ") : "없음";
 
   return (
     <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
@@ -57,19 +58,13 @@ export function ProfileTab({ spec, target, onEditSpec, onLogout }: ProfileTabPro
           <span style={{ fontSize: 14, color: "#61616C", fontWeight: 500 }}>학점</span>
           <span style={{ fontSize: 15, fontWeight: 700, color: "#15141B" }}>{spec.gpa} / {spec.gpaScale}</span>
         </div>
-        <div style={rowStyle(true)}>
-          <span style={{ fontSize: 14, color: "#61616C", fontWeight: 500 }}>어학</span>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#15141B" }}>
-            {spec.langType} {spec.langScore}
-          </span>
-        </div>
         <div style={{ ...rowStyle(true), alignItems: "flex-start", gap: 20 }}>
-          <span style={{ fontSize: 14, color: "#61616C", fontWeight: 500, flexShrink: 0 }}>자격증</span>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "#15141B", textAlign: "right", lineHeight: 1.5 }}>{certLabel}</span>
+          <span style={{ fontSize: 14, color: "#61616C", fontWeight: 500, flexShrink: 0 }}>어학</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: "#15141B", textAlign: "right", lineHeight: 1.5 }}>{langLabel}</span>
         </div>
         <div style={{ ...rowStyle(false), alignItems: "flex-start", gap: 20 }}>
-          <span style={{ fontSize: 14, color: "#61616C", fontWeight: 500, flexShrink: 0 }}>경험</span>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "#15141B", textAlign: "right", lineHeight: 1.5 }}>{expLabel}</span>
+          <span style={{ fontSize: 14, color: "#61616C", fontWeight: 500, flexShrink: 0 }}>자격증</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: "#15141B", textAlign: "right", lineHeight: 1.5 }}>{certLabel}</span>
         </div>
       </div>
 

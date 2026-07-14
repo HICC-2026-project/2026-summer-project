@@ -1,10 +1,8 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { Chip } from "../components/Chip";
 import {
-  CERT_OPTIONS,
-  EXP_OPTIONS,
   GPA_SCALE_OPTIONS,
   INDUSTRY_OPTIONS,
   JOB_OPTIONS,
@@ -25,10 +23,9 @@ interface OnboardingScreenProps {
   onNext: () => void;
   onSetGpa: (v: string) => void;
   onSetGpaScale: (v: number) => void;
-  onSetLangType: (v: string) => void;
-  onSetLangScore: (v: string) => void;
-  onToggleCert: (v: string) => void;
-  onToggleExp: (v: string) => void;
+  onSetLangScore: (type: string, v: string) => void;
+  onAddCert: (v: string) => void;
+  onRemoveCert: (v: string) => void;
   onSetJob: (v: string) => void;
   onSetSize: (v: string) => void;
   onSetIndustry: (v: string) => void;
@@ -88,17 +85,23 @@ export function OnboardingScreen({
   onNext,
   onSetGpa,
   onSetGpaScale,
-  onSetLangType,
   onSetLangScore,
-  onToggleCert,
-  onToggleExp,
+  onAddCert,
+  onRemoveCert,
   onSetJob,
   onSetSize,
   onSetIndustry,
 }: OnboardingScreenProps) {
+  const [certInput, setCertInput] = useState("");
   const onboardPct = step === 0 ? "50%" : "100%";
   const onboardCta = step === 0 ? "다음" : "분석 시작하기";
-  const langMax = LANG_MAX[spec.langType] ?? null;
+
+  function submitCertInput() {
+    const value = certInput.trim();
+    if (!value || spec.certs.includes(value)) return;
+    onAddCert(value);
+    setCertInput("");
+  }
 
   return (
     <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", background: "#F6F6F9" }}>
@@ -177,79 +180,101 @@ export function OnboardingScreen({
 
           <div style={cardStyle}>
             <label style={{ ...fieldLabelStyle, marginBottom: 12 }}>어학 성적</label>
-            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-              {LANG_TYPES.map((lt) => (
-                <Chip
-                  key={lt}
-                  selected={spec.langType === lt}
-                  onClick={() => onSetLangType(lt)}
-                  style={{ flex: 1, height: 40, borderRadius: 12 }}
-                >
-                  {lt}
-                </Chip>
-              ))}
-            </div>
-            {spec.langType === "OPIc" ? (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {OPIC_GRADES.map((grade) => (
-                  <Chip
-                    key={grade}
-                    selected={spec.langScore === grade}
-                    onClick={() => onSetLangScore(grade)}
-                    style={{ minWidth: 52 }}
-                  >
-                    {grade}
-                  </Chip>
-                ))}
-              </div>
-            ) : (
-              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                <input
-                  value={spec.langScore}
-                  onChange={(e) => {
-                    const sanitized = sanitizeNumericInput(e.target.value, false);
-                    onSetLangScore(langMax != null ? clampToMax(sanitized, langMax) : sanitized);
-                  }}
-                  type="text"
-                  inputMode="numeric"
-                  style={{ ...numberInputStyle, width: 120 }}
-                />
-                <span style={{ fontSize: 15, fontWeight: 600, color: "#9797A1" }}>
-                  {langMax != null ? `/ ${langMax}점` : "점"}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <div style={cardStyle}>
-            <label style={{ ...fieldLabelStyle, marginBottom: 4 }}>보유 자격증</label>
-            <p style={{ fontSize: 12, color: "#B0B0BA", margin: "0 0 12px" }}>해당하는 항목을 모두 선택하세요</p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {CERT_OPTIONS.map((c) => {
-                const selected = spec.certs.includes(c);
+            <p style={{ fontSize: 12, color: "#B0B0BA", margin: "-2px 0 14px" }}>해당하는 시험에 점수를 입력하세요</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {LANG_TYPES.map((lt) => {
+                const langMax = LANG_MAX[lt] ?? null;
+                const score = spec.langScores[lt] ?? "";
                 return (
-                  <Chip key={c} selected={selected} onClick={() => onToggleCert(c)}>
-                    {selected ? "✓ " : ""}
-                    {c}
-                  </Chip>
+                  <div key={lt}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#15141B" }}>{lt}</span>
+                    <div style={{ marginTop: 6 }}>
+                      {lt === "OPIc" ? (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {OPIC_GRADES.map((grade) => (
+                            <Chip
+                              key={grade}
+                              selected={score === grade}
+                              onClick={() => onSetLangScore(lt, score === grade ? "" : grade)}
+                              style={{ minWidth: 52 }}
+                            >
+                              {grade}
+                            </Chip>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                          <input
+                            value={score}
+                            onChange={(e) => {
+                              const sanitized = sanitizeNumericInput(e.target.value, false);
+                              onSetLangScore(lt, langMax != null ? clampToMax(sanitized, langMax) : sanitized);
+                            }}
+                            type="text"
+                            inputMode="numeric"
+                            style={{ ...numberInputStyle, fontSize: 22, width: 100 }}
+                          />
+                          <span style={{ fontSize: 13, fontWeight: 600, color: "#9797A1" }}>
+                            {langMax != null ? `/ ${langMax}점` : "점"}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
             </div>
           </div>
 
           <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <label style={{ ...fieldLabelStyle, marginBottom: 4 }}>경험 / 활동</label>
-            <p style={{ fontSize: 12, color: "#B0B0BA", margin: "0 0 12px" }}>인턴 · 동아리 · 프로젝트 등</p>
+            <label style={{ ...fieldLabelStyle, marginBottom: 4 }}>보유 자격증</label>
+            <p style={{ fontSize: 12, color: "#B0B0BA", margin: "0 0 12px" }}>자격증 이름을 직접 입력해 추가하세요</p>
+            <div style={{ display: "flex", gap: 8, marginBottom: spec.certs.length ? 12 : 0 }}>
+              <input
+                value={certInput}
+                onChange={(e) => setCertInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    submitCertInput();
+                  }
+                }}
+                type="text"
+                placeholder="예: 정보처리기사"
+                style={{
+                  flex: 1,
+                  height: 42,
+                  padding: "0 14px",
+                  borderRadius: 12,
+                  border: "1px solid #E1E0EA",
+                  fontSize: 14,
+                  outline: "none",
+                }}
+              />
+              <button
+                type="button"
+                onClick={submitCertInput}
+                style={{
+                  height: 42,
+                  padding: "0 18px",
+                  borderRadius: 12,
+                  border: "none",
+                  background: PRIMARY,
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                추가
+              </button>
+            </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {EXP_OPTIONS.map((e) => {
-                const selected = spec.exps.includes(e);
-                return (
-                  <Chip key={e} selected={selected} onClick={() => onToggleExp(e)}>
-                    {selected ? "✓ " : ""}
-                    {e}
-                  </Chip>
-                );
-              })}
+              {spec.certs.map((c) => (
+                <Chip key={c} selected onClick={() => onRemoveCert(c)}>
+                  {c} ✕
+                </Chip>
+              ))}
             </div>
           </div>
         </div>
