@@ -7,6 +7,7 @@ import type { Spec, Target } from "../../types";
 interface ProfileTabProps {
   spec: Spec;
   target: Target;
+  nickname: string | null;
   onEditSpec: () => void;
   onLogout: () => void;
 }
@@ -21,7 +22,8 @@ function rowStyle(hasBorder: boolean): CSSProperties {
   };
 }
 
-export function ProfileTab({ spec, target, onEditSpec, onLogout }: ProfileTabProps) {
+export function ProfileTab({ spec, target, nickname, onEditSpec, onLogout }: ProfileTabProps) {
+  const displayName = nickname ?? USER_NAME;
   const targetSummary = `${target.size} ${target.job}`;
   const certLabel = spec.certs.length ? spec.certs.join(", ") : "없음";
   const langEntries = Object.entries(spec.langScores).filter(([, score]) => score);
@@ -45,10 +47,10 @@ export function ProfileTab({ spec, target, onEditSpec, onLogout }: ProfileTabPro
             flexShrink: 0,
           }}
         >
-          {USER_NAME.slice(0, 1)}
+          {displayName.slice(0, 1)}
         </div>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: "#15141B", letterSpacing: "-0.02em" }}>{USER_NAME}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "#15141B", letterSpacing: "-0.02em" }}>{displayName}</div>
           <div style={{ fontSize: 13.5, color: "#61616C", marginTop: 2 }}>{targetSummary} 준비 중</div>
         </div>
       </div>

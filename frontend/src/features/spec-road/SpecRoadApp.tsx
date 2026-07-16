@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { clearTokens, getAccessToken } from "@/lib/auth";
+import { getMe } from "./api";
 import { AnalyzingScreen } from "./screens/AnalyzingScreen";
 import { AppScreen } from "./screens/AppScreen";
 import { DetailSheet } from "./screens/DetailSheet";
@@ -28,6 +30,7 @@ export function SpecRoadApp() {
   const [detailId, setDetailId] = useState<number | null>(null);
   const [spec, setSpec] = useState<Spec>(INITIAL_SPEC);
   const [target, setTarget] = useState<Target>(INITIAL_TARGET);
+  const [nickname, setNickname] = useState<string | null>(null);
 
   useEffect(() => {
     if (screen !== "analyzing") return;
@@ -37,6 +40,22 @@ export function SpecRoadApp() {
     }, 2100);
     return () => clearTimeout(timer);
   }, [screen]);
+
+  // 카카오 로그인 콜백(app/oauth/callback)이 토큰을 저장해두면 로그인 화면을 건너뛰고
+  // 실제 로그인한 유저 정보를 가져온다.
+  useEffect(() => {
+    if (!getAccessToken()) return;
+
+    getMe()
+      .then((me) => {
+        setNickname(me.nickname);
+        setScreen("app");
+        setTab("home");
+      })
+      .catch(() => {
+        clearTokens();
+      });
+  }, []);
 
   function addCert(value: string) {
     setSpec((s) => (s.certs.includes(value) ? s : { ...s, certs: [...s.certs, value] }));
@@ -127,12 +146,15 @@ export function SpecRoadApp() {
             onTabChange={setTab}
             spec={spec}
             target={target}
+            nickname={nickname}
             onOpenDetail={setDetailId}
             onEditSpec={() => {
               setOnboardStep(0);
               setScreen("onboard");
             }}
             onLogout={() => {
+              clearTokens();
+              setNickname(null);
               setDetailId(null);
               setScreen("login");
             }}

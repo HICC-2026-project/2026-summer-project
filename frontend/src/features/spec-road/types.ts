@@ -10,6 +10,31 @@ export interface Spec {
   certs: string[];
 }
 
+// Shape expected by PUT /users/me/spec's languageScores field (API 명세서 기준).
+// Score-based tests (TOEIC, TOEFL) send score+maxScore; grade-based tests (OPIC) send grade only.
+export interface LanguageScorePayload {
+  type: string;
+  score?: number;
+  maxScore?: number;
+  grade?: string;
+}
+
+// GET /users/me response shape.
+export interface UserSpecResponse {
+  gpa: number | null;
+  gpaMax: number | null;
+  languageScores: Record<string, string> | null;
+  certifications: string[] | null;
+}
+
+export interface UserMeResponse {
+  id: string;
+  nickname: string | null;
+  provider: string;
+  role: string;
+  spec: UserSpecResponse | null;
+}
+
 export interface Target {
   job: string;
   size: string;

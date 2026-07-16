@@ -6,17 +6,19 @@ import type { Target } from "../../types";
 
 interface HomeTabProps {
   target: Target;
+  nickname: string | null;
   onOpenDetail: (id: number) => void;
 }
 
-export function HomeTab({ target, onOpenDetail }: HomeTabProps) {
+export function HomeTab({ target, nickname, onOpenDetail }: HomeTabProps) {
   const targetSummary = `${target.size} ${target.job}`;
+  const displayName = nickname ?? USER_NAME;
 
   return (
     <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 22 }}>
         <div>
-          <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 4px", fontWeight: 500 }}>{USER_NAME}님, 안녕하세요 👋</p>
+          <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 4px", fontWeight: 500 }}>{displayName}님, 안녕하세요 👋</p>
           <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em", margin: 0, color: "#15141B", lineHeight: 1.3 }}>
             {targetSummary}
             <br />
