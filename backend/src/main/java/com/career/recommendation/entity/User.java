@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "users")
+@Table(name = "users", uniqueConstraints = @UniqueConstraint(columnNames = {"provider", "provider_id"}))
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class User {
 
@@ -16,8 +16,8 @@ public class User {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(unique = true, nullable = false)
-    private String email;
+    @Column(unique = true)
+    private String email;       // 카카오 닉네임만 수집하기로 결정 — 항상 null
 
     private String nickname;
 

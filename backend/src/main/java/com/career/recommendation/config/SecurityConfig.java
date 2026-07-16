@@ -1,8 +1,12 @@
 package com.career.recommendation.config;
 
+import com.career.recommendation.security.CustomOAuth2UserService;
+import com.career.recommendation.security.HttpCookieOAuth2AuthorizationRequestRepository;
 import com.career.recommendation.security.JwtAccessDeniedHandler;
 import com.career.recommendation.security.JwtAuthenticationEntryPoint;
 import com.career.recommendation.security.JwtAuthenticationFilter;
+import com.career.recommendation.security.OAuth2LoginFailureHandler;
+import com.career.recommendation.security.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,10 +29,16 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
+    private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
+    private final CustomOAuth2UserService customOAuth2UserService;
+    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+    private final OAuth2LoginFailureHandler oAuth2LoginFailureHandler;
 
     private static final String[] PUBLIC_URLS = {
             "/api/v1/auth/**",
             "/api/v1/activities/**",
+            "/oauth2/**",
+            "/login/oauth2/**",
             "/swagger-ui/**",
             "/api-docs/**",
             "/error"
@@ -47,6 +57,14 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint)
                         .accessDeniedHandler(jwtAccessDeniedHandler)
+                )
+                .oauth2Login(oauth2 -> oauth2
+                        .authorizationEndpoint(endpoint -> endpoint
+                                .authorizationRequestRepository(authorizationRequestRepository)
+                        )
+                        .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
+                        .successHandler(oAuth2LoginSuccessHandler)
+                        .failureHandler(oAuth2LoginFailureHandler)
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();

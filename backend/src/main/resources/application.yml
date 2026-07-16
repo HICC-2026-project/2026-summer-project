@@ -29,9 +29,10 @@ spring:
           kakao:
             client-id: ${KAKAO_CLIENT_ID}
             client-secret: ${KAKAO_CLIENT_SECRET}
+            client-authentication-method: client_secret_post   # 카카오 토큰 엔드포인트는 시크릿을 폼 파라미터로 받음 (기본값 basic이면 401)
             redirect-uri: "{baseUrl}/login/oauth2/code/kakao"
             authorization-grant-type: authorization_code
-            scope: profile_nickname, account_email
+            scope: profile_nickname
 #          google:                      ← 나중에 추가할 때 주석 해제
 #            client-id: ${GOOGLE_CLIENT_ID}
 #            client-secret: ${GOOGLE_CLIENT_SECRET}
@@ -47,6 +48,10 @@ spring:
 
 server:
   port: 8080
+
+app:
+  oauth2:
+    frontend-redirect-uri: ${FRONTEND_REDIRECT_URI:http://localhost:3000/oauth/callback}
 
 jwt:
   secret: ${JWT_SECRET:dev-secret-key-please-change-in-production}
