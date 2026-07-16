@@ -10,4 +10,5 @@ import java.util.UUID;
 public interface ActivityRepository extends JpaRepository<Activity, UUID> {
     Page<Activity> findByIsActiveTrue(Pageable pageable);
     List<Activity> findByTypeAndIsActiveTrue(String type);
+    Page<Activity> findByTypeAndIsActiveTrue(String type, Pageable pageable);
 }
