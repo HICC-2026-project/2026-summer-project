@@ -23,6 +23,9 @@ public class PasserData {
     @JoinColumn(name = "activity_id", nullable = false)
     private Activity activity;
 
+    @Column(name = "job_type")
+    private String jobType;   // FE, BE, AI/ML, 데이터, 기획/PM, 보안 등
+
     private Integer year;
 
     @Column(precision = 3, scale = 2)
