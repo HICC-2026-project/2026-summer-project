@@ -159,13 +159,13 @@ public class RecommendationService {
                     .type(String.valueOf(a.getOrDefault("type", "")))
                     .name(String.valueOf(a.getOrDefault("name", "")))
                     .reason(String.valueOf(a.getOrDefault("reason", "")))
-                    .matchScore(overallMatchScore)
                     .deadline(deadline)
                     .build());
         }
 
         return RecommendationResponse.builder()
                 .activities(result)
+                .matchScore(overallMatchScore)
                 .comparisonMessage(comparisonMessage)
                 .isAiRecommendation(true)
                 .build();
