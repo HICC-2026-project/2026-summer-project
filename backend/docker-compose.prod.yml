@@ -1,0 +1,17 @@
+# EC2에서 사용하는 프로덕션 compose 파일 (DB는 RDS를 사용하므로 앱 컨테이너만 띄움)
+# 실행: docker compose -f docker-compose.prod.yml up -d --build
+services:
+  app:
+    build: .
+    container_name: spec-road-api
+    env_file: .env
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
