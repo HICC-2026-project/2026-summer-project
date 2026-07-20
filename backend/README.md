@@ -51,6 +51,9 @@ DB_PASSWORD: 본인_postgres_비밀번호   # docker-compose 사용 시 1234
 ## API 문서
 서버 실행 후 → http://localhost:8080/swagger-ui.html
 
+## 배포 (AWS EC2 + RDS)
+[DEPLOY.md](DEPLOY.md) 참고 — Dockerfile과 `docker-compose.prod.yml`로 EC2에서 실행한다.
+
 ## 브랜치 전략
 - `main`: 프로덕션
 - `dev`: 개발 통합
