@@ -43,6 +43,7 @@ public class SecurityConfig {
             "/api/v1/activities/**",
             "/oauth2/**",
             "/login/oauth2/**",
+            "/swagger-ui.html",   // 진입 URL — /swagger-ui/** 패턴에 안 걸리므로 별도 등록 필요
             "/swagger-ui/**",
             "/api-docs/**",
             "/error"
