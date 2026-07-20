@@ -17,5 +17,5 @@ AI 기반 커리어 추천 서비스 **Spec Road**입니다.
 |---|---|---|---|
 | BE-1 | 최서영 | [@choiseoyoungo](https://github.com/choiseoyoungo) | AI/추천 엔진 (ClaudeService, RecommendationService, RoadmapService) |
 | BE-2 | 조재성 | [@wbfkr0980-tech](https://github.com/wbfkr0980-tech) | DB/코어 (Entity, Repository, UserService, ActivityService, PasserService) |
-| BE-3 | 이지우 | [@011201Leejiwoo](https://github.com/011201Leejiwoo) | API/인프라 (Controller, Security, JWT, OAuth2, 배포) |
+| BE-3 | 이지우 | [@011201Leejiwoo](https://github.com/011201Leejiwoo) | API/인프라 (Controller, Security, JWT, OAuth2, 배포, FE작업, FE-BE 연동) |
 
