@@ -21,6 +21,13 @@ public class RecommendationResponse {
 
     private List<ActivityRecommendation> activities;
 
+    /**
+     * MatchScoreCalculator가 계산한 0~100 점수.
+     * 유저 스펙과 유사 합격자 전체를 비교한 단일 점수이므로
+     * 개별 활동이 아닌 응답 최상단에 위치한다.
+     */
+    private int matchScore;
+
     /** "유사 합격자 N명과 비교한 결과" 또는 "데이터가 부족해 AI 일반 추천을 제공합니다" */
     private String comparisonMessage;
 
@@ -41,9 +48,6 @@ public class RecommendationResponse {
         private String name;
 
         private String reason;
-
-        /** MatchScoreCalculator가 계산한 0~100 점수 */
-        private int matchScore;
 
         private LocalDate deadline;
     }
