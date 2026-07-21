@@ -42,7 +42,7 @@ public class RoadmapService {
     private final UserSpecRepository userSpecRepository;
     private final TargetJobRepository targetJobRepository;
     private final ActivityRepository activityRepository;
-    private final ClaudeService claudeService;
+    private final GeminiService geminiService;
     private final ObjectMapper objectMapper;
 
     /** period 텍스트에서 월 숫자를 추출하는 패턴 (예: "7월", "9~11월", "12월~2월") */
@@ -63,7 +63,7 @@ public class RoadmapService {
         Integer grade       = (userSpec != null) ? userSpec.getGrade() : null;
 
         // 1단계: AI가 로드맵 타임라인 생성
-        RoadmapResponse roadmap = callClaudeWithRetry(userSpecJson, targetJobStr, grade);
+        RoadmapResponse roadmap = callGeminiWithRetry(userSpecJson, targetJobStr, grade);
 
         // 2단계: 각 타임라인 단계에 시기가 맞는 실제 DB 활동 매칭
         return enrichWithMatchedActivities(roadmap);
@@ -188,26 +188,26 @@ public class RoadmapService {
         return new int[]{months.get(months.size() - 2), months.get(months.size() - 1)};
     }
 
-    private RoadmapResponse callClaudeWithRetry(String userSpecJson, String targetJobStr, Integer grade) {
+    private RoadmapResponse callGeminiWithRetry(String userSpecJson, String targetJobStr, Integer grade) {
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
-                String rawJson = claudeService.generateRoadmap(userSpecJson, targetJobStr, grade);
+                String rawJson = geminiService.generateRoadmap(userSpecJson, targetJobStr, grade);
                 if (rawJson.isBlank()) {
-                    log.warn("Claude 로드맵 응답 비어있음 (시도 {}회)", attempt);
+                    log.warn("Gemini 로드맵 응답 비어있음 (시도 {}회)", attempt);
                     continue;
                 }
-                RoadmapResponse parsed = parseClaudeResponse(rawJson);
+                RoadmapResponse parsed = parseGeminiResponse(rawJson);
                 if (parsed != null) return parsed;
             } catch (Exception e) {
-                log.warn("Claude 로드맵 파싱 실패 (시도 {}회): {}", attempt, e.getMessage());
+                log.warn("Gemini 로드맵 파싱 실패 (시도 {}회): {}", attempt, e.getMessage());
             }
         }
-        log.error("Claude 로드맵 2회 연속 실패 → 기본 로드맵 반환");
+        log.error("Gemini 로드맵 2회 연속 실패 → 기본 로드맵 반환");
         return buildFallbackRoadmap(grade);
     }
 
     @SuppressWarnings("unchecked")
-    private RoadmapResponse parseClaudeResponse(String rawJson) throws Exception {
+    private RoadmapResponse parseGeminiResponse(String rawJson) throws Exception {
         Map<String, Object> root = objectMapper.readValue(rawJson, new TypeReference<>() {});
         List<Map<String, Object>> timeline = (List<Map<String, Object>>) root.get("timeline");
         if (timeline == null || timeline.isEmpty()) return null;

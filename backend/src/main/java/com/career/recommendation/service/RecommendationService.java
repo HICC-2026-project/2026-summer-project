@@ -48,7 +48,7 @@ public class RecommendationService {
     private final RecommendationCacheService recommendationCacheService;
     private final SimilarSpecFinder similarSpecFinder;
     private final MatchScoreCalculator matchScoreCalculator;
-    private final ClaudeService claudeService;
+    private final GeminiService geminiService;
     private final ObjectMapper objectMapper;
 
     private static final int CACHE_HOURS = 24;
@@ -79,14 +79,14 @@ public class RecommendationService {
         );
         String comparisonMessage = similarSpecFinder.buildComparisonMessage(similarPassers.size(), jobType);
 
-        // 4. Claude API 호출 (최대 2회 시도)
+        // 4. Gemini API 호출 (최대 2회 시도)
         String userSpecJson = serializeSpec(userSpec);
         String targetJobStr = (targetJob != null)
                 ? targetJob.getJobType() + " / " + targetJob.getCompanySize() + " / " + targetJob.getIndustry()
                 : "미설정";
         String similarCasesStr = buildSimilarCasesText(similarPassers);
 
-        RecommendationResponse response = callClaudeWithRetry(
+        RecommendationResponse response = callGeminiWithRetry(
                 userSpecJson, targetJobStr, similarCasesStr,
                 userSpec, similarPassers, comparisonMessage
         );
@@ -98,38 +98,38 @@ public class RecommendationService {
     }
 
     /**
-     * Claude API를 호출하고 JSON 파싱을 시도한다. 실패 시 1회 재시도 후 Fallback 반환.
+     * Gemini API를 호출하고 JSON 파싱을 시도한다. 실패 시 1회 재시도 후 Fallback 반환.
      */
-    private RecommendationResponse callClaudeWithRetry(
+    private RecommendationResponse callGeminiWithRetry(
             String userSpecJson, String targetJobStr, String similarCasesStr,
             UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage) {
 
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
-                String rawJson = claudeService.generateRecommendation(userSpecJson, targetJobStr, similarCasesStr);
+                String rawJson = geminiService.generateRecommendation(userSpecJson, targetJobStr, similarCasesStr);
                 if (rawJson.isBlank()) {
-                    log.warn("Claude 추천 응답 비어있음 (시도 {}회)", attempt);
+                    log.warn("Gemini 추천 응답 비어있음 (시도 {}회)", attempt);
                     continue;
                 }
 
-                RecommendationResponse parsed = parseClaudeResponse(rawJson, userSpec, similarPassers, comparisonMessage);
+                RecommendationResponse parsed = parseGeminiResponse(rawJson, userSpec, similarPassers, comparisonMessage);
                 if (parsed != null) {
                     return parsed;
                 }
             } catch (Exception e) {
-                log.warn("Claude 추천 파싱 실패 (시도 {}회): {}", attempt, e.getMessage());
+                log.warn("Gemini 추천 파싱 실패 (시도 {}회): {}", attempt, e.getMessage());
             }
         }
 
-        log.error("Claude 추천 2회 연속 실패 → Fallback 반환");
+        log.error("Gemini 추천 2회 연속 실패 → Fallback 반환");
         return RecommendationFallbackData.get();
     }
 
     /**
-     * Claude 응답 JSON을 RecommendationResponse DTO로 변환하고 matchScore를 주입한다.
+     * Gemini 응답 JSON을 RecommendationResponse DTO로 변환하고 matchScore를 주입한다.
      */
     @SuppressWarnings("unchecked")
-    private RecommendationResponse parseClaudeResponse(
+    private RecommendationResponse parseGeminiResponse(
             String rawJson, UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage) throws Exception {
 
         Map<String, Object> root = objectMapper.readValue(rawJson, new TypeReference<>() {});

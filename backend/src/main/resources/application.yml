@@ -5,7 +5,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/career_db}
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:password}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -61,12 +61,11 @@ jwt:
   access-token-expiration: 3600000      # 1시간 (ms)
   refresh-token-expiration: 604800000   # 7일 (ms)
 
-claude:
+gemini:
   api:
-    key: ${CLAUDE_API_KEY}
-    base-url: https://api.anthropic.com
-    model: claude-sonnet-4-6
-    max-tokens: 2048
+    key: ${GEMINI_API_KEY:}
+    base-url: https://generativelanguage.googleapis.com/v1beta
+    model: gemini-2.5-flash
 
 springdoc:
   api-docs:

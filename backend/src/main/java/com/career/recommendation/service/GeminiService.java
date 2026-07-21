@@ -13,25 +13,22 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * BE-1 담당 — Claude API 연동 서비스
- * 추천 생성 및 로드맵 생성 프롬프트를 관리합니다.
+ * BE-1 담당 — Gemini API 연동 서비스
+ * 추천 생성 및 로드맵 생성 프롬프트를 관리하며 Google Gemini API를 호출합니다.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class ClaudeService {
+public class GeminiService {
 
-    @Value("${claude.api.key}")
+    @Value("${gemini.api.key}")
     private String apiKey;
 
-    @Value("${claude.api.base-url}")
+    @Value("${gemini.api.base-url}")
     private String baseUrl;
 
-    @Value("${claude.api.model}")
+    @Value("${gemini.api.model}")
     private String model;
-
-    @Value("${claude.api.max-tokens}")
-    private int maxTokens;
 
     private final WebClient.Builder webClientBuilder;
 
@@ -43,15 +40,12 @@ public class ClaudeService {
      * @param userSpecJson  사용자 스펙 (JSON 문자열)
      * @param targetJob     목표 직무
      * @param similarCases  유사 합격자 케이스 요약 (SimilarSpecFinder에서 생성)
-     * @return Claude API 응답 JSON 텍스트 (파싱 실패 시 빈 문자열)
+     * @return Gemini API 응답 JSON 텍스트 (파싱 실패 시 빈 문자열)
      */
     public String generateRecommendation(String userSpecJson, String targetJob, String similarCases) {
         String prompt = buildRecommendationPrompt(userSpecJson, targetJob, similarCases);
-        String raw = callClaudeApi(
-                "당신은 취업 커리어 어드바이저입니다. 사용자의 스펙을 분석하고 맞춤형 활동을 추천해 주세요. " +
-                "반드시 JSON 형식으로만 응답하세요.",
-                prompt
-        );
+        String systemInstruction = "당신은 취업 커리어 어드바이저입니다. 사용자의 스펙을 분석하고 맞춤형 활동을 추천해 주세요. 반드시 JSON 형식으로만 응답하세요.";
+        String raw = callGeminiApi(systemInstruction, prompt);
         return extractJsonBlock(raw);
     }
 
@@ -63,11 +57,8 @@ public class ClaudeService {
      */
     public String generateRoadmap(String userSpecJson, String targetJob, Integer grade) {
         String prompt = buildRoadmapPrompt(userSpecJson, targetJob, grade);
-        String raw = callClaudeApi(
-                "당신은 취업 커리어 어드바이저입니다. 사용자의 현재 스펙과 목표 직무를 기반으로 " +
-                "시기별 커리어 로드맵을 JSON 형식으로만 생성해 주세요.",
-                prompt
-        );
+        String systemInstruction = "당신은 취업 커리어 어드바이저입니다. 사용자의 현재 스펙과 목표 직무를 기반으로 시기별 커리어 로드맵을 JSON 형식으로만 생성해 주세요.";
+        String raw = callGeminiApi(systemInstruction, prompt);
         return extractJsonBlock(raw);
     }
 
@@ -118,9 +109,7 @@ public class ClaudeService {
     }
 
     /**
-     * Claude API 원문 응답에서 순수 JSON 블록만 추출한다.
-     * 앞뒤 잡담(자연어 텍스트)을 제거하고 { ... } 형태만 반환한다.
-     * 매칭 실패 시 빈 문자열을 반환한다.
+     * Gemini API 원문 응답에서 순수 JSON 블록만 추출한다.
      */
     public String extractJsonBlock(String raw) {
         if (raw == null || raw.isBlank()) return "";
@@ -128,36 +117,47 @@ public class ClaudeService {
         return matcher.find() ? matcher.group() : "";
     }
 
-    private String callClaudeApi(String systemPrompt, String userMessage) {
+    private String callGeminiApi(String systemInstruction, String userMessage) {
         WebClient client = webClientBuilder
                 .baseUrl(baseUrl)
-                .defaultHeader("x-api-key", apiKey)
-                .defaultHeader("anthropic-version", "2023-06-01")
-                .defaultHeader("content-type", "application/json")
                 .build();
 
+        // Gemini generateContent API 규격에 맞춘 요청 Body 생성
         Map<String, Object> requestBody = Map.of(
-                "model", model,
-                "max_tokens", maxTokens,
-                "system", systemPrompt,
-                "messages", List.of(Map.of("role", "user", "content", userMessage))
+                "systemInstruction", Map.of(
+                        "parts", List.of(Map.of("text", systemInstruction))
+                ),
+                "contents", List.of(
+                        Map.of(
+                                "role", "user",
+                                "parts", List.of(Map.of("text", userMessage))
+                        )
+                ),
+                "generationConfig", Map.of(
+                        "responseMimeType", "application/json"
+                )
         );
+
+        String uri = String.format("/models/%s:generateContent?key=%s", model, apiKey);
 
         try {
             Map<?, ?> response = client.post()
-                    .uri("/v1/messages")
+                    .uri(uri)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(Map.class)
                     .block();
 
-            if (response != null && response.get("content") instanceof List<?> contents && !contents.isEmpty()) {
-                Map<?, ?> firstContent = (Map<?, ?>) contents.get(0);
-                return (String) firstContent.get("text");
+            if (response != null && response.get("candidates") instanceof List<?> candidates && !candidates.isEmpty()) {
+                Map<?, ?> candidate = (Map<?, ?>) candidates.get(0);
+                if (candidate.get("content") instanceof Map<?, ?> content && content.get("parts") instanceof List<?> parts && !parts.isEmpty()) {
+                    Map<?, ?> firstPart = (Map<?, ?>) parts.get(0);
+                    return (String) firstPart.get("text");
+                }
             }
         } catch (Exception e) {
-            log.error("Claude API 호출 실패: {}", e.getMessage());
+            log.error("Gemini API 호출 실패: {}", e.getMessage());
         }
         return "";
     }

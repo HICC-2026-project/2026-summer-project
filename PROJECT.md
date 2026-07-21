@@ -14,14 +14,14 @@
 
 | 역할 | 담당 영역 | 핵심 기술 |
 | --- | --- | --- |
-| **BE-1 (AI/추천)** · 최서영 | Claude API 연동, 추천 엔진, matchScore, RAG 파이프라인 | Claude API, 프롬프트 엔지니어링, pgvector |
+| **BE-1 (AI/추천)** · 최서영 | Gemini API 연동, 추천 엔진, matchScore, RAG 파이프라인 | Gemini API, 프롬프트 엔지니어링, pgvector |
 | **BE-2 (DB/코어)** · 조재성 | DB 설계, JPA Entity, 사용자·스펙·활동·합격자 CRUD | Spring Data JPA, PostgreSQL, Flyway |
 | **BE-3 (API/인프라)** · 이지우 | REST API 개발, JWT·OAuth2 인증, Swagger, 배포 | Spring Security, SpringDoc, AWS, GitHub Actions |
 
 ### BE-1 세부 담당
 
-- `RecommendationService` — Claude API 호출 및 파싱
-- `ClaudeService` — 프롬프트 템플릿 관리
+- `RecommendationService` — Gemini API 호출 및 파싱
+- `GeminiService` — 프롬프트 템플릿 관리 및 Google Gemini API 연동
 - `MatchScoreCalculator` — 스펙 매칭 점수 계산
 - `RoadmapService` — 로드맵 생성 로직 + **RAG 패턴 기반 DB 활동 매칭**
   - `enrichWithMatchedActivities()` — AI 생성 타임라인에 시기별 실제 DB 활동을 자동 매칭 (할루시네이션 방지)
@@ -69,7 +69,7 @@
 │  ┌───────────────────────▼───────────────────────┐  │
 │  │            External Services                  │  │
 │  │  ┌──────────────┐  ┌────────────────────┐    │  │
-│  │  │ Claude API   │  │  PostgreSQL 15      │    │  │
+│  │  │ Gemini API   │  │  PostgreSQL 15      │    │  │
 │  │  │ (추천 생성)   │  │  (데이터 저장)     │    │  │
 │  │  └──────┬───────┘  └─────────┬──────────┘    │  │
 │  │         │                    │                │  │
@@ -89,7 +89,7 @@
 
 ```
 사용자 요청 → getRoadmap()
-  ├─ [1단계] AI(Claude)가 6개월 커리어 타임라인 생성
+  ├─ [1단계] AI(Gemini)가 6개월 커리어 타임라인 생성
   │          (period, priority, activity, reason)
   └─ [2단계] enrichWithMatchedActivities()
        ├─ period 텍스트에서 월 범위 파싱 ("9~11월" → [9, 11])
@@ -106,8 +106,7 @@
 com.career.recommendation
 ├── config/
 │   ├── SecurityConfig.java        (BE-3)
-│   ├── SwaggerConfig.java         (BE-3)
-│   └── ClaudeApiConfig.java       (BE-1)
+│   └── SwaggerConfig.java         (BE-3)
 ├── controller/
 │   ├── AuthController.java        (BE-3)
 │   ├── UserController.java        (BE-3)
@@ -122,7 +121,7 @@ com.career.recommendation
 │   ├── PasserService.java         (BE-2)
 │   ├── RecommendationService.java (BE-1)
 │   ├── RoadmapService.java        (BE-1) ← RAG 매칭 로직 포함
-│   └── ClaudeService.java         (BE-1)
+│   └── GeminiService.java         (BE-1)
 ├── repository/
 │   ├── UserRepository.java        (BE-2)
 │   ├── UserSpecRepository.java    (BE-2)
@@ -162,7 +161,7 @@ com.career.recommendation
 | PostgreSQL | 15 | 복잡한 관계형 데이터, JSONB 지원 |
 | Spring Data JPA | - | ORM 표준, Flyway와 연동 |
 | Spring Security | - | JWT + OAuth2 통합 지원 |
-| Claude API | claude-sonnet-4-6 | 고품질 추천, 별도 ML 모델 불필요 |
+| Gemini API | gemini-2.5-flash | 고품질 추천, 빠른 응답 속도 및 JSON Mode 파싱 안정성 |
 | Flyway | - | DB 마이그레이션 버전 관리 |
 | SpringDoc (Swagger) | - | API 문서 자동화 |
 | GitHub Actions | - | CI/CD 자동화 |
@@ -184,7 +183,7 @@ com.career.recommendation
 
 ```yaml
 # application-secret.yml (git 제외)
-CLAUDE_API_KEY: sk-ant-...
+GEMINI_API_KEY: AIzaSy...
 KAKAO_CLIENT_ID: ...
 GOOGLE_CLIENT_ID: ...
 JWT_SECRET: ...
