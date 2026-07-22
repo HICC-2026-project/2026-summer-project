@@ -1,5 +1,7 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.dto.gemini.GeminiRoadmapResult;
+import com.career.recommendation.dto.gemini.GeminiRoadmapResult.GeminiTimelineStep;
 import com.career.recommendation.dto.recommendation.RecommendationResponse;
 import com.career.recommendation.dto.roadmap.RoadmapResponse;
 import com.career.recommendation.dto.roadmap.RoadmapResponse.MatchedActivity;
@@ -12,8 +14,8 @@ import com.career.recommendation.entity.UserSpec;
 import com.career.recommendation.repository.ActivityRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
+import com.career.recommendation.util.PromptDataBuilder;
 import com.career.recommendation.util.SimilarSpecFinder;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +23,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * BE-1 담당 — F-05 커리어 로드맵 비즈니스 로직.
@@ -43,6 +49,7 @@ public class RoadmapService {
     private final SimilarSpecFinder similarSpecFinder;
     private final RecommendationService recommendationService;
     private final GeminiService geminiService;
+    private final PromptDataBuilder promptDataBuilder;
     private final ObjectMapper objectMapper;
 
     /**
@@ -55,8 +62,8 @@ public class RoadmapService {
         UserSpec userSpec   = userSpecRepository.findByUser_Id(user.getId()).orElse(null);
         TargetJob targetJob = targetJobRepository.findByUser_Id(user.getId()).orElse(null);
 
-        String userSpecJson = serializeSpec(userSpec);
-        String targetJobStr = buildTargetJobString(targetJob);
+        String userSpecJson = promptDataBuilder.serializeSpecForRoadmap(userSpec);
+        String targetJobStr = promptDataBuilder.buildTargetJobString(targetJob);
         Integer grade       = (userSpec != null) ? userSpec.getGrade() : null;
 
         // 1. 유사 합격자 케이스 조회 (F-03과 맥락 통일)
@@ -65,7 +72,7 @@ public class RoadmapService {
                 jobType,
                 (userSpec != null) ? userSpec.getGpa() : null
         );
-        String similarCasesStr = buildSimilarCasesText(similarPassers);
+        String similarCasesStr = promptDataBuilder.buildSimilarCasesText(similarPassers);
 
         // 2. F-03 맞춤 추천 결과 조회 (추천 활동 우선 반영)
         String topRecommendedJson = "[]";
@@ -80,7 +87,7 @@ public class RoadmapService {
 
         // 3. DB 활성 활동 목록 조회 (RAG 패턴)
         List<Activity> activeActivities = activityRepository.findByIsActiveTrue();
-        String availableActivitiesJson = buildAvailableActivitiesJson(activeActivities);
+        String availableActivitiesJson = promptDataBuilder.buildAvailableActivitiesJson(activeActivities);
 
         // 4. Gemini API 호출 (최대 2회 시도)
         return callGeminiWithRetry(userSpecJson, targetJobStr, grade,
@@ -111,9 +118,8 @@ public class RoadmapService {
 
     /**
      * Gemini 응답 JSON을 RoadmapResponse DTO로 변환한다.
-     * Gemini가 반환한 activityIds를 DB와 대조하여 실재하는 활동만 포함한다.
+     * 타입 안전한 GeminiRoadmapResult DTO로 파싱하고, DB와 대조하여 실재하는 활동만 포함한다.
      */
-    @SuppressWarnings("unchecked")
     private RoadmapResponse parseGeminiResponse(String rawJson,
                                                  List<Activity> activeActivities) throws Exception {
         // DB 활동을 UUID → Activity Map으로 변환 (빠른 검증용)
@@ -122,35 +128,34 @@ public class RoadmapService {
             activityMap.put(a.getId(), a);
         }
 
-        Map<String, Object> root = objectMapper.readValue(rawJson, new TypeReference<>() {});
-        List<Map<String, Object>> timeline = (List<Map<String, Object>>) root.get("timeline");
-        if (timeline == null || timeline.isEmpty()) return null;
+        // 타입 안전한 DTO로 파싱 (개선 #5)
+        GeminiRoadmapResult geminiResult = objectMapper.readValue(rawJson, GeminiRoadmapResult.class);
+        if (geminiResult.getTimeline() == null || geminiResult.getTimeline().isEmpty()) return null;
 
         List<TimelineStep> steps = new ArrayList<>();
-        for (Map<String, Object> t : timeline) {
-            String period = String.valueOf(t.getOrDefault("period", ""));
+        for (GeminiTimelineStep t : geminiResult.getTimeline()) {
+            String period = t.getPeriod() != null ? t.getPeriod() : "";
 
             // Gemini가 반환한 activityIds에서 DB에 실재하는 활동만 매칭
             List<MatchedActivity> matched = new ArrayList<>();
-            Object idsObj = t.get("activityIds");
-            if (idsObj instanceof List<?> idList) {
-                for (Object idObj : idList) {
+            if (t.getActivityIds() != null) {
+                for (String idStr : t.getActivityIds()) {
                     try {
-                        UUID activityId = UUID.fromString(String.valueOf(idObj));
+                        UUID activityId = UUID.fromString(idStr);
                         if (activityMap.containsKey(activityId)) {
                             matched.add(toMatchedActivity(activityMap.get(activityId)));
                         } else {
-                            log.warn("Gemini 로드맵이 DB에 없는 활동 ID를 반환함 (무시): {}", idObj);
+                            log.warn("Gemini 로드맵이 DB에 없는 활동 ID를 반환함 (무시): {}", idStr);
                         }
                     } catch (Exception ignored) {
-                        log.warn("Gemini 로드맵이 잘못된 형식의 ID를 반환함 (무시): {}", idObj);
+                        log.warn("Gemini 로드맵이 잘못된 형식의 ID를 반환함 (무시): {}", idStr);
                     }
                 }
             }
 
-            String rawActivity = String.valueOf(t.getOrDefault("activity", ""));
+            String rawActivity = t.getActivity();
             String activityText;
-            if (!rawActivity.isBlank() && !"null".equalsIgnoreCase(rawActivity)) {
+            if (rawActivity != null && !rawActivity.isBlank() && !"null".equalsIgnoreCase(rawActivity)) {
                 activityText = rawActivity;
             } else {
                 activityText = matched.stream().map(MatchedActivity::getName).reduce((a, b) -> a + ", " + b).orElse("");
@@ -158,9 +163,9 @@ public class RoadmapService {
 
             steps.add(TimelineStep.builder()
                     .period(period)
-                    .priority(String.valueOf(t.getOrDefault("priority", "MEDIUM")))
+                    .priority(t.getPriority() != null ? t.getPriority() : "MEDIUM")
                     .activity(activityText)
-                    .reason(String.valueOf(t.getOrDefault("reason", "")))
+                    .reason(t.getReason() != null ? t.getReason() : "")
                     .matchedActivities(matched)
                     .build());
         }
@@ -209,69 +214,5 @@ public class RoadmapService {
                                 .build()
                 ))
                 .build();
-    }
-
-    private String buildTargetJobString(TargetJob targetJob) {
-        if (targetJob == null) return "미설정";
-        return targetJob.getJobType() + " / " + targetJob.getCompanySize() + " / " + targetJob.getIndustry();
-    }
-
-    private String serializeSpec(UserSpec userSpec) {
-        if (userSpec == null) return "{}";
-        try {
-            return objectMapper.writeValueAsString(Map.of(
-                    "gpa", userSpec.getGpa() != null ? userSpec.getGpa() : "없음",
-                    "grade", userSpec.getGrade() != null ? userSpec.getGrade() : "미입력",
-                    "certifications", userSpec.getCertifications() != null ? userSpec.getCertifications() : new String[]{}
-            ));
-        } catch (Exception e) {
-            return "{}";
-        }
-    }
-
-    private String buildSimilarCasesText(List<PasserData> passerList) {
-        if (passerList.isEmpty()) return "유사 합격자 데이터 없음";
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < passerList.size(); i++) {
-            PasserData p = passerList.get(i);
-            sb.append(String.format("합격자%d: 학점=%s, 경험수=%d, 자격증=%s\n",
-                    i + 1,
-                    p.getGpa() != null ? p.getGpa() : "미상",
-                    p.getExperienceCount() != null ? p.getExperienceCount() : 0,
-                    p.getCertifications() != null ? String.join(", ", p.getCertifications()) : "없음"
-            ));
-        }
-        return sb.toString();
-    }
-
-    /**
-     * DB 활성 활동 목록을 Gemini 프롬프트용 JSON 문자열로 변환한다.
-     */
-    private String buildAvailableActivitiesJson(List<Activity> activities) {
-        if (activities.isEmpty()) return "[]";
-        try {
-            List<Map<String, Object>> list = new ArrayList<>();
-            for (Activity a : activities) {
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("id", a.getId().toString());
-                item.put("type", a.getType());
-                item.put("name", a.getName());
-                item.put("organization", a.getOrganization());
-                if (a.getDescription() != null) {
-                    item.put("description", a.getDescription());
-                }
-                if (a.getDeadline() != null) {
-                    item.put("deadline", a.getDeadline().toString());
-                }
-                if (a.getTags() != null) {
-                    item.put("tags", a.getTags());
-                }
-                list.add(item);
-            }
-            return objectMapper.writeValueAsString(list);
-        } catch (Exception e) {
-            log.warn("활동 목록 JSON 변환 실패: {}", e.getMessage());
-            return "[]";
-        }
     }
 }

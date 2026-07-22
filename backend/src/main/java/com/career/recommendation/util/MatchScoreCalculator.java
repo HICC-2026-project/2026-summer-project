@@ -50,7 +50,7 @@ public class MatchScoreCalculator {
         double gpaScore  = scoreGpa(userSpec.getGpa(), passer.getGpa(), userSpec.getGpaMax());
         double langScore = scoreLang(userSpec.getLanguageScores(), passer.getLanguageScore());
         double certScore = scoreCert(userSpec.getCertifications(), passer.getCertifications());
-        double expScore  = scoreExp(passer.getExperienceCount());
+        double expScore  = scoreExp(userSpec, passer.getExperienceCount());
 
         return gpaScore  * WEIGHT_GPA
              + langScore * WEIGHT_LANG
@@ -123,13 +123,27 @@ public class MatchScoreCalculator {
     }
 
     /**
-     * 경험 수 점수: 합격자 경험 건수 기준으로 유저 경험(추후 연동)을 비교.
-     * 현재는 합격자 경험 수를 MAX_EXP_COUNT 기준으로 점수화한다.
+     * 경험 수 점수: 유저의 스펙(자격증 수, 학년 등)을 바탕으로 경험 수준을 산출하여
+     * 합격자의 경험 수(passerExpCount)와 상대 비교한다.
+     * 유저 경험이 합격자 경험 수 이상이면 100점, 미달 시 비율대로 감점한다.
      */
-    private double scoreExp(Integer passerExpCount) {
-        if (passerExpCount == null || passerExpCount == 0) return 50.0;
-        // 합격자 경험이 MAX 이상이면 만점이 어려운 상황을 역으로 점수화
-        // (경험 수가 많을수록 합격 가능성이 높았다는 의미 → 유저에게 도전 지표로 활용)
-        return Math.min(100.0, ((double) passerExpCount / MAX_EXP_COUNT) * 100.0);
+    private double scoreExp(UserSpec userSpec, Integer passerExpCount) {
+        if (passerExpCount == null || passerExpCount == 0) return 100.0;
+
+        int userExpEstimate = 0;
+        if (userSpec != null) {
+            if (userSpec.getCertifications() != null) {
+                userExpEstimate += userSpec.getCertifications().length;
+            }
+            if (userSpec.getGrade() != null && userSpec.getGrade() >= 3) {
+                userExpEstimate += (userSpec.getGrade() - 2); // 3학년:+1, 4학년:+2
+            }
+        }
+
+        if (userExpEstimate >= passerExpCount) {
+            return 100.0;
+        }
+
+        return Math.max(0.0, ((double) userExpEstimate / passerExpCount) * 100.0);
     }
 }
