@@ -12,6 +12,7 @@ import com.career.recommendation.service.UserSpecService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -35,11 +36,11 @@ public class UserController {
     }
 
     @Operation(summary = "내 스펙 저장/수정 (F-01)",
-            description = "학점·어학 점수·자격증·경험을 저장한다. 이미 있으면 전체를 덮어쓴다(upsert).")
+            description = "학점·학점 기준값·복수 어학성적·복수 자격증·학년을 저장한다. 이미 있으면 전체를 덮어쓴다(upsert).")
     @PutMapping("/me/spec")
     public UserSpecResponse updateMySpec(
             Authentication authentication,
-            @RequestBody UserSpecRequest request
+            @Valid @RequestBody UserSpecRequest request
     ) {
         return userSpecService.saveOrUpdateMySpec(authentication, request);
     }
