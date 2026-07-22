@@ -2,11 +2,13 @@ package com.career.recommendation.service;
 
 import com.career.recommendation.dto.recommendation.RecommendationResponse;
 import com.career.recommendation.dto.recommendation.RecommendationResponse.ActivityRecommendation;
+import com.career.recommendation.entity.Activity;
 import com.career.recommendation.entity.PasserData;
 import com.career.recommendation.entity.Recommendation;
 import com.career.recommendation.entity.TargetJob;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.entity.UserSpec;
+import com.career.recommendation.repository.ActivityRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
@@ -46,6 +48,7 @@ public class RecommendationService {
     private final TargetJobRepository targetJobRepository;
     private final RecommendationRepository recommendationRepository;
     private final RecommendationCacheService recommendationCacheService;
+    private final ActivityRepository activityRepository;
     private final SimilarSpecFinder similarSpecFinder;
     private final MatchScoreCalculator matchScoreCalculator;
     private final GeminiService geminiService;
@@ -79,7 +82,11 @@ public class RecommendationService {
         );
         String comparisonMessage = similarSpecFinder.buildComparisonMessage(similarPassers.size(), jobType);
 
-        // 4. Gemini API 호출 (최대 2회 시도)
+        // 4. DB 활성 활동 목록 조회 (RAG 패턴 — Gemini에 선택지 제공)
+        List<Activity> activeActivities = activityRepository.findByIsActiveTrue();
+        String availableActivitiesJson = buildAvailableActivitiesJson(activeActivities);
+
+        // 5. Gemini API 호출 (최대 2회 시도)
         String userSpecJson = serializeSpec(userSpec);
         String targetJobStr = (targetJob != null)
                 ? targetJob.getJobType() + " / " + targetJob.getCompanySize() + " / " + targetJob.getIndustry()
@@ -87,8 +94,8 @@ public class RecommendationService {
         String similarCasesStr = buildSimilarCasesText(similarPassers);
 
         RecommendationResponse response = callGeminiWithRetry(
-                userSpecJson, targetJobStr, similarCasesStr,
-                userSpec, similarPassers, comparisonMessage
+                userSpecJson, targetJobStr, similarCasesStr, availableActivitiesJson,
+                userSpec, similarPassers, comparisonMessage, activeActivities
         );
 
         // 5. 결과 캐싱 (24시간) — 별도 Bean에서 호출해야 @Transactional 프록시가 정상 동작함
@@ -101,18 +108,21 @@ public class RecommendationService {
      * Gemini API를 호출하고 JSON 파싱을 시도한다. 실패 시 1회 재시도 후 Fallback 반환.
      */
     private RecommendationResponse callGeminiWithRetry(
-            String userSpecJson, String targetJobStr, String similarCasesStr,
-            UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage) {
+            String userSpecJson, String targetJobStr, String similarCasesStr, String availableActivitiesJson,
+            UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage,
+            List<Activity> activeActivities) {
 
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
-                String rawJson = geminiService.generateRecommendation(userSpecJson, targetJobStr, similarCasesStr);
+                String rawJson = geminiService.generateRecommendation(
+                        userSpecJson, targetJobStr, similarCasesStr, availableActivitiesJson);
                 if (rawJson.isBlank()) {
                     log.warn("Gemini 추천 응답 비어있음 (시도 {}회)", attempt);
                     continue;
                 }
 
-                RecommendationResponse parsed = parseGeminiResponse(rawJson, userSpec, similarPassers, comparisonMessage);
+                RecommendationResponse parsed = parseGeminiResponse(
+                        rawJson, userSpec, similarPassers, comparisonMessage, activeActivities);
                 if (parsed != null) {
                     return parsed;
                 }
@@ -126,11 +136,19 @@ public class RecommendationService {
     }
 
     /**
-     * Gemini 응답 JSON을 RecommendationResponse DTO로 변환하고 matchScore를 주입한다.
+     * Gemini 응답 JSON을 RecommendationResponse DTO로 변환한다.
+     * DB에 실재하는 활동만 포함하고, matchScore를 주입한다.
      */
     @SuppressWarnings("unchecked")
     private RecommendationResponse parseGeminiResponse(
-            String rawJson, UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage) throws Exception {
+            String rawJson, UserSpec userSpec, List<PasserData> similarPassers,
+            String comparisonMessage, List<Activity> activeActivities) throws Exception {
+
+        // DB 활동을 UUID → Activity Map으로 변환 (빠른 검증용)
+        Map<UUID, Activity> activityMap = new java.util.HashMap<>();
+        for (Activity a : activeActivities) {
+            activityMap.put(a.getId(), a);
+        }
 
         Map<String, Object> root = objectMapper.readValue(rawJson, new TypeReference<>() {});
         List<Map<String, Object>> activities = (List<Map<String, Object>>) root.get("activities");
@@ -141,27 +159,29 @@ public class RecommendationService {
 
         List<ActivityRecommendation> result = new ArrayList<>();
         for (Map<String, Object> a : activities) {
-            String deadlineStr = (String) a.get("deadline");
-            LocalDate deadline = null;
-            if (deadlineStr != null && !deadlineStr.isBlank()) {
-                try { deadline = LocalDate.parse(deadlineStr); } catch (Exception ignored) {}
-            }
-
-            // id가 없거나 숫자로 들어오는 경우 null 처리 (UUID 타입으로 통일)
+            // Gemini가 반환한 ID를 UUID로 파싱
             UUID activityId = null;
             Object idObj = a.get("id");
             if (idObj instanceof String s) {
                 try { activityId = UUID.fromString(s); } catch (Exception ignored) {}
             }
 
-            result.add(ActivityRecommendation.builder()
-                    .id(activityId)
-                    .type(String.valueOf(a.getOrDefault("type", "")))
-                    .name(String.valueOf(a.getOrDefault("name", "")))
-                    .reason(String.valueOf(a.getOrDefault("reason", "")))
-                    .deadline(deadline)
-                    .build());
+            // DB에 실재하는 활동만 포함 (할루시네이션 방지)
+            if (activityId != null && activityMap.containsKey(activityId)) {
+                Activity dbActivity = activityMap.get(activityId);
+                result.add(ActivityRecommendation.builder()
+                        .id(dbActivity.getId())
+                        .type(dbActivity.getType())
+                        .name(dbActivity.getName())
+                        .reason(String.valueOf(a.getOrDefault("reason", "")))
+                        .deadline(dbActivity.getDeadline())
+                        .build());
+            } else {
+                log.warn("Gemini가 DB에 없는 활동 ID를 반환함 (무시): {}", idObj);
+            }
         }
+
+        if (result.isEmpty()) return null;
 
         return RecommendationResponse.builder()
                 .activities(result)
@@ -210,5 +230,37 @@ public class RecommendationService {
             ));
         }
         return sb.toString();
+    }
+
+    /**
+     * DB 활성 활동 목록을 Gemini 프롬프트용 JSON 문자열로 변환한다.
+     * 각 활동의 id, type, name, organization, description, deadline, tags 정보를 포함한다.
+     */
+    private String buildAvailableActivitiesJson(List<Activity> activities) {
+        if (activities.isEmpty()) return "[]";
+        try {
+            List<Map<String, Object>> list = new ArrayList<>();
+            for (Activity a : activities) {
+                Map<String, Object> item = new java.util.LinkedHashMap<>();
+                item.put("id", a.getId().toString());
+                item.put("type", a.getType());
+                item.put("name", a.getName());
+                item.put("organization", a.getOrganization());
+                if (a.getDescription() != null) {
+                    item.put("description", a.getDescription());
+                }
+                if (a.getDeadline() != null) {
+                    item.put("deadline", a.getDeadline().toString());
+                }
+                if (a.getTags() != null) {
+                    item.put("tags", a.getTags());
+                }
+                list.add(item);
+            }
+            return objectMapper.writeValueAsString(list);
+        } catch (Exception e) {
+            log.warn("활동 목록 JSON 변환 실패: {}", e.getMessage());
+            return "[]";
+        }
     }
 }

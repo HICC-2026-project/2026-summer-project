@@ -10,7 +10,7 @@ import java.util.UUID;
 /**
  * GET /api/v1/roadmaps 응답 DTO.
  * 학기/방학 단위로 구분된 6개월 커리어 타임라인을 반환합니다.
- * 각 타임라인 단계에는 해당 시기에 지원 가능한 실제 DB 활동 목록이 포함됩니다.
+ * 각 타임라인 단계에는 Gemini가 선택한 실제 DB 활동 목록이 포함됩니다.
  */
 @Getter
 @Builder
@@ -25,20 +25,16 @@ public class RoadmapResponse {
         /** 예: "3학년 2학기", "7-8월 방학", "내년 상반기" */
         private String period;
 
-        /** AI가 판단한 해당 시기의 시작 월 (1~12). 활동 매칭에 사용. */
-        private Integer startMonth;
-
-        /** AI가 판단한 해당 시기의 종료 월 (1~12). 활동 매칭에 사용. */
-        private Integer endMonth;
-
         /** HIGH | MEDIUM | LOW */
         private String priority;
 
+        /** AI가 해당 시기에 추천하는 활동 요약 (매칭된 활동명 조합) */
         private String activity;
 
+        /** AI가 생성한 추천 이유 */
         private String reason;
 
-        /** 해당 시기에 지원 가능한 실제 DB 대외활동 목록 (할루시네이션 방지) */
+        /** 해당 시기에 추천된 실제 DB 대외활동 목록 (Gemini가 선택 → DB 검증) */
         @Builder.Default
         private List<MatchedActivity> matchedActivities = List.of();
     }
