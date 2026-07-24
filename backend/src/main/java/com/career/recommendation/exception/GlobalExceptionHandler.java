@@ -19,6 +19,12 @@ public class GlobalExceptionHandler {
                 .body(errorBody("INVALID_TOKEN", e.getMessage()));
     }
 
+    @ExceptionHandler(ActivityNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleActivityNotFoundException(ActivityNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(errorBody("ACTIVITY_NOT_FOUND", e.getMessage()));
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntimeException(RuntimeException e) {
         log.error("RuntimeException: {}", e.getMessage());

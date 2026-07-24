@@ -42,7 +42,7 @@ public class RecommendationResponse {
         /** activities 테이블 PK (UUID로 통일 — 기획서 예시의 정수 id 사용 안 함) */
         private UUID id;
 
-        /** INTERNSHIP | EXTERNAL | COMPETITION */
+        /** INTERNSHIP | EXTERNAL | COMPETITION | EDUCATION*/
         private String type;
 
         private String name;

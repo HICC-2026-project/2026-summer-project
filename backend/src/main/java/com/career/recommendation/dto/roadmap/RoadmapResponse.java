@@ -52,7 +52,7 @@ public class RoadmapResponse {
         /** 예: "삼성 청년 SW 아카데미(SSAFY) 12기" */
         private String name;
 
-        /** INTERNSHIP | EXTERNAL | COMPETITION */
+        /** INTERNSHIP | EXTERNAL | COMPETITION | EDUCATION */
         private String type;
 
         /** 주최 기관 */

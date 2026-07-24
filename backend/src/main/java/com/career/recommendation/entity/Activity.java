@@ -20,7 +20,7 @@ public class Activity {
     private UUID id;
 
     @Column(nullable = false)
-    private String type;           // INTERNSHIP | EXTERNAL | COMPETITION
+    private String type;           // INTERNSHIP | EXTERNAL | COMPETITION | EDUCATION
 
     @Column(nullable = false)
     private String name;
