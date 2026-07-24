@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -27,8 +28,11 @@ public class RecommendationCacheService {
     private final RecommendationRepository recommendationRepository;
     private final ObjectMapper objectMapper;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void save(User user, RecommendationResponse response, int cacheHours) {
+        if (response == null || response.getActivities() == null || response.getActivities().isEmpty()) {
+            return;
+        }
         try {
             String json = objectMapper.writeValueAsString(response);
             Recommendation rec = recommendationRepository.findByUser_Id(user.getId())

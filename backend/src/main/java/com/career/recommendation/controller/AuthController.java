@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "인증", description = "토큰 재발급 및 로그아웃 — 카카오 로그인 시작은 `GET /oauth2/authorization/kakao` (브라우저 리다이렉트)")
+@Tag(name = "인증", description = "토큰 재발급 및 로그아웃")
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor

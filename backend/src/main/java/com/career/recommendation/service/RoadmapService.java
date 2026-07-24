@@ -112,8 +112,8 @@ public class RoadmapService {
                 log.warn("Gemini 로드맵 파싱 실패 (시도 {}회): {}", attempt, e.getMessage());
             }
         }
-        log.error("Gemini 로드맵 2회 연속 실패 → 기본 로드맵 반환");
-        return buildFallbackRoadmap(grade);
+        log.info("Gemini 로드맵 미사용/실패 → DB 저장 활동 기반 로드맵 반환");
+        return buildFallbackRoadmap(grade, activeActivities);
     }
 
     /**
@@ -186,31 +186,47 @@ public class RoadmapService {
                 .build();
     }
 
-    /** Gemini 완전 실패 시 기본 로드맵 반환 */
-    private RoadmapResponse buildFallbackRoadmap(Integer grade) {
-        String semester1 = (grade != null) ? grade + "학년 1학기" : "상반기";
-        String semester2 = (grade != null) ? grade + "학년 여름방학" : "여름";
-        String semester3 = (grade != null) ? grade + "학년 2학기" : "하반기";
+    /** Gemini 미사용/실패 시 DB 등록 활동 기반 기본 로드맵 반환 */
+    private RoadmapResponse buildFallbackRoadmap(Integer grade, List<Activity> activeActivities) {
+        String semester1 = (grade != null) ? grade + "학년 1학기 (9~11월)" : "1~2개월 차";
+        String semester2 = (grade != null) ? grade + "학년 겨울방학 (12~2월)" : "3~4개월 차";
+        String semester3 = (grade != null) ? (grade < 4 ? (grade + 1) + "학년 1학기" : "4학년 2학기") : "5~6개월 차";
+
+        List<MatchedActivity> step1Matched = new ArrayList<>();
+        List<MatchedActivity> step2Matched = new ArrayList<>();
+        List<MatchedActivity> step3Matched = new ArrayList<>();
+
+        if (activeActivities != null) {
+            for (int i = 0; i < activeActivities.size(); i++) {
+                Activity a = activeActivities.get(i);
+                if (i < 3) step1Matched.add(toMatchedActivity(a));
+                else if (i < 6) step2Matched.add(toMatchedActivity(a));
+                else if (i < 9) step3Matched.add(toMatchedActivity(a));
+            }
+        }
 
         return RoadmapResponse.builder()
                 .timeline(List.of(
                         TimelineStep.builder()
                                 .period(semester1)
                                 .priority("HIGH")
-                                .activity("자격증 취득 (정보처리기사 등)")
-                                .reason("기본 역량 인증으로 서류 통과율을 높일 수 있습니다.")
+                                .activity("핵심 SW 교육 및 인턴십 지원")
+                                .reason("서류 가점 및 기초 실무 역량을 다지는 핵심 시기입니다.")
+                                .matchedActivities(step1Matched)
                                 .build(),
                         TimelineStep.builder()
                                 .period(semester2)
                                 .priority("HIGH")
-                                .activity("스타트업 인턴십 또는 부트캠프 참여")
-                                .reason("방학 기간 동안 실무 경험을 쌓는 것이 효과적입니다.")
+                                .activity("부트캠프 및 프로젝트 몰입")
+                                .reason("방학 기간을 활용하여 포트폴리오를 대폭 강화합니다.")
+                                .matchedActivities(step2Matched)
                                 .build(),
                         TimelineStep.builder()
                                 .period(semester3)
                                 .priority("MEDIUM")
-                                .activity("SW 공모전 1개 참가")
-                                .reason("수상 실적이 포트폴리오를 강화합니다.")
+                                .activity("오픈소스 기여 및 해커톤 공모전 참가")
+                                .reason("실무 협업 역량을 입증하고 채용 우대 혜택을 획득합니다.")
+                                .matchedActivities(step3Matched)
                                 .build()
                 ))
                 .build();

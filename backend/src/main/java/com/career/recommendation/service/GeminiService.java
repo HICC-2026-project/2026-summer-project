@@ -163,6 +163,11 @@ public class GeminiService {
                 )
         );
 
+        if (apiKey == null || apiKey.isBlank() || apiKey.contains("입력")) {
+            log.warn("Gemini API 키가 설정되지 않았습니다. 즉시 폴백 데이터를 반환합니다.");
+            return "";
+        }
+
         String uri = String.format("/models/%s:generateContent?key=%s", model, apiKey);
 
         try {
@@ -172,7 +177,7 @@ public class GeminiService {
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(Map.class)
-                    .block(java.time.Duration.ofSeconds(30));
+                    .block(java.time.Duration.ofSeconds(8));
 
             if (response != null && response.get("candidates") instanceof List<?> candidates && !candidates.isEmpty()) {
                 Map<?, ?> candidate = (Map<?, ?>) candidates.get(0);

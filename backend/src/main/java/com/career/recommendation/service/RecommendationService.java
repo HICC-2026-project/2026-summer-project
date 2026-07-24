@@ -65,10 +65,13 @@ public class RecommendationService {
     public RecommendationResponse getRecommendations(Authentication authentication) {
         User user = currentUserService.getCurrentUser(authentication);
 
-        // 1. 유효 캐시 확인
+        // 1. 유효 캐시 확인 (활동 목록이 포함된 정상 캐시만 사용)
         Recommendation cached = recommendationRepository.findByUser_Id(user.getId()).orElse(null);
         if (cached != null && cached.isValid()) {
-            return deserialize(cached.getResultJson());
+            RecommendationResponse deserialized = deserialize(cached.getResultJson());
+            if (deserialized != null && deserialized.getActivities() != null && !deserialized.getActivities().isEmpty()) {
+                return deserialized;
+            }
         }
 
         // 2. 스펙 및 목표 직무 조회
@@ -130,8 +133,37 @@ public class RecommendationService {
             }
         }
 
-        log.error("Gemini 추천 2회 연속 실패 → Fallback 반환");
-        return RecommendationFallbackData.get();
+        log.info("Gemini 추천 미사용/실패 → DB 저장 활동 기반 맞춤 추천 반환");
+        return buildDbFallbackRecommendation(userSpec, similarPassers, comparisonMessage, activeActivities);
+    }
+
+    private RecommendationResponse buildDbFallbackRecommendation(
+            UserSpec userSpec, List<PasserData> similarPassers,
+            String comparisonMessage, List<Activity> activeActivities) {
+
+        int overallMatchScore = matchScoreCalculator.calculate(userSpec, similarPassers);
+        List<ActivityRecommendation> recs = new ArrayList<>();
+
+        int count = Math.min(5, activeActivities.size());
+        for (int i = 0; i < count; i++) {
+            Activity a = activeActivities.get(i);
+            recs.add(ActivityRecommendation.builder()
+                    .id(a.getId())
+                    .type(a.getType())
+                    .name(a.getName())
+                    .reason(a.getDescription() != null && !a.getDescription().isBlank() 
+                            ? a.getDescription() 
+                            : "사용자의 목표 직무 및 학점 스펙 기반 DB 맞춤 추천 활동입니다.")
+                    .deadline(a.getDeadline())
+                    .build());
+        }
+
+        return RecommendationResponse.builder()
+                .activities(recs)
+                .matchScore(overallMatchScore)
+                .comparisonMessage(comparisonMessage)
+                .isAiRecommendation(false)
+                .build();
     }
 
     /**

@@ -3,9 +3,9 @@ spring:
     name: career-recommendation-service
 
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/career_db}
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/career_db}
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD}
+    password: ${DB_PASSWORD:1234}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -27,8 +27,8 @@ spring:
       client:
         registration:
           kakao:
-            client-id: ${KAKAO_CLIENT_ID}
-            client-secret: ${KAKAO_CLIENT_SECRET}
+            client-id: ${KAKAO_CLIENT_ID:dummy-kakao-client-id}
+            client-secret: ${KAKAO_CLIENT_SECRET:dummy-kakao-client-secret}
             client-authentication-method: client_secret_post   # 카카오 토큰 엔드포인트는 시크릿을 폼 파라미터로 받음 (기본값 basic이면 401)
             redirect-uri: "{baseUrl}/login/oauth2/code/kakao"
             authorization-grant-type: authorization_code
