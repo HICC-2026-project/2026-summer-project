@@ -1,5 +1,5 @@
--- V13__seed_activities_and_passer_data.sql
--- 10개 대표 IT 활동 및 합격자 스펙 시드 데이터
+-- passer-and-activity-seed.sql
+-- 10개 대표 IT 활동 및 합격자 스펙 시드 데이터 (수동 실행용)
 
 INSERT INTO activities (id, type, name, organization, description, deadline, start_date, end_date, target_spec, tags, url, is_active)
 VALUES (
