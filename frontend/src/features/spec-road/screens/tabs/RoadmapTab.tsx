@@ -1,7 +1,8 @@
 "use client";
 
-import { PRIMARY, ROADMAP } from "../../data";
-import type { Priority, Target } from "../../types";
+import { PRIMARY } from "../../data";
+import { dday, ddayColor } from "../../helpers";
+import type { Priority, RoadmapMilestone, Target } from "../../types";
 
 const PRIORITY_META: Record<Priority, { label: string; color: string; bg: string }> = {
   HIGH: { label: "지금 집중", color: PRIMARY, bg: `color-mix(in srgb, ${PRIMARY} 12%, #fff)` },
@@ -11,9 +12,12 @@ const PRIORITY_META: Record<Priority, { label: string; color: string; bg: string
 
 interface RoadmapTabProps {
   target: Target;
+  roadmap: RoadmapMilestone[];
+  roadmapLoading: boolean;
+  roadmapError: boolean;
 }
 
-export function RoadmapTab({ target }: RoadmapTabProps) {
+export function RoadmapTab({ target, roadmap, roadmapLoading, roadmapError }: RoadmapTabProps) {
   const targetSummary = `${target.size} ${target.job}`;
 
   return (
@@ -23,8 +27,23 @@ export function RoadmapTab({ target }: RoadmapTabProps) {
         {targetSummary} 목표까지, 시기별로 해야 할 일을 정리했어요.
       </p>
 
-      <div style={{ position: "relative", paddingLeft: 6 }}>
-        {ROADMAP.map((m, i) => {
+      {roadmapLoading ? (
+        <div style={{ padding: "40px 0", textAlign: "center", color: "#9797A1", fontSize: 14, fontWeight: 500 }}>
+          AI가 로드맵을 그리고 있어요…
+        </div>
+      ) : roadmapError ? (
+        <div style={{ padding: "32px 20px", textAlign: "center", background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16 }}>
+          <div style={{ fontSize: 14.5, fontWeight: 700, color: "#E5484D", marginBottom: 6 }}>로드맵을 불러오지 못했어요</div>
+          <div style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5 }}>네트워크를 확인한 뒤 잠시 후 다시 시도해주세요.</div>
+        </div>
+      ) : roadmap.length === 0 ? (
+        <div style={{ padding: "32px 20px", textAlign: "center", background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16 }}>
+          <div style={{ fontSize: 14.5, fontWeight: 700, color: "#15141B", marginBottom: 6 }}>아직 로드맵이 없어요</div>
+          <div style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5 }}>스펙과 목표 직무를 입력하면 시기별 로드맵을 만들어드려요.</div>
+        </div>
+      ) : (
+        <div style={{ position: "relative", paddingLeft: 6 }}>
+          {roadmap.map((m, i) => {
           const meta = PRIORITY_META[m.priority];
           const dotBg = m.current ? PRIMARY : "#fff";
           const dotBorder = m.current ? PRIMARY : "#D9D8E4";
@@ -48,9 +67,12 @@ export function RoadmapTab({ target }: RoadmapTabProps) {
               />
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                 <span style={{ fontSize: 13, fontWeight: 800, color: "#15141B" }}>{m.period}</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "#9797A1", background: "#F1F0F6", padding: "3px 8px", borderRadius: 6 }}>
-                  {m.phase}
-                </span>
+                {/* phase는 목업 전용 필드 → 있을 때만 표시 (백엔드 응답엔 없음) */}
+                {m.phase && (
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#9797A1", background: "#F1F0F6", padding: "3px 8px", borderRadius: 6 }}>
+                    {m.phase}
+                  </span>
+                )}
               </div>
               <div style={{ background: "#fff", border: `1px solid ${cardBorder}`, borderRadius: 18, padding: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
@@ -63,11 +85,47 @@ export function RoadmapTab({ target }: RoadmapTabProps) {
                   {m.activity}
                 </div>
                 <div style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5 }}>{m.reason}</div>
+
+                {/* 백엔드가 RAG로 검증해 붙여주는 실제 DB 활동(이름·마감·지원 링크). 있을 때만 표시. */}
+                {m.matchedActivities && m.matchedActivities.length > 0 && (
+                  <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                    {m.matchedActivities.map((a) => (
+                      <a
+                        key={a.activityId}
+                        href={a.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 10,
+                          padding: "10px 12px",
+                          background: "#F8F7FC",
+                          border: "1px solid #EDEDF2",
+                          borderRadius: 12,
+                          textDecoration: "none",
+                        }}
+                      >
+                        <span style={{ minWidth: 0, flex: 1 }}>
+                          <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, color: "#15141B", lineHeight: 1.35 }}>
+                            {a.name}
+                          </span>
+                          {a.organization && (
+                            <span style={{ display: "block", fontSize: 12, color: "#9797A1", fontWeight: 500 }}>{a.organization}</span>
+                          )}
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: ddayColor(a.deadline), flexShrink: 0 }}>{dday(a.deadline)}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           );
-        })}
-      </div>
+          })}
+        </div>
+      )}
     </div>
   );
 }

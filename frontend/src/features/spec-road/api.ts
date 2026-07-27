@@ -2,6 +2,7 @@ import { apiFetch } from "@/lib/api";
 import { toLanguageScoresPayload } from "./helpers";
 import type {
   RecommendationsResponse,
+  RoadmapResponse,
   Spec,
   Target,
   TargetJobResponse,
@@ -17,6 +18,12 @@ export function getMe(): Promise<UserMeResponse> {
 // 응답은 24시간 캐싱되며, isAiRecommendation이 false면 기본 추천(fallback)이다.
 export function getRecommendations(): Promise<RecommendationsResponse> {
   return apiFetch<RecommendationsResponse>("/api/v1/recommendations");
+}
+
+// F-05 커리어 로드맵. 실제 컨트롤러 경로는 /roadmaps (명세서의 /roadmap과 다름 — 실제 기준).
+// 각 단계에는 RAG로 검증된 실제 DB 활동(matchedActivities)이 포함된다.
+export function getRoadmap(): Promise<RoadmapResponse> {
+  return apiFetch<RoadmapResponse>("/api/v1/roadmaps");
 }
 
 // 화면 state → 백엔드 필드명(gpaMax, certifications)으로 변환해 저장한다.

@@ -94,13 +94,44 @@ export interface RecommendationMeta {
   isAiRecommendation: boolean;
 }
 
+// 화면에서 쓰는 로드맵 단계 모델.
+// period·priority·activity·reason은 백엔드 GET /roadmaps가 항상 주는 값이고,
+// phase·current는 목업(둘러보기)에만 있는 값이라 optional로 둔다.
+// matchedActivities는 백엔드가 RAG로 검증해 붙여주는 실제 DB 활동 목록.
 export interface RoadmapMilestone {
   period: string;
-  phase: string;
   priority: Priority;
   activity: string;
   reason: string;
-  current: boolean;
+  phase?: string;
+  current?: boolean;
+  matchedActivities?: MatchedActivity[];
+}
+
+// GET /api/v1/roadmaps 단계에 매칭된 실제 DB 대외활동 (이름·마감일·지원 링크 모두 DB 원본).
+export interface MatchedActivity {
+  activityId: string;
+  name: string;
+  type: string;
+  organization: string;
+  deadline: string;
+  url: string;
+}
+
+// GET /api/v1/roadmaps 타임라인 단계 (실제 컨트롤러/DTO 기준).
+// 백엔드는 목업의 phase·current를 주지 않고, 대신 matchedActivities를 준다.
+export interface RoadmapStep {
+  period: string;
+  priority: string;
+  activity: string;
+  reason: string;
+  matchedActivities: MatchedActivity[];
+}
+
+// GET /api/v1/roadmaps 전체 응답.
+// 명세서의 /roadmap · targetJob 필드와 달리 실제 컨트롤러는 /roadmaps이고 timeline만 반환한다.
+export interface RoadmapResponse {
+  timeline: RoadmapStep[];
 }
 
 export interface CompareRow {

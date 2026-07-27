@@ -1,7 +1,7 @@
 "use client";
 
 import { BottomNav } from "../components/BottomNav";
-import type { Recommendation, RecommendationMeta, Spec, Tab, Target } from "../types";
+import type { Recommendation, RecommendationMeta, RoadmapMilestone, Spec, Tab, Target } from "../types";
 import { CompareTab } from "./tabs/CompareTab";
 import { HomeTab } from "./tabs/HomeTab";
 import { ProfileTab } from "./tabs/ProfileTab";
@@ -17,6 +17,9 @@ interface AppScreenProps {
   recMeta: RecommendationMeta | null;
   recLoading: boolean;
   recError: boolean;
+  roadmap: RoadmapMilestone[];
+  roadmapLoading: boolean;
+  roadmapError: boolean;
   onOpenDetail: (id: string | number) => void;
   onEditSpec: () => void;
   onLogout: () => void;
@@ -32,6 +35,9 @@ export function AppScreen({
   recMeta,
   recLoading,
   recError,
+  roadmap,
+  roadmapLoading,
+  roadmapError,
   onOpenDetail,
   onEditSpec,
   onLogout,
@@ -50,7 +56,9 @@ export function AppScreen({
             onOpenDetail={onOpenDetail}
           />
         )}
-        {tab === "roadmap" && <RoadmapTab target={target} />}
+        {tab === "roadmap" && (
+          <RoadmapTab target={target} roadmap={roadmap} roadmapLoading={roadmapLoading} roadmapError={roadmapError} />
+        )}
         {tab === "compare" && <CompareTab />}
         {tab === "profile" && (
           <ProfileTab spec={spec} target={target} nickname={nickname} onEditSpec={onEditSpec} onLogout={onLogout} />

@@ -1,9 +1,12 @@
 import { LANG_MAX, PRIMARY, TODAY } from "./data";
 import type {
   LanguageScorePayload,
+  Priority,
   Recommendation,
   RecommendationMeta,
   RecommendationsResponse,
+  RoadmapMilestone,
+  RoadmapResponse,
   Spec,
 } from "./types";
 
@@ -98,4 +101,22 @@ export function toRecommendationMeta(res: RecommendationsResponse): Recommendati
     comparisonMessage: res.comparisonMessage,
     isAiRecommendation: res.isAiRecommendation,
   };
+}
+
+// 백엔드 priority 문자열을 화면 Priority로 정규화한다.
+// 알 수 없는 값이 와도 화면이 깨지지 않게 MEDIUM으로 떨어뜨린다.
+function normalizePriority(priority: string): Priority {
+  return priority === "HIGH" || priority === "MEDIUM" || priority === "LOW" ? priority : "MEDIUM";
+}
+
+// GET /roadmaps 응답을 화면 로드맵 단계 모델로 변환한다.
+// 백엔드는 목업의 phase·current를 주지 않아 비워 두고(optional), matchedActivities는 그대로 전달한다.
+export function fromRoadmapResponse(res: RoadmapResponse): RoadmapMilestone[] {
+  return res.timeline.map((step) => ({
+    period: step.period,
+    priority: normalizePriority(step.priority),
+    activity: step.activity,
+    reason: step.reason,
+    matchedActivities: step.matchedActivities,
+  }));
 }

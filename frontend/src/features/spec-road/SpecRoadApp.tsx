@@ -3,15 +3,29 @@
 import { useEffect, useState } from "react";
 import { KAKAO_LOGIN_URL } from "@/lib/api";
 import { clearTokens, getAccessToken } from "@/lib/auth";
-import { getMe, getRecommendations, putSpec, putTarget } from "./api";
-import { RECOMMENDATIONS } from "./data";
-import { fromLanguageScoresPayload, fromRecommendationsResponse, toRecommendationMeta } from "./helpers";
+import { getMe, getRecommendations, getRoadmap, putSpec, putTarget } from "./api";
+import { RECOMMENDATIONS, ROADMAP } from "./data";
+import {
+  fromLanguageScoresPayload,
+  fromRecommendationsResponse,
+  fromRoadmapResponse,
+  toRecommendationMeta,
+} from "./helpers";
 import { AnalyzingScreen } from "./screens/AnalyzingScreen";
 import { AppScreen } from "./screens/AppScreen";
 import { DetailSheet } from "./screens/DetailSheet";
 import { LoginScreen } from "./screens/LoginScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
-import type { OnboardStep, Recommendation, RecommendationMeta, Screen, Spec, Tab, Target } from "./types";
+import type {
+  OnboardStep,
+  Recommendation,
+  RecommendationMeta,
+  RoadmapMilestone,
+  Screen,
+  Spec,
+  Tab,
+  Target,
+} from "./types";
 
 // "로그인 없이 둘러보기"용 예시 데이터. 실제 로그인 유저의 첫 온보딩은 EMPTY_SPEC에서 시작한다.
 const INITIAL_SPEC: Spec = {
@@ -52,6 +66,11 @@ export function SpecRoadApp() {
   const [recLoading, setRecLoading] = useState(false);
   const [recError, setRecError] = useState(false);
 
+  // 로드맵 상태. 추천과 동일하게 로그인 유저는 실 API(GET /roadmaps), 둘러보기는 목업.
+  const [roadmap, setRoadmap] = useState<RoadmapMilestone[]>([]);
+  const [roadmapLoading, setRoadmapLoading] = useState(false);
+  const [roadmapError, setRoadmapError] = useState(false);
+
   useEffect(() => {
     if (screen !== "analyzing") return;
     const timer = setTimeout(() => {
@@ -69,10 +88,13 @@ export function SpecRoadApp() {
       setRecommendations(RECOMMENDATIONS);
       setRecMeta(null);
       setRecError(false);
+      setRoadmap(ROADMAP);
+      setRoadmapError(false);
       return;
     }
 
     let cancelled = false;
+
     setRecLoading(true);
     setRecError(false);
     getRecommendations()
@@ -89,6 +111,22 @@ export function SpecRoadApp() {
       })
       .finally(() => {
         if (!cancelled) setRecLoading(false);
+      });
+
+    setRoadmapLoading(true);
+    setRoadmapError(false);
+    getRoadmap()
+      .then((res) => {
+        if (cancelled) return;
+        setRoadmap(fromRoadmapResponse(res));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRoadmap([]);
+        setRoadmapError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setRoadmapLoading(false);
       });
 
     return () => {
@@ -241,6 +279,9 @@ export function SpecRoadApp() {
             recMeta={recMeta}
             recLoading={recLoading}
             recError={recError}
+            roadmap={roadmap}
+            roadmapLoading={roadmapLoading}
+            roadmapError={roadmapError}
             onOpenDetail={setDetailId}
             onEditSpec={() => {
               setOnboardStep(0);
