@@ -1,7 +1,7 @@
 "use client";
 
 import { BottomNav } from "../components/BottomNav";
-import type { Spec, Tab, Target } from "../types";
+import type { Recommendation, RecommendationMeta, Spec, Tab, Target } from "../types";
 import { CompareTab } from "./tabs/CompareTab";
 import { HomeTab } from "./tabs/HomeTab";
 import { ProfileTab } from "./tabs/ProfileTab";
@@ -13,16 +13,43 @@ interface AppScreenProps {
   spec: Spec;
   target: Target;
   nickname: string | null;
-  onOpenDetail: (id: number) => void;
+  recommendations: Recommendation[];
+  recMeta: RecommendationMeta | null;
+  recLoading: boolean;
+  recError: boolean;
+  onOpenDetail: (id: string | number) => void;
   onEditSpec: () => void;
   onLogout: () => void;
 }
 
-export function AppScreen({ tab, onTabChange, spec, target, nickname, onOpenDetail, onEditSpec, onLogout }: AppScreenProps) {
+export function AppScreen({
+  tab,
+  onTabChange,
+  spec,
+  target,
+  nickname,
+  recommendations,
+  recMeta,
+  recLoading,
+  recError,
+  onOpenDetail,
+  onEditSpec,
+  onLogout,
+}: AppScreenProps) {
   return (
     <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", background: "#F6F6F9" }}>
       <div className="cf-scroll" style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
-        {tab === "home" && <HomeTab target={target} nickname={nickname} onOpenDetail={onOpenDetail} />}
+        {tab === "home" && (
+          <HomeTab
+            target={target}
+            nickname={nickname}
+            recommendations={recommendations}
+            recMeta={recMeta}
+            recLoading={recLoading}
+            recError={recError}
+            onOpenDetail={onOpenDetail}
+          />
+        )}
         {tab === "roadmap" && <RoadmapTab target={target} />}
         {tab === "compare" && <CompareTab />}
         {tab === "profile" && (

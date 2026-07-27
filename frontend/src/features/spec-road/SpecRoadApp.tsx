@@ -3,14 +3,15 @@
 import { useEffect, useState } from "react";
 import { KAKAO_LOGIN_URL } from "@/lib/api";
 import { clearTokens, getAccessToken } from "@/lib/auth";
-import { getMe, putSpec, putTarget } from "./api";
-import { fromLanguageScoresPayload } from "./helpers";
+import { getMe, getRecommendations, putSpec, putTarget } from "./api";
+import { RECOMMENDATIONS } from "./data";
+import { fromLanguageScoresPayload, fromRecommendationsResponse, toRecommendationMeta } from "./helpers";
 import { AnalyzingScreen } from "./screens/AnalyzingScreen";
 import { AppScreen } from "./screens/AppScreen";
 import { DetailSheet } from "./screens/DetailSheet";
 import { LoginScreen } from "./screens/LoginScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
-import type { OnboardStep, Screen, Spec, Tab, Target } from "./types";
+import type { OnboardStep, Recommendation, RecommendationMeta, Screen, Spec, Tab, Target } from "./types";
 
 // "로그인 없이 둘러보기"용 예시 데이터. 실제 로그인 유저의 첫 온보딩은 EMPTY_SPEC에서 시작한다.
 const INITIAL_SPEC: Spec = {
@@ -39,10 +40,17 @@ export function SpecRoadApp() {
   const [screen, setScreen] = useState<Screen>("login");
   const [onboardStep, setOnboardStep] = useState<OnboardStep>(0);
   const [tab, setTab] = useState<Tab>("home");
-  const [detailId, setDetailId] = useState<number | null>(null);
+  const [detailId, setDetailId] = useState<string | number | null>(null);
   const [spec, setSpec] = useState<Spec>(INITIAL_SPEC);
   const [target, setTarget] = useState<Target>(INITIAL_TARGET);
   const [nickname, setNickname] = useState<string | null>(null);
+
+  // 추천 목록 상태. 로그인 유저는 실 API(GET /recommendations)로 채우고,
+  // 둘러보기(비로그인)는 목업으로 채운다. meta는 응답 최상단 요약(matchScore 등).
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [recMeta, setRecMeta] = useState<RecommendationMeta | null>(null);
+  const [recLoading, setRecLoading] = useState(false);
+  const [recError, setRecError] = useState(false);
 
   useEffect(() => {
     if (screen !== "analyzing") return;
@@ -51,6 +59,41 @@ export function SpecRoadApp() {
       setTab("home");
     }, 2100);
     return () => clearTimeout(timer);
+  }, [screen]);
+
+  // 앱 화면 진입 시 추천을 불러온다. 로그인 상태면 실 API, 아니면(둘러보기) 목업.
+  useEffect(() => {
+    if (screen !== "app") return;
+
+    if (!getAccessToken()) {
+      setRecommendations(RECOMMENDATIONS);
+      setRecMeta(null);
+      setRecError(false);
+      return;
+    }
+
+    let cancelled = false;
+    setRecLoading(true);
+    setRecError(false);
+    getRecommendations()
+      .then((res) => {
+        if (cancelled) return;
+        setRecommendations(fromRecommendationsResponse(res));
+        setRecMeta(toRecommendationMeta(res));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRecommendations([]);
+        setRecMeta(null);
+        setRecError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setRecLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [screen]);
 
   // 카카오 로그인 콜백(app/oauth/callback)이 토큰을 저장해두면 로그인 화면을 건너뛰고
@@ -194,6 +237,10 @@ export function SpecRoadApp() {
             spec={spec}
             target={target}
             nickname={nickname}
+            recommendations={recommendations}
+            recMeta={recMeta}
+            recLoading={recLoading}
+            recError={recError}
             onOpenDetail={setDetailId}
             onEditSpec={() => {
               setOnboardStep(0);
@@ -211,6 +258,8 @@ export function SpecRoadApp() {
         {screen === "app" && detailId != null && (
           <DetailSheet
             recommendationId={detailId}
+            recommendations={recommendations}
+            recMeta={recMeta}
             onClose={() => setDetailId(null)}
             onCompare={() => {
               setDetailId(null);

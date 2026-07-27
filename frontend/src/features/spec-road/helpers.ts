@@ -1,5 +1,11 @@
 import { LANG_MAX, PRIMARY, TODAY } from "./data";
-import type { LanguageScorePayload, Spec } from "./types";
+import type {
+  LanguageScorePayload,
+  Recommendation,
+  RecommendationMeta,
+  RecommendationsResponse,
+  Spec,
+} from "./types";
 
 export function dday(dateStr: string): string {
   const diff = Math.ceil((new Date(dateStr).getTime() - TODAY.getTime()) / 86400000);
@@ -58,4 +64,38 @@ export function toLanguageScoresPayload(langScores: Spec["langScores"]): Languag
       const maxScore = LANG_MAX[type] ?? null;
       return maxScore == null ? { type: apiType, grade: value } : { type: apiType, score: Number(value), maxScore };
     });
+}
+
+// 백엔드 활동 type 코드(INTERNSHIP 등)를 화면 라벨(인턴십 등)로 바꾼다.
+// 매핑에 없는 값은 원본을 그대로 보여준다(신규 type 추가 시에도 화면이 깨지지 않도록).
+const ACTIVITY_TYPE_LABELS: Record<string, string> = {
+  INTERNSHIP: "인턴십",
+  EXTERNAL: "대외활동",
+  COMPETITION: "공모전",
+  EDUCATION: "교육",
+};
+
+export function activityTypeLabel(type: string): string {
+  return ACTIVITY_TYPE_LABELS[type] ?? type;
+}
+
+// GET /recommendations 응답을 화면 추천 카드 모델로 변환한다.
+// 백엔드는 개별 활동 점수·기관·태그·bullets를 주지 않으므로 해당 필드는 비워 둔다
+// (Recommendation에서 optional). 점수는 응답 최상단 matchScore 하나로 통일됐다.
+export function fromRecommendationsResponse(res: RecommendationsResponse): Recommendation[] {
+  return res.activities.map((a) => ({
+    id: a.id,
+    type: activityTypeLabel(a.type),
+    name: a.name,
+    reason: a.reason,
+    deadline: a.deadline,
+  }));
+}
+
+export function toRecommendationMeta(res: RecommendationsResponse): RecommendationMeta {
+  return {
+    matchScore: res.matchScore,
+    comparisonMessage: res.comparisonMessage,
+    isAiRecommendation: res.isAiRecommendation,
+  };
 }

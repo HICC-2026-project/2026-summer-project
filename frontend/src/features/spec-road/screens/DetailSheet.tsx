@@ -1,19 +1,31 @@
 "use client";
 
-import { PRIMARY, RECOMMENDATIONS } from "../data";
+import { PRIMARY } from "../data";
 import { dday, ddayColor, fmtDate } from "../helpers";
+import type { Recommendation, RecommendationMeta } from "../types";
 
 interface DetailSheetProps {
-  recommendationId: number;
+  recommendationId: string | number;
+  recommendations: Recommendation[];
+  recMeta: RecommendationMeta | null;
   onClose: () => void;
   onCompare: () => void;
 }
 
-export function DetailSheet({ recommendationId, onClose, onCompare }: DetailSheetProps) {
-  const rec = RECOMMENDATIONS.find((r) => r.id === recommendationId);
+export function DetailSheet({ recommendationId, recommendations, recMeta, onClose, onCompare }: DetailSheetProps) {
+  const rec = recommendations.find((r) => r.id === recommendationId);
   if (!rec) return null;
 
-  const scoreDeg = rec.score * 3.6;
+  // 개별 점수(score)는 목업에만 있고, 실 API는 응답 최상단 matchScore 하나만 준다.
+  const score = rec.score ?? recMeta?.matchScore ?? 0;
+  const scoreDeg = score * 3.6;
+  // 상세 근거: 목업은 bullets 배열, 실 API는 단일 reason 문자열을 준다.
+  const bullets = rec.bullets && rec.bullets.length > 0 ? rec.bullets : [rec.reason];
+  // 비교 안내 문구: 목업은 유사 합격자 수, 실 API는 comparisonMessage.
+  const matchSubtitle =
+    rec.passers != null
+      ? `유사 합격자 ${rec.passers}명의 스펙과 비교한 결과예요.`
+      : (recMeta?.comparisonMessage ?? "나와 잘 맞는 활동이에요.");
 
   return (
     <>
@@ -56,7 +68,7 @@ export function DetailSheet({ recommendationId, onClose, onCompare }: DetailShee
             {rec.name}
           </h2>
           <div style={{ fontSize: 14, color: "#9797A1", fontWeight: 500, marginBottom: 20 }}>
-            {rec.org} · 마감 {fmtDate(rec.deadline)}
+            {rec.org ? `${rec.org} · ` : ""}마감 {fmtDate(rec.deadline)}
           </div>
 
           <div
@@ -92,13 +104,13 @@ export function DetailSheet({ recommendationId, onClose, onCompare }: DetailShee
                   justifyContent: "center",
                 }}
               >
-                <span style={{ fontSize: 26, fontWeight: 800, color: PRIMARY, lineHeight: 1 }}>{rec.score}</span>
+                <span style={{ fontSize: 26, fontWeight: 800, color: PRIMARY, lineHeight: 1 }}>{score}</span>
                 <span style={{ fontSize: 10, fontWeight: 700, color: "#B0B0BA" }}>매치</span>
               </div>
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14.5, fontWeight: 800, color: "#15141B", marginBottom: 4 }}>나와 잘 맞는 활동이에요</div>
-              <div style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5 }}>유사 합격자 {rec.passers}명의 스펙과 비교한 결과예요.</div>
+              <div style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5 }}>{matchSubtitle}</div>
             </div>
           </div>
 
@@ -107,7 +119,7 @@ export function DetailSheet({ recommendationId, onClose, onCompare }: DetailShee
             <span style={{ fontSize: 11, fontWeight: 700, color: PRIMARY }}>✦ AI 분석</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
-            {rec.bullets.map((b, i) => (
+            {bullets.map((b, i) => (
               <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                 <span
                   style={{
@@ -132,13 +144,15 @@ export function DetailSheet({ recommendationId, onClose, onCompare }: DetailShee
             ))}
           </div>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 8 }}>
-            {rec.tags.map((t) => (
-              <span key={t} style={{ fontSize: 12.5, fontWeight: 600, color: "#61616C", background: "#F1F0F6", padding: "6px 12px", borderRadius: 999 }}>
-                #{t}
-              </span>
-            ))}
-          </div>
+          {rec.tags && rec.tags.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 8 }}>
+              {rec.tags.map((t) => (
+                <span key={t} style={{ fontSize: 12.5, fontWeight: 600, color: "#61616C", background: "#F1F0F6", padding: "6px 12px", borderRadius: 999 }}>
+                  #{t}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ padding: "12px 24px calc(20px + env(safe-area-inset-bottom))", borderTop: "1px solid #F1F0F6", display: "flex", gap: 10, flexShrink: 0 }}>
           <button

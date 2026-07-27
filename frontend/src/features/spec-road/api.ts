@@ -1,9 +1,22 @@
 import { apiFetch } from "@/lib/api";
 import { toLanguageScoresPayload } from "./helpers";
-import type { Spec, Target, TargetJobResponse, UserMeResponse, UserSpecResponse } from "./types";
+import type {
+  RecommendationsResponse,
+  Spec,
+  Target,
+  TargetJobResponse,
+  UserMeResponse,
+  UserSpecResponse,
+} from "./types";
 
 export function getMe(): Promise<UserMeResponse> {
   return apiFetch<UserMeResponse>("/api/v1/users/me");
+}
+
+// F-03 맞춤 활동 추천. JWT 필수 — apiFetch가 저장된 토큰을 Authorization 헤더로 붙인다.
+// 응답은 24시간 캐싱되며, isAiRecommendation이 false면 기본 추천(fallback)이다.
+export function getRecommendations(): Promise<RecommendationsResponse> {
+  return apiFetch<RecommendationsResponse>("/api/v1/recommendations");
 }
 
 // 화면 state → 백엔드 필드명(gpaMax, certifications)으로 변환해 저장한다.
