@@ -6,6 +6,14 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   (process.env.NODE_ENV === "production" ? "" : "http://localhost:8080");
 
+// 카카오 로그인 시작은 페이지 이동(navigation)이라 Mixed Content 차단 대상이 아니고,
+// OAuth 인가 요청 쿠키가 백엔드 도메인에 설정되어야 하므로 프록시 없이 백엔드로 직접 간다.
+export const BACKEND_ORIGIN =
+  process.env.NEXT_PUBLIC_BACKEND_ORIGIN ??
+  (process.env.NODE_ENV === "production" ? "http://13.124.80.94:8080" : "http://localhost:8080");
+
+export const KAKAO_LOGIN_URL = `${BACKEND_ORIGIN}/oauth2/authorization/kakao`;
+
 export class ApiError extends Error {
   constructor(
     public status: number,

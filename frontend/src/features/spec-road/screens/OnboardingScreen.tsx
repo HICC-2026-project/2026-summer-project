@@ -4,6 +4,7 @@ import { useState, type CSSProperties } from "react";
 import { Chip } from "../components/Chip";
 import {
   GPA_SCALE_OPTIONS,
+  GRADE_OPTIONS,
   INDUSTRY_OPTIONS,
   JOB_OPTIONS,
   LANG_MAX,
@@ -23,6 +24,7 @@ interface OnboardingScreenProps {
   onNext: () => void;
   onSetGpa: (v: string) => void;
   onSetGpaScale: (v: number) => void;
+  onSetGrade: (v: number) => void;
   onSetLangScore: (type: string, v: string) => void;
   onAddCert: (v: string) => void;
   onRemoveCert: (v: string) => void;
@@ -85,6 +87,7 @@ export function OnboardingScreen({
   onNext,
   onSetGpa,
   onSetGpaScale,
+  onSetGrade,
   onSetLangScore,
   onAddCert,
   onRemoveCert,
@@ -148,6 +151,22 @@ export function OnboardingScreen({
           <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 22px", lineHeight: 1.55 }}>
             입력한 정보는 추천과 합격자 비교에만 쓰이고, 언제든 수정할 수 있어요.
           </p>
+
+          <div style={cardStyle}>
+            <label style={fieldLabelStyle}>학년</label>
+            <div style={{ display: "flex", gap: 6 }}>
+              {GRADE_OPTIONS.map((g) => (
+                <Chip
+                  key={g}
+                  selected={spec.grade === g}
+                  onClick={() => onSetGrade(g)}
+                  style={{ flex: 1, height: 34, fontSize: 12.5, borderRadius: 10 }}
+                >
+                  {g}학년
+                </Chip>
+              ))}
+            </div>
+          </div>
 
           <div style={cardStyle}>
             <label style={fieldLabelStyle}>학점 (GPA)</label>

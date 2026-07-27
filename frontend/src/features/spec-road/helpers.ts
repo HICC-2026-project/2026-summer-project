@@ -33,6 +33,21 @@ const API_LANGUAGE_TYPE_NAMES: Record<string, string> = {
   OPIc: "OPIC",
 };
 
+const FRONT_LANGUAGE_TYPE_NAMES: Record<string, string> = {
+  OPIC: "OPIc",
+};
+
+// GET /users/me 응답의 languageScores 배열을 화면 state({ TOEIC: "850" })로 되돌린다.
+export function fromLanguageScoresPayload(payload: LanguageScorePayload[]): Spec["langScores"] {
+  const result: Spec["langScores"] = {};
+  for (const item of payload) {
+    const type = FRONT_LANGUAGE_TYPE_NAMES[item.type] ?? item.type;
+    const value = item.grade ?? (item.score != null ? String(item.score) : "");
+    if (value) result[type] = value;
+  }
+  return result;
+}
+
 // Converts the flat { TOEIC: "850", OPIc: "IH" } state into the
 // [{ type, score, maxScore } | { type, grade }] array PUT /users/me/spec expects.
 export function toLanguageScoresPayload(langScores: Spec["langScores"]): LanguageScorePayload[] {

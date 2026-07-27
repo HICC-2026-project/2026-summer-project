@@ -6,6 +6,7 @@ export type Priority = "HIGH" | "MEDIUM" | "LOW";
 export interface Spec {
   gpa: string;
   gpaScale: number;
+  grade: number | null; // 학년 (1~4)
   langScores: Record<string, string>;
   certs: string[];
 }
@@ -23,16 +24,24 @@ export interface LanguageScorePayload {
 export interface UserSpecResponse {
   gpa: number | null;
   gpaMax: number | null;
-  languageScores: Record<string, string> | null;
+  grade: number | null;
+  languageScores: LanguageScorePayload[] | null;
   certifications: string[] | null;
+}
+
+export interface TargetJobResponse {
+  jobType: string;
+  companySize: string;
+  industry: string;
 }
 
 export interface UserMeResponse {
   id: string;
+  email: string | null;
   nickname: string | null;
   provider: string;
-  role: string;
   spec: UserSpecResponse | null;
+  target: TargetJobResponse | null;
 }
 
 export interface Target {
