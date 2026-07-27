@@ -152,6 +152,9 @@ export const SIZE_OPTIONS: [string, string][] = [
 export const INDUSTRY_OPTIONS = ["IT·플랫폼", "금융", "제조", "게임"];
 export const LANG_TYPES = ["TOEIC", "OPIc", "TOEFL"];
 
+// 로드맵 구간 계산(학기/방학 구분)에 쓰이는 학년 선택지 (7/14 회의 결정).
+export const GRADE_OPTIONS = [1, 2, 3, 4];
+
 // 학교마다 학점 만점 기준(4.5/4.3/4.0)이 달라, 학교명 대신 만점 기준 자체를 직접 고르게 한다.
 // (학교명 수집·매핑 없이도 정확한 백분율 환산이 가능해 개인정보 이슈를 원천적으로 피할 수 있다.)
 export const GPA_SCALE_OPTIONS = [4.5, 4.3, 4.0];
