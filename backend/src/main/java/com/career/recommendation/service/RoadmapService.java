@@ -19,10 +19,13 @@ import com.career.recommendation.util.SimilarSpecFinder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -51,6 +54,9 @@ public class RoadmapService {
     private final GeminiService geminiService;
     private final PromptDataBuilder promptDataBuilder;
     private final ObjectMapper objectMapper;
+
+    private static final int MAX_RECOMMENDABLE_ACTIVITIES = 50;
+    private static final ZoneId SERVICE_ZONE_ID = ZoneId.of("Asia/Seoul");
 
     /**
      * 현재 로그인한 유저의 6개월 커리어 로드맵을 반환한다.
@@ -85,8 +91,11 @@ public class RoadmapService {
             log.warn("F-03 추천 결과 연동 중 오류 (기본값 사용): {}", e.getMessage());
         }
 
-        // 3. DB 활성 활동 목록 조회 (RAG 패턴)
-        List<Activity> activeActivities = activityRepository.findByIsActiveTrue();
+        // 3. 현재 신청 가능한 DB 활동 조회 (RAG 패턴)
+        List<Activity> activeActivities = activityRepository.findRecommendableActivities(
+                LocalDate.now(SERVICE_ZONE_ID),
+                PageRequest.of(0, MAX_RECOMMENDABLE_ACTIVITIES)
+        );
         String availableActivitiesJson = promptDataBuilder.buildAvailableActivitiesJson(activeActivities);
 
         // 4. Gemini API 호출 (최대 2회 시도)
