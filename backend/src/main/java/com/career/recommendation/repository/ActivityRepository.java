@@ -40,4 +40,33 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID> {
     List<Activity> findRecommendableActivities(
             @Param("today") LocalDate today,
             Pageable pageable);
+
+    /**
+     * 현재 신청 가능한 활동 목록을 페이지 단위로 조회한다.
+     * 마감일이 없는 활동은 상시 모집으로 간주하여 포함한다.
+     */
+    @Query("""
+            SELECT a
+            FROM Activity a
+            WHERE a.isActive = true
+              AND (a.deadline IS NULL OR a.deadline >= :today)
+            """)
+    Page<Activity> findOpenActivities(
+            @Param("today") LocalDate today,
+            Pageable pageable);
+
+    /**
+     * 지정한 유형 중 현재 신청 가능한 활동을 페이지 단위로 조회한다.
+     */
+    @Query("""
+            SELECT a
+            FROM Activity a
+            WHERE a.isActive = true
+              AND a.type = :type
+              AND (a.deadline IS NULL OR a.deadline >= :today)
+            """)
+    Page<Activity> findOpenActivitiesByType(
+            @Param("type") String type,
+            @Param("today") LocalDate today,
+            Pageable pageable);
 }
