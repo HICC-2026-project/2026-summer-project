@@ -21,10 +21,13 @@ import com.career.recommendation.util.SimilarSpecFinder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -56,6 +59,8 @@ public class RecommendationService {
     private final ObjectMapper objectMapper;
 
     private static final int CACHE_HOURS = 24;
+    private static final int MAX_RECOMMENDABLE_ACTIVITIES = 50;
+    private static final ZoneId SERVICE_ZONE_ID = ZoneId.of("Asia/Seoul");
 
     /**
      * 현재 로그인한 유저의 맞춤 추천 활동 목록을 반환한다.
@@ -64,12 +69,13 @@ public class RecommendationService {
     @Transactional
     public RecommendationResponse getRecommendations(Authentication authentication) {
         User user = currentUserService.getCurrentUser(authentication);
+        LocalDate today = LocalDate.now(SERVICE_ZONE_ID);
 
         // 1. 유효 캐시 확인 (활동 목록이 포함된 정상 캐시만 사용)
         Recommendation cached = recommendationRepository.findByUser_Id(user.getId()).orElse(null);
         if (cached != null && cached.isValid()) {
             RecommendationResponse deserialized = deserialize(cached.getResultJson());
-            if (deserialized != null && deserialized.getActivities() != null && !deserialized.getActivities().isEmpty()) {
+            if (hasUsableCachedActivities(deserialized, today)) {
                 return deserialized;
             }
         }
@@ -86,8 +92,11 @@ public class RecommendationService {
         );
         String comparisonMessage = similarSpecFinder.buildComparisonMessage(similarPassers.size(), jobType);
 
-        // 4. DB 활성 활동 목록 조회 (RAG 패턴 — Gemini에 선택지 제공)
-        List<Activity> activeActivities = activityRepository.findByIsActiveTrue();
+        // 4. 현재 신청 가능한 DB 활동 조회 (RAG 패턴 — Gemini에 선택지 제공)
+        List<Activity> activeActivities = activityRepository.findRecommendableActivities(
+                today,
+                PageRequest.of(0, MAX_RECOMMENDABLE_ACTIVITIES)
+        );
         String availableActivitiesJson = promptDataBuilder.buildAvailableActivitiesJson(activeActivities);
 
         // 5. Gemini API 호출 (최대 2회 시도)
@@ -104,6 +113,15 @@ public class RecommendationService {
         recommendationCacheService.save(user, response, CACHE_HOURS);
 
         return response;
+    }
+
+    private boolean hasUsableCachedActivities(RecommendationResponse response, LocalDate today) {
+        return response != null
+                && response.getActivities() != null
+                && !response.getActivities().isEmpty()
+                && response.getActivities().stream()
+                .noneMatch(activity -> activity.getDeadline() != null
+                        && activity.getDeadline().isBefore(today));
     }
 
     /**
