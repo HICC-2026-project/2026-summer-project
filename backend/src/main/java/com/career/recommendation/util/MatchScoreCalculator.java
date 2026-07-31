@@ -37,6 +37,10 @@ public class MatchScoreCalculator {
         if (passerList == null || passerList.isEmpty()) {
             return 0;
         }
+        // userSpec이 null이면 스펙 비교 불가 → 0 반환
+        if (userSpec == null) {
+            return 0;
+        }
 
         double totalScore = passerList.stream()
                 .mapToDouble(passer -> calculateSingle(userSpec, passer))
@@ -47,6 +51,9 @@ public class MatchScoreCalculator {
     }
 
     private double calculateSingle(UserSpec userSpec, PasserData passer) {
+        // userSpec은 이미 calculate()에서 null 체크되었으나, passer null 방어
+        if (passer == null) return 0.0;
+
         double gpaScore  = scoreGpa(userSpec.getGpa(), passer.getGpa(), userSpec.getGpaMax());
         double langScore = scoreLang(userSpec.getLanguageScores(), passer.getLanguageScore());
         double certScore = scoreCert(userSpec.getCertifications(), passer.getCertifications());

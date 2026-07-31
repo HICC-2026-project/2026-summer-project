@@ -47,6 +47,10 @@ public class PromptDataBuilder {
                 if (a.getTags() != null) {
                     item.put("tags", a.getTags());
                 }
+                // 활동 자격 요건(targetSpec)을 포함하여 AI가 유저 스펙과 비교할 수 있도록 전달
+                if (a.getTargetSpec() != null) {
+                    item.put("targetSpec", a.getTargetSpec());
+                }
                 list.add(item);
             }
             return objectMapper.writeValueAsString(list);

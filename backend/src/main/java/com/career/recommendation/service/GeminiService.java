@@ -177,7 +177,7 @@ public class GeminiService {
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(Map.class)
-                    .block(java.time.Duration.ofSeconds(8));
+                    .block(java.time.Duration.ofSeconds(30));
 
             if (response != null && response.get("candidates") instanceof List<?> candidates && !candidates.isEmpty()) {
                 Map<?, ?> candidate = (Map<?, ?>) candidates.get(0);

@@ -11,7 +11,7 @@ import java.util.UUID;
 /**
  * GET /api/v1/recommendations 응답 DTO.
  *
- * isAiRecommendation: Claude 정상 응답이면 true, Fallback이면 false → 프론트에서 "일반 추천" 배지 표시.
+ * isAiRecommendation: Gemini 정상 응답이면 true, Fallback이면 false → 프론트에서 "일반 추천" 배지 표시.
  * comparisonMessage: 유사 합격자 수에 따른 요약 메시지.
  */
 @Getter

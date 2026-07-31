@@ -63,7 +63,7 @@ public class SimilarSpecFinder {
      */
     public String buildComparisonMessage(int count, String jobType) {
         if (count == 0) {
-            return "아직 이 활동은 데이터가 부족해 AI 일반 추천을 제공합니다.";
+            return "아직 이 직무는 데이터가 부족해 AI 일반 추천을 제공합니다.";
         }
         String jobLabel = (jobType != null && !jobType.isBlank()) ? jobType + " " : "";
         return String.format("유사 %s합격자 %d명과 비교한 결과입니다.", jobLabel, count);
