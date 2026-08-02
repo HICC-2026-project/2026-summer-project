@@ -104,10 +104,11 @@ public class PromptDataBuilder {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < passerList.size(); i++) {
             PasserData p = passerList.get(i);
-            sb.append(String.format("합격자%d: 학점=%s, 경험수=%d, 자격증=%s\n",
+            sb.append(String.format("합격자%d: 학점=%s/%s, 어학=%s, 자격증=%s\n",
                     i + 1,
                     p.getGpa() != null ? p.getGpa() : "미상",
-                    p.getExperienceCount() != null ? p.getExperienceCount() : 0,
+                    p.getGpaMax() != null ? p.getGpaMax() : "미상",
+                    p.getLanguageScores() != null ? p.getLanguageScores() : List.of(),
                     p.getCertifications() != null ? String.join(", ", p.getCertifications()) : "없음"
             ));
         }

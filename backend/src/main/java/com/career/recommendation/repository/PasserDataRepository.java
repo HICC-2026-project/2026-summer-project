@@ -16,15 +16,35 @@ public interface PasserDataRepository extends JpaRepository<PasserData, UUID> {
 
     List<PasserData> findByIsVerifiedTrue();
 
-    /** 학점 범위만으로 유사 합격자 검색 (직무 데이터가 없을 때 폴백으로 사용) */
-    @Query("SELECT p FROM PasserData p WHERE p.gpa BETWEEN :minGpa AND :maxGpa AND p.isVerified = true")
-    List<PasserData> findSimilarByGpa(@Param("minGpa") BigDecimal minGpa,
-                                       @Param("maxGpa") BigDecimal maxGpa);
+    /** 정규화 학점 비율만으로 유사 합격자 검색 (직무 데이터가 없을 때 폴백으로 사용) */
+    @Query("""
+            SELECT p
+            FROM PasserData p
+            WHERE p.isVerified = true
+              AND p.gpa IS NOT NULL
+              AND p.gpaMax IS NOT NULL
+              AND p.gpaMax > 0
+              AND (p.gpa / p.gpaMax) BETWEEN :minRatio AND :maxRatio
+            """)
+    List<PasserData> findSimilarByGpaRatio(
+            @Param("minRatio") BigDecimal minRatio,
+            @Param("maxRatio") BigDecimal maxRatio,
+            Pageable pageable);
 
-    /** 목표 직무 + 학점 범위 복합 조건으로 유사 합격자 Top N 검색 (BE-1 SimilarSpecFinder에서 사용) */
-    @Query("SELECT p FROM PasserData p WHERE p.jobType = :jobType AND p.gpa BETWEEN :minGpa AND :maxGpa AND p.isVerified = true")
-    List<PasserData> findSimilarByJobTypeAndGpa(@Param("jobType") String jobType,
-                                                 @Param("minGpa") BigDecimal minGpa,
-                                                 @Param("maxGpa") BigDecimal maxGpa,
-                                                 Pageable pageable);
+    /** 목표 직무 + 정규화 학점 비율로 유사 합격자 Top N 검색 */
+    @Query("""
+            SELECT p
+            FROM PasserData p
+            WHERE p.isVerified = true
+              AND p.jobType = :jobType
+              AND p.gpa IS NOT NULL
+              AND p.gpaMax IS NOT NULL
+              AND p.gpaMax > 0
+              AND (p.gpa / p.gpaMax) BETWEEN :minRatio AND :maxRatio
+            """)
+    List<PasserData> findSimilarByJobTypeAndGpaRatio(
+            @Param("jobType") String jobType,
+            @Param("minRatio") BigDecimal minRatio,
+            @Param("maxRatio") BigDecimal maxRatio,
+            Pageable pageable);
 }

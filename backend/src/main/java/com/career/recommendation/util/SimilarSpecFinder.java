@@ -7,6 +7,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 /**
@@ -19,8 +20,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SimilarSpecFinder {
 
-    /** 학점 유사 범위: ±0.3 */
-    private static final BigDecimal GPA_MARGIN = new BigDecimal("0.3");
+    /** 정규화 학점 비율 유사 범위: ±7%p */
+    private static final BigDecimal GPA_RATIO_MARGIN = new BigDecimal("0.07");
 
     /** 유사 합격자 최대 조회 수 */
     private static final int TOP_N = 5;
@@ -31,31 +32,32 @@ public class SimilarSpecFinder {
      * 목표 직무 + 학점 복합 조건으로 유사 합격자 Top 5를 검색한다.
      * 직무 조건으로 0건이면 학점 범위만으로 재시도(폴백)한다.
      *
-     * @param jobType 목표 직무 (예: "BE", "FE", "AI/ML")
+     * @param jobType 목표 직무 (예: "BACKEND", "FRONTEND", "AI_ML")
      * @param gpa     사용자 학점
+     * @param gpaMax  사용자 학점 만점
      * @return 검색 결과 (0~5건)
      */
-    public List<PasserData> find(String jobType, BigDecimal gpa) {
-        if (gpa == null) {
+    public List<PasserData> find(String jobType, BigDecimal gpa, BigDecimal gpaMax) {
+        if (gpa == null || gpaMax == null || gpaMax.signum() <= 0) {
             return List.of();
         }
-        BigDecimal minGpa = gpa.subtract(GPA_MARGIN);
-        BigDecimal maxGpa = gpa.add(GPA_MARGIN);
 
-        // 1차: 직무 + 학점 복합 검색
+        BigDecimal userRatio = gpa.divide(gpaMax, 4, RoundingMode.HALF_UP);
+        BigDecimal minRatio = userRatio.subtract(GPA_RATIO_MARGIN).max(BigDecimal.ZERO);
+        BigDecimal maxRatio = userRatio.add(GPA_RATIO_MARGIN).min(BigDecimal.ONE);
+
+        // 1차: 직무 + 정규화 학점 비율 복합 검색
         if (jobType != null && !jobType.isBlank()) {
-            List<PasserData> result = passerDataRepository.findSimilarByJobTypeAndGpa(
-                    jobType, minGpa, maxGpa, PageRequest.of(0, TOP_N));
+            List<PasserData> result = passerDataRepository.findSimilarByJobTypeAndGpaRatio(
+                    jobType, minRatio, maxRatio, PageRequest.of(0, TOP_N));
             if (!result.isEmpty()) {
                 return result;
             }
         }
 
-        // 2차 폴백: 해당 직무 데이터 부족 → 학점 범위만으로 재시도
-        return passerDataRepository.findSimilarByGpa(minGpa, maxGpa)
-                .stream()
-                .limit(TOP_N)
-                .toList();
+        // 2차 폴백: 해당 직무 데이터 부족 → 정규화 학점 비율만으로 재시도
+        return passerDataRepository.findSimilarByGpaRatio(
+                minRatio, maxRatio, PageRequest.of(0, TOP_N));
     }
 
     /**

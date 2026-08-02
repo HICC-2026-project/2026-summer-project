@@ -7,6 +7,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -24,16 +25,19 @@ public class PasserData {
     private Activity activity;
 
     @Column(name = "job_type")
-    private String jobType;   // FE, BE, AI/ML, 데이터, 기획/PM, 보안 등
+    private String jobType;   // BACKEND | FRONTEND | AI_ML | DATA_ENGINEER | PM | SECURITY
 
     private Integer year;
 
-    @Column(precision = 3, scale = 2)
+    @Column(precision = 4, scale = 2)
     private BigDecimal gpa;
 
+    @Column(name = "gpa_max", precision = 4, scale = 2)
+    private BigDecimal gpaMax;
+
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "language_score", columnDefinition = "jsonb")
-    private Map<String, Object> languageScore;
+    @Column(name = "language_scores", columnDefinition = "jsonb")
+    private List<Map<String, Object>> languageScores;
 
     @Column(columnDefinition = "text[]")
     private String[] certifications;

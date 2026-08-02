@@ -154,131 +154,141 @@ VALUES (
 
 -- PasserData SQL
 
-INSERT INTO passer_data (id, activity_id, job_type, year, gpa, language_score, certifications, experience_count, spec_summary, is_verified)
+INSERT INTO passer_data (id, activity_id, job_type, year, gpa, gpa_max, language_scores, certifications, experience_count, spec_summary, is_verified)
 VALUES (
     'b0000000-0000-0000-0000-000000000001',
     'a0000000-0000-0000-0000-000000000001',
-    'BE',
+    'BACKEND',
     2025,
     3.75,
-    '{"toeic": 860}'::jsonb,
+    4.5,
+    '[{"type":"TOEIC","score":860,"maxScore":990}]'::jsonb,
     ARRAY['정보처리기사', 'SQLD'],
     2,
     '컴퓨터공학과 4학년 / 백엔드 웹 프로젝트 2회 (Spring Boot, MySQL) / 정보처리기사, SQLD 보유 / 토익 860점',
     TRUE
 ) ON CONFLICT (id) DO NOTHING;
-INSERT INTO passer_data (id, activity_id, job_type, year, gpa, language_score, certifications, experience_count, spec_summary, is_verified)
+INSERT INTO passer_data (id, activity_id, job_type, year, gpa, gpa_max, language_scores, certifications, experience_count, spec_summary, is_verified)
 VALUES (
     'b0000000-0000-0000-0000-000000000002',
     'a0000000-0000-0000-0000-000000000002',
-    'BE',
+    'BACKEND',
     2025,
     3.65,
-    '{"toeic": 830}'::jsonb,
+    4.5,
+    '[{"type":"TOEIC","score":830,"maxScore":990}]'::jsonb,
     ARRAY['정보처리기사'],
     1,
     '소프트웨어전공 4학년 / Java 객체지향 설계 및 JUnit 테스트 작성 경험 / 알고리즘 스터디 6개월 / 정보처리기사',
     TRUE
 ) ON CONFLICT (id) DO NOTHING;
-INSERT INTO passer_data (id, activity_id, job_type, year, gpa, language_score, certifications, experience_count, spec_summary, is_verified)
+INSERT INTO passer_data (id, activity_id, job_type, year, gpa, gpa_max, language_scores, certifications, experience_count, spec_summary, is_verified)
 VALUES (
     'b0000000-0000-0000-0000-000000000003',
     'a0000000-0000-0000-0000-000000000003',
-    'FE',
+    'FRONTEND',
     2025,
     3.82,
-    '{"toeic_speaking": "AL"}'::jsonb,
+    4.5,
+    '[]'::jsonb,
     ARRAY['SQLD'],
     2,
     '컴퓨터공학과 3학년 / React, TypeScript 기반 대용량 웹 프로젝트 2회 / SQLD 보유 / 토익스피킹 AL',
     TRUE
 ) ON CONFLICT (id) DO NOTHING;
-INSERT INTO passer_data (id, activity_id, job_type, year, gpa, language_score, certifications, experience_count, spec_summary, is_verified)
+INSERT INTO passer_data (id, activity_id, job_type, year, gpa, gpa_max, language_scores, certifications, experience_count, spec_summary, is_verified)
 VALUES (
     'b0000000-0000-0000-0000-000000000004',
     'a0000000-0000-0000-0000-000000000004',
-    'BE',
+    'BACKEND',
     2025,
     3.9,
-    '{"toeic": 910}'::jsonb,
+    4.5,
+    '[{"type":"TOEIC","score":910,"maxScore":990}]'::jsonb,
     ARRAY['정보처리기사', 'AWS SAA'],
     3,
     '컴퓨터공학과 4학년 / 오픈소스 프로젝트 PR 기여 3회 / Docker, Kubernetes 클라우드 구축 / 정보처리기사, AWS SAA',
     TRUE
 ) ON CONFLICT (id) DO NOTHING;
-INSERT INTO passer_data (id, activity_id, job_type, year, gpa, language_score, certifications, experience_count, spec_summary, is_verified)
+INSERT INTO passer_data (id, activity_id, job_type, year, gpa, gpa_max, language_scores, certifications, experience_count, spec_summary, is_verified)
 VALUES (
     'b0000000-0000-0000-0000-000000000005',
     'a0000000-0000-0000-0000-000000000005',
-    'AI/ML',
+    'AI_ML',
     2025,
     4.1,
-    '{"opic": "IH"}'::jsonb,
+    4.5,
+    '[{"type":"OPIC","grade":"IH"}]'::jsonb,
     ARRAY['정보처리기사', 'ADsP'],
     2,
     '인공지능학과 4학년 / PyTorch 기반 자연어 처리(NLP) 해커톤 수상 / ADsP, 정보처리기사 / OPIc IH',
     TRUE
 ) ON CONFLICT (id) DO NOTHING;
-INSERT INTO passer_data (id, activity_id, job_type, year, gpa, language_score, certifications, experience_count, spec_summary, is_verified)
+INSERT INTO passer_data (id, activity_id, job_type, year, gpa, gpa_max, language_scores, certifications, experience_count, spec_summary, is_verified)
 VALUES (
     'b0000000-0000-0000-0000-000000000006',
     'a0000000-0000-0000-0000-000000000006',
-    'BE',
+    'BACKEND',
     2025,
     3.55,
-    '{"toeic": 810}'::jsonb,
+    4.5,
+    '[{"type":"TOEIC","score":810,"maxScore":990}]'::jsonb,
     ARRAY['정보처리기사'],
     1,
     '정보통신공학과 4학년 / Node.js Express 기반 동아리 서비스 API 개발 / 정보처리기사 보유 / 토익 810점',
     TRUE
 ) ON CONFLICT (id) DO NOTHING;
-INSERT INTO passer_data (id, activity_id, job_type, year, gpa, language_score, certifications, experience_count, spec_summary, is_verified)
+INSERT INTO passer_data (id, activity_id, job_type, year, gpa, gpa_max, language_scores, certifications, experience_count, spec_summary, is_verified)
 VALUES (
     'b0000000-0000-0000-0000-000000000007',
     'a0000000-0000-0000-0000-000000000007',
-    'FE',
+    'FRONTEND',
     2025,
     3.48,
-    '{"toeic": 780}'::jsonb,
+    4.5,
+    '[{"type":"TOEIC","score":780,"maxScore":990}]'::jsonb,
     ARRAY['WebDesign'],
     1,
     '전산학과 3학년 / Next.js & Tailwind CSS 웹 프론트엔드 제작 / 토익 780점 / 튜터링 1회',
     TRUE
 ) ON CONFLICT (id) DO NOTHING;
-INSERT INTO passer_data (id, activity_id, job_type, year, gpa, language_score, certifications, experience_count, spec_summary, is_verified)
+INSERT INTO passer_data (id, activity_id, job_type, year, gpa, gpa_max, language_scores, certifications, experience_count, spec_summary, is_verified)
 VALUES (
     'b0000000-0000-0000-0000-000000000008',
     'a0000000-0000-0000-0000-000000000008',
-    'AI/ML',
+    'AI_ML',
     2025,
     3.88,
-    '{"opic": "AL"}'::jsonb,
+    4.5,
+    '[{"type":"OPIC","grade":"AL"}]'::jsonb,
     ARRAY['SQLD'],
     3,
     '컴퓨터공학과 4학년 / LangChain & Vector DB 기반 RAG 추천 시스템 구축 / 해커톤 2회 수상 / SQLD',
     TRUE
 ) ON CONFLICT (id) DO NOTHING;
-INSERT INTO passer_data (id, activity_id, job_type, year, gpa, language_score, certifications, experience_count, spec_summary, is_verified)
+INSERT INTO passer_data (id, activity_id, job_type, year, gpa, gpa_max, language_scores, certifications, experience_count, spec_summary, is_verified)
 VALUES (
     'b0000000-0000-0000-0000-000000000009',
     'a0000000-0000-0000-0000-000000000009',
-    '기획/PM',
+    'PM',
     2025,
     3.6,
-    '{"toeic": 890}'::jsonb,
+    4.5,
+    '[{"type":"TOEIC","score":890,"maxScore":990}]'::jsonb,
     ARRAY['SQLD'],
     2,
     '경영정보학과 3학년 / IT 서비스 와이어프레임 기획 및 PM 프로젝트 2회 / SQLD 보유 / 토익 890점',
     TRUE
 ) ON CONFLICT (id) DO NOTHING;
-INSERT INTO passer_data (id, activity_id, job_type, year, gpa, language_score, certifications, experience_count, spec_summary, is_verified)
+INSERT INTO passer_data (id, activity_id, job_type, year, gpa, gpa_max, language_scores, certifications, experience_count, spec_summary, is_verified)
 VALUES (
     'b0000000-0000-0000-0000-000000000010',
     'a0000000-0000-0000-0000-000000000010',
-    'BE',
+    'BACKEND',
     2025,
     3.95,
-    '{"toeic": 920}'::jsonb,
+    4.5,
+    '[{"type":"TOEIC","score":920,"maxScore":990}]'::jsonb,
     ARRAY['정보처리기사', 'SQLD', 'AWS SAA'],
     3,
     '컴퓨터공학과 4학년 / 분산 서버 및 Redis Caching 적용 토이 프로젝트 / 정보처리기사, SQLD, AWS SAA / 토익 920점',

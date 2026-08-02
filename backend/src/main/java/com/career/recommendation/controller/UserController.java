@@ -50,7 +50,7 @@ public class UserController {
     @PutMapping("/me/target")
     public TargetJobResponse updateMyTarget(
             Authentication authentication,
-            @RequestBody TargetJobRequest request
+            @Valid @RequestBody TargetJobRequest request
     ) {
         return targetJobService.saveOrUpdateMyTarget(authentication, request);
     }
