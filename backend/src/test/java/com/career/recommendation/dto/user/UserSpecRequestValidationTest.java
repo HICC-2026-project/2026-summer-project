@@ -42,6 +42,18 @@ class UserSpecRequestValidationTest {
     }
 
     @Test
+    void TOEIC_SPEAKING은_지원하지_않는다() {
+        UserSpecRequest request = validRequest();
+        LanguageScoreRequest speaking = new LanguageScoreRequest();
+        speaking.setType("TOEIC_SPEAKING");
+        speaking.setGrade("AL");
+        request.setLanguageScores(List.of(speaking));
+
+        assertThat(validationMessages(request))
+                .contains("지원하는 어학시험은 TOEIC, TOEFL, OPIC입니다.");
+    }
+
+    @Test
     void TOEIC_점수가_990점을_초과하면_검증에_실패한다() {
         UserSpecRequest request = validRequest();
         request.setLanguageScores(List.of(toeic(1000)));

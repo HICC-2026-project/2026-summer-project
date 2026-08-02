@@ -88,7 +88,8 @@ public class RecommendationService {
         String jobType = (targetJob != null) ? targetJob.getJobType() : null;
         List<PasserData> similarPassers = similarSpecFinder.find(
                 jobType,
-                (userSpec != null) ? userSpec.getGpa() : null
+                (userSpec != null) ? userSpec.getGpa() : null,
+                (userSpec != null) ? userSpec.getGpaMax() : null
         );
         String comparisonMessage = similarSpecFinder.buildComparisonMessage(similarPassers.size(), jobType);
 

@@ -6,28 +6,41 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * BE-1 담당 — 유저 스펙과 합격자 데이터를 비교하여 matchScore(0~100)를 계산한다.
  *
- * 가중치 (회의록 결정):
- *   - 학점        30%
- *   - 어학 점수    25%
- *   - 자격증       20%
- *   - 경험 수      25%
+ * UserSpec에서 경험 필드가 제거되어 비교 가능한 세 항목의 기존 비중(30:25:20)을
+ * 합계 100%로 재조정한다:
+ *   - 학점        40%
+ *   - 어학 점수    33.33%
+ *   - 자격증       26.67%
  */
 @Component
 public class MatchScoreCalculator {
 
-    private static final double WEIGHT_GPA   = 0.30;
-    private static final double WEIGHT_LANG  = 0.25;
-    private static final double WEIGHT_CERT  = 0.20;
-    private static final double WEIGHT_EXP   = 0.25;
+    private static final double WEIGHT_GPA  = 0.40;
+    private static final double WEIGHT_LANG = 1.0 / 3.0;
+    private static final double WEIGHT_CERT = 4.0 / 15.0;
 
-    /** 경험 수 최대 기준 (이 이상이면 만점) */
-    private static final int MAX_EXP_COUNT = 5;
+    private static final Map<String, Integer> OPIC_RANKS = Map.ofEntries(
+            Map.entry("NL", 0),
+            Map.entry("NM", 1),
+            Map.entry("NH", 2),
+            Map.entry("IL", 3),
+            Map.entry("IM", 4),
+            Map.entry("IM1", 4),
+            Map.entry("IM2", 5),
+            Map.entry("IM3", 6),
+            Map.entry("IH", 7),
+            Map.entry("AL", 8)
+    );
 
     /**
      * 유저 스펙과 합격자 케이스 목록을 비교하여 평균 matchScore를 반환한다.
@@ -54,15 +67,15 @@ public class MatchScoreCalculator {
         // userSpec은 이미 calculate()에서 null 체크되었으나, passer null 방어
         if (passer == null) return 0.0;
 
-        double gpaScore  = scoreGpa(userSpec.getGpa(), passer.getGpa(), userSpec.getGpaMax());
-        double langScore = scoreLang(userSpec.getLanguageScores(), passer.getLanguageScore());
+        double gpaScore  = scoreGpa(
+                userSpec.getGpa(), userSpec.getGpaMax(),
+                passer.getGpa(), passer.getGpaMax());
+        double langScore = scoreLang(userSpec.getLanguageScores(), passer.getLanguageScores());
         double certScore = scoreCert(userSpec.getCertifications(), passer.getCertifications());
-        double expScore  = scoreExp(userSpec, passer.getExperienceCount());
 
         return gpaScore  * WEIGHT_GPA
              + langScore * WEIGHT_LANG
-             + certScore * WEIGHT_CERT
-             + expScore  * WEIGHT_EXP;
+             + certScore * WEIGHT_CERT;
     }
 
     /**
@@ -70,49 +83,81 @@ public class MatchScoreCalculator {
      * 유저 학점이 합격자 학점 이상이면 100점.
      * gpaMax 기준으로 정규화하여 비율을 계산한다.
      */
-    private double scoreGpa(BigDecimal userGpa, BigDecimal passerGpa, BigDecimal gpaMax) {
-        if (userGpa == null || passerGpa == null) return 50.0;
-        double scale = (gpaMax != null) ? gpaMax.doubleValue() : 4.5;
-        double userVal   = userGpa.doubleValue() / scale;
-        double passerVal = passerGpa.doubleValue() / scale;
+    private double scoreGpa(BigDecimal userGpa, BigDecimal userGpaMax,
+                            BigDecimal passerGpa, BigDecimal passerGpaMax) {
+        if (userGpa == null || userGpaMax == null
+                || passerGpa == null || passerGpaMax == null
+                || userGpaMax.signum() <= 0 || passerGpaMax.signum() <= 0) {
+            return 50.0;
+        }
+
+        double userVal = userGpa.doubleValue() / userGpaMax.doubleValue();
+        double passerVal = passerGpa.doubleValue() / passerGpaMax.doubleValue();
+        if (passerVal <= 0) return 50.0;
         if (userVal >= passerVal) return 100.0;
-        // 부족한 비율에 따라 감점 (최소 0점)
-        double ratio = userVal / passerVal;
-        return Math.max(0.0, ratio * 100.0);
+        return Math.max(0.0, (userVal / passerVal) * 100.0);
     }
 
     /**
-     * 어학 점수: 유저의 TOEIC 점수가 있으면 합격자와 비교.
-     * 점수가 없거나 비교 불가능한 경우 중립 50점 처리.
+     * 사용자와 합격자가 공통으로 보유한 시험끼리 비교한다.
+     * 공통 시험이 여러 개면 평균을 사용하고, 비교 가능한 시험이 없으면 중립 50점 처리한다.
      */
-    private double scoreLang(List<Map<String, Object>> userLangScores, Map<String, Object> passerLangScore) {
-        if (userLangScores == null || userLangScores.isEmpty() || passerLangScore == null) return 50.0;
-
-        // TOEIC 기준 비교 (존재할 경우)
-        Integer userToeic   = extractToeic(userLangScores);
-        Object  passerScore = passerLangScore.get("score");
-
-        if (userToeic == null || passerScore == null) return 50.0;
-
-        try {
-            int passerToeic = Integer.parseInt(passerScore.toString());
-            if (userToeic >= passerToeic) return 100.0;
-            return Math.max(0.0, ((double) userToeic / passerToeic) * 100.0);
-        } catch (NumberFormatException e) {
+    private double scoreLang(List<Map<String, Object>> userLangScores,
+                             List<Map<String, Object>> passerLangScores) {
+        if (userLangScores == null || userLangScores.isEmpty()
+                || passerLangScores == null || passerLangScores.isEmpty()) {
             return 50.0;
         }
+
+        Map<String, Map<String, Object>> passerByType = new LinkedHashMap<>();
+        passerLangScores.stream()
+                .filter(score -> score != null && score.get("type") != null)
+                .forEach(score -> passerByType.putIfAbsent(
+                        normalize(String.valueOf(score.get("type"))), score));
+
+        return userLangScores.stream()
+                .filter(score -> score != null && score.get("type") != null)
+                .mapToDouble(userScore -> {
+                    String type = normalize(String.valueOf(userScore.get("type")));
+                    Map<String, Object> passerScore = passerByType.get(type);
+                    return passerScore == null
+                            ? Double.NaN
+                            : scoreSameLanguageTest(type, userScore, passerScore);
+                })
+                .filter(score -> !Double.isNaN(score))
+                .average()
+                .orElse(50.0);
     }
 
-    private Integer extractToeic(List<Map<String, Object>> langScores) {
-        return langScores.stream()
-                .filter(m -> "TOEIC".equalsIgnoreCase(String.valueOf(m.get("type"))))
-                .map(m -> {
-                    try { return Integer.parseInt(String.valueOf(m.get("score"))); }
-                    catch (Exception e) { return null; }
-                })
-                .filter(s -> s != null)
-                .findFirst()
-                .orElse(null);
+    private double scoreSameLanguageTest(String type,
+                                         Map<String, Object> userScore,
+                                         Map<String, Object> passerScore) {
+        if ("OPIC".equals(type)) {
+            Integer userRank = OPIC_RANKS.get(normalize(asString(userScore.get("grade"))));
+            Integer passerRank = OPIC_RANKS.get(normalize(asString(passerScore.get("grade"))));
+            if (userRank == null || passerRank == null) return Double.NaN;
+            if (userRank >= passerRank) return 100.0;
+            return ((double) (userRank + 1) / (passerRank + 1)) * 100.0;
+        }
+
+        Double userValue = asDouble(userScore.get("score"));
+        Double passerValue = asDouble(passerScore.get("score"));
+        if (userValue == null || passerValue == null || passerValue <= 0) {
+            return Double.NaN;
+        }
+
+        Double userMax = asDouble(userScore.get("maxScore"));
+        Double passerMax = asDouble(passerScore.get("maxScore"));
+        double normalizedUser = userMax != null && userMax > 0
+                ? userValue / userMax
+                : userValue;
+        double normalizedPasser = passerMax != null && passerMax > 0
+                ? passerValue / passerMax
+                : passerValue;
+
+        if (normalizedPasser <= 0) return Double.NaN;
+        if (normalizedUser >= normalizedPasser) return 100.0;
+        return Math.max(0.0, (normalizedUser / normalizedPasser) * 100.0);
     }
 
     /**
@@ -122,35 +167,33 @@ public class MatchScoreCalculator {
         if (passerCerts == null || passerCerts.length == 0) return 100.0;
         if (userCerts == null || userCerts.length == 0)    return 0.0;
 
-        List<String> userList   = Arrays.asList(userCerts);
+        Set<String> userSet = Arrays.stream(userCerts)
+                .map(this::normalize)
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.toSet());
+
         long matched = Arrays.stream(passerCerts)
-                .filter(userList::contains)
+                .map(this::normalize)
+                .filter(value -> !value.isBlank())
+                .filter(userSet::contains)
                 .count();
         return ((double) matched / passerCerts.length) * 100.0;
     }
 
-    /**
-     * 경험 수 점수: 유저의 스펙(자격증 수, 학년 등)을 바탕으로 경험 수준을 산출하여
-     * 합격자의 경험 수(passerExpCount)와 상대 비교한다.
-     * 유저 경험이 합격자 경험 수 이상이면 100점, 미달 시 비율대로 감점한다.
-     */
-    private double scoreExp(UserSpec userSpec, Integer passerExpCount) {
-        if (passerExpCount == null || passerExpCount == 0) return 100.0;
+    private String normalize(String value) {
+        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+    }
 
-        int userExpEstimate = 0;
-        if (userSpec != null) {
-            if (userSpec.getCertifications() != null) {
-                userExpEstimate += userSpec.getCertifications().length;
-            }
-            if (userSpec.getGrade() != null && userSpec.getGrade() >= 3) {
-                userExpEstimate += (userSpec.getGrade() - 2); // 3학년:+1, 4학년:+2
-            }
+    private String asString(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private Double asDouble(Object value) {
+        if (value == null) return null;
+        try {
+            return Double.parseDouble(String.valueOf(value));
+        } catch (NumberFormatException e) {
+            return null;
         }
-
-        if (userExpEstimate >= passerExpCount) {
-            return 100.0;
-        }
-
-        return Math.max(0.0, ((double) userExpEstimate / passerExpCount) * 100.0);
     }
 }
