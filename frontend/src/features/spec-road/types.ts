@@ -84,13 +84,18 @@ export interface ApiRecommendationItem {
 }
 
 // GET /api/v1/recommendations 전체 응답.
-// matchScore는 개별 활동이 아닌 응답 최상단의 단일 점수(0~100),
-// isAiRecommendation이 false면 Fallback(일반 추천)이라 화면에서 배지로 안내한다.
+// matchScore는 개별 활동이 아닌 응답 최상단의 단일 점수(0~100).
+//
+// AI 추천 여부 플래그는 두 이름을 모두 받는다.
+// 백엔드 DTO 필드는 isAiRecommendation이지만 Jackson이 boolean의 is 접두사를 떼고
+// aiRecommendation으로 직렬화한다(명세서와 실제 응답이 다른 지점).
+// 백엔드가 @JsonProperty로 이름을 되돌려도 화면이 깨지지 않도록 둘 다 optional로 둔다.
 export interface RecommendationsResponse {
   activities: ApiRecommendationItem[];
   matchScore: number;
   comparisonMessage: string;
-  isAiRecommendation: boolean;
+  aiRecommendation?: boolean;
+  isAiRecommendation?: boolean;
 }
 
 // 추천 목록과 함께 화면 상단에 표시할 요약 정보(응답 최상단 필드에서 추출).
