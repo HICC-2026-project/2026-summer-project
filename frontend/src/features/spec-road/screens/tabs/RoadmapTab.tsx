@@ -1,7 +1,7 @@
 "use client";
 
 import { PRIMARY } from "../../data";
-import { dday, ddayColor } from "../../helpers";
+import { dday, ddayColor, jobLabel } from "../../helpers";
 import type { Priority, RoadmapMilestone, Target } from "../../types";
 
 const PRIORITY_META: Record<Priority, { label: string; color: string; bg: string }> = {
@@ -18,7 +18,7 @@ interface RoadmapTabProps {
 }
 
 export function RoadmapTab({ target, roadmap, roadmapLoading, roadmapError }: RoadmapTabProps) {
-  const targetSummary = `${target.size} ${target.job}`;
+  const targetSummary = `${target.size} ${jobLabel(target.job)}`;
 
   return (
     <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>

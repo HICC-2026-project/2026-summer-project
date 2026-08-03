@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { PRIMARY, USER_NAME } from "../../data";
+import { jobLabel } from "../../helpers";
 import type { Spec, Target } from "../../types";
 
 interface ProfileTabProps {
@@ -24,7 +25,7 @@ function rowStyle(hasBorder: boolean): CSSProperties {
 
 export function ProfileTab({ spec, target, nickname, onEditSpec, onLogout }: ProfileTabProps) {
   const displayName = nickname ?? USER_NAME;
-  const targetSummary = `${target.size} ${target.job}`;
+  const targetSummary = `${target.size} ${jobLabel(target.job)}`;
   const certLabel = spec.certs.length ? spec.certs.join(", ") : "없음";
   const langEntries = Object.entries(spec.langScores).filter(([, score]) => score);
   const langLabel = langEntries.length ? langEntries.map(([type, score]) => `${type} ${score}`).join(", ") : "없음";

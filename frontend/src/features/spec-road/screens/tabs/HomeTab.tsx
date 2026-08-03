@@ -1,7 +1,7 @@
 "use client";
 
 import { PASSER_COUNT, PRIMARY, READINESS, READINESS_RANK, USER_NAME } from "../../data";
-import { dday, ddayColor } from "../../helpers";
+import { dday, ddayColor, jobLabel } from "../../helpers";
 import type { Recommendation, RecommendationMeta, Target } from "../../types";
 
 interface HomeTabProps {
@@ -15,7 +15,7 @@ interface HomeTabProps {
 }
 
 export function HomeTab({ target, nickname, recommendations, recMeta, recLoading, recError, onOpenDetail }: HomeTabProps) {
-  const targetSummary = `${target.size} ${target.job}`;
+  const targetSummary = `${target.size} ${jobLabel(target.job)}`;
   const displayName = nickname ?? USER_NAME;
 
   // 로그인 유저는 실 API 응답(recMeta)의 matchScore·비교 메시지를, 둘러보기는 목업 값을 쓴다.

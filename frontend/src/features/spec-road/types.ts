@@ -3,6 +3,10 @@ export type OnboardStep = 0 | 1;
 export type Tab = "home" | "roadmap" | "compare" | "profile";
 export type Priority = "HIGH" | "MEDIUM" | "LOW";
 
+// 백엔드 TargetJobRequest가 @Pattern으로 허용하는 직무 코드.
+// 화면에는 한글 라벨을 보여주고 저장할 때는 이 코드를 보낸다.
+export type JobCode = "BACKEND" | "FRONTEND" | "DATA_ENGINEER" | "AI_ML" | "PM" | "SECURITY";
+
 export interface Spec {
   gpa: string;
   gpaScale: number;
@@ -44,8 +48,10 @@ export interface UserMeResponse {
   target: TargetJobResponse | null;
 }
 
+// job은 미선택 상태("")를 허용한다. 저장 전에 반드시 코드를 고르게 하고,
+// 예전에 한글 직무명("SW 개발")으로 저장된 값을 불러올 때도 미선택으로 떨어뜨린다.
 export interface Target {
-  job: string;
+  job: JobCode | "";
   size: string;
   industry: string;
 }
