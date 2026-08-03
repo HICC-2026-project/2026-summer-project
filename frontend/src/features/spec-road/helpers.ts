@@ -1,5 +1,6 @@
-import { LANG_MAX, PRIMARY, TODAY } from "./data";
+import { JOB_OPTIONS, LANG_MAX, PRIMARY, TODAY } from "./data";
 import type {
+  JobCode,
   LanguageScorePayload,
   Priority,
   Recommendation,
@@ -35,6 +36,17 @@ export function chipStyle(selected: boolean): ChipStyle {
   return selected
     ? { background: `color-mix(in srgb, ${PRIMARY} 10%, #fff)`, color: PRIMARY, borderColor: PRIMARY }
     : { background: "#F6F5FA", color: "#61616C", borderColor: "#EAE9F1" };
+}
+
+// 직무 코드 → 화면 라벨. 저장은 코드로, 표시는 라벨로 한다.
+export function jobLabel(code: JobCode | ""): string {
+  return JOB_OPTIONS.find((option) => option.code === code)?.label ?? "";
+}
+
+// GET /users/me의 jobType을 화면 값으로 정규화한다.
+// 직무 코드 도입 전에 저장된 한글 직무명("SW 개발")은 미선택으로 떨어뜨려 다시 고르게 한다.
+export function normalizeJobCode(value: string | null | undefined): JobCode | "" {
+  return JOB_OPTIONS.some((option) => option.code === value) ? (value as JobCode) : "";
 }
 
 // Frontend language-type keys that differ from the API 명세서's `type` value.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { KAKAO_LOGIN_URL } from "@/lib/api";
+import { ApiError, KAKAO_LOGIN_URL } from "@/lib/api";
 import { clearTokens, getAccessToken } from "@/lib/auth";
 import { getMe, getRecommendations, getRoadmap, putSpec, putTarget } from "./api";
 import { RECOMMENDATIONS, ROADMAP } from "./data";
@@ -9,11 +9,13 @@ import {
   fromLanguageScoresPayload,
   fromRecommendationsResponse,
   fromRoadmapResponse,
+  normalizeJobCode,
   toRecommendationMeta,
 } from "./helpers";
 import { AnalyzingScreen } from "./screens/AnalyzingScreen";
 import { AppScreen } from "./screens/AppScreen";
 import { DetailSheet } from "./screens/DetailSheet";
+import { IntroScreen } from "./screens/IntroScreen";
 import { LoginScreen } from "./screens/LoginScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
 import type {
@@ -45,9 +47,16 @@ const EMPTY_SPEC: Spec = {
 };
 
 const INITIAL_TARGET: Target = {
-  job: "SW 개발",
+  job: "BACKEND",
   size: "대기업",
-  industry: "IT",
+  industry: "IT·플랫폼",
+};
+
+// 로그인 유저의 첫 온보딩은 직무도 직접 고르게 한다.
+const EMPTY_TARGET: Target = {
+  job: "",
+  size: "대기업",
+  industry: "IT·플랫폼",
 };
 
 export function SpecRoadApp() {
@@ -152,19 +161,23 @@ export function SpecRoadApp() {
             certs: me.spec.certifications ?? [],
           });
         }
+        // 직무 코드 도입 전 저장된 한글 직무명은 미선택으로 떨어져 온보딩에서 다시 고르게 된다.
+        const jobCode = normalizeJobCode(me.target?.jobType);
         if (me.target) {
           setTarget({
-            job: me.target.jobType,
+            job: jobCode,
             size: me.target.companySize,
             industry: me.target.industry,
           });
         }
 
-        if (me.spec) {
+        // 스펙과 유효한 직무가 모두 있어야 추천·로드맵이 정상 동작한다.
+        if (me.spec && jobCode !== "") {
           setScreen("app");
           setTab("home");
         } else {
-          setSpec(EMPTY_SPEC);
+          if (!me.spec) setSpec(EMPTY_SPEC);
+          if (!me.target) setTarget(EMPTY_TARGET);
           setOnboardStep(0);
           setScreen("onboard");
         }
@@ -173,6 +186,11 @@ export function SpecRoadApp() {
         clearTokens();
       });
   }, []);
+
+  // 백엔드 OAuth 엔드포인트로 이동 → 카카오 로그인 → /oauth/callback으로 토큰과 함께 복귀
+  function startKakaoLogin() {
+    window.location.href = KAKAO_LOGIN_URL;
+  }
 
   function addCert(value: string) {
     setSpec((s) => (s.certs.includes(value) ? s : { ...s, certs: [...s.certs, value] }));
@@ -192,8 +210,11 @@ export function SpecRoadApp() {
     if (getAccessToken()) {
       try {
         await Promise.all([putSpec(spec), putTarget(target)]);
-      } catch {
-        alert("스펙 저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.");
+      } catch (error) {
+        // 백엔드 검증 메시지("학점은 필수입니다." 등)를 그대로 보여준다.
+        const message =
+          error instanceof ApiError ? error.message : "네트워크 확인 후 다시 시도해주세요.";
+        alert(`스펙 저장에 실패했어요.\n${message}`);
         return;
       }
     }
@@ -232,11 +253,17 @@ export function SpecRoadApp() {
       >
         {screen === "login" && (
           <LoginScreen
-            onLoginKakao={() => {
-              // 백엔드 OAuth 엔드포인트로 이동 → 카카오 로그인 → /oauth/callback으로 토큰과 함께 복귀
-              window.location.href = KAKAO_LOGIN_URL;
-            }}
-            onLoginDemo={() => {
+            onLoginKakao={startKakaoLogin}
+            // 7/14 회의 결정: 게스트 모드 대신 서비스 소개 페이지를 보여준다.
+            onLoginDemo={() => setScreen("intro")}
+          />
+        )}
+
+        {screen === "intro" && (
+          <IntroScreen
+            onBack={() => setScreen("login")}
+            onLoginKakao={startKakaoLogin}
+            onPreviewDemo={() => {
               setTab("home");
               setScreen("app");
             }}

@@ -14,7 +14,7 @@ import {
   SIZE_OPTIONS,
 } from "../data";
 import { chipStyle } from "../helpers";
-import type { OnboardStep, Spec, Target } from "../types";
+import type { JobCode, OnboardStep, Spec, Target } from "../types";
 
 interface OnboardingScreenProps {
   step: OnboardStep;
@@ -28,7 +28,7 @@ interface OnboardingScreenProps {
   onSetLangScore: (type: string, v: string) => void;
   onAddCert: (v: string) => void;
   onRemoveCert: (v: string) => void;
-  onSetJob: (v: string) => void;
+  onSetJob: (v: JobCode) => void;
   onSetSize: (v: string) => void;
   onSetIndustry: (v: string) => void;
 }
@@ -98,6 +98,19 @@ export function OnboardingScreen({
   const [certInput, setCertInput] = useState("");
   const onboardPct = step === 0 ? "50%" : "100%";
   const onboardCta = step === 0 ? "다음" : "분석 시작하기";
+
+  // 백엔드가 필수로 요구하는 값(학점·학년·직무)을 채우기 전엔 진행을 막는다.
+  // 그냥 보내면 400과 함께 온보딩이 중단되므로, 화면에서 먼저 안내한다.
+  const blockedMessage =
+    step === 0
+      ? spec.gpa === ""
+        ? "학점을 입력해주세요"
+        : spec.grade == null
+          ? "학년을 선택해주세요"
+          : null
+      : target.job === ""
+        ? "희망 직무를 선택해주세요"
+        : null;
 
   function submitCertInput() {
     const value = certInput.trim();
@@ -313,13 +326,13 @@ export function OnboardingScreen({
               희망 직무
             </label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {JOB_OPTIONS.map((j) => {
-                const st = chipStyle(target.job === j);
+              {JOB_OPTIONS.map(({ code, label }) => {
+                const st = chipStyle(target.job === code);
                 return (
                   <button
-                    key={j}
+                    key={code}
                     type="button"
-                    onClick={() => onSetJob(j)}
+                    onClick={() => onSetJob(code)}
                     style={{
                       height: 44,
                       padding: "0 18px",
@@ -333,7 +346,7 @@ export function OnboardingScreen({
                       transition: "all .15s ease",
                     }}
                   >
-                    {j}
+                    {label}
                   </button>
                 );
               })}
@@ -427,9 +440,15 @@ export function OnboardingScreen({
           background: "linear-gradient(180deg, rgba(246,246,249,0), #F6F6F9 32%)",
         }}
       >
+        {blockedMessage && (
+          <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#9797A1", textAlign: "center" }}>
+            {blockedMessage}
+          </p>
+        )}
         <button
           type="button"
           onClick={onNext}
+          disabled={blockedMessage != null}
           style={{
             display: "flex",
             alignItems: "center",
@@ -439,12 +458,13 @@ export function OnboardingScreen({
             height: 54,
             border: "none",
             borderRadius: 16,
-            background: PRIMARY,
+            background: blockedMessage ? "#D9D8E4" : PRIMARY,
             color: "#fff",
             fontSize: 16,
             fontWeight: 700,
-            cursor: "pointer",
-            boxShadow: `0 8px 20px color-mix(in srgb, ${PRIMARY} 32%, transparent)`,
+            cursor: blockedMessage ? "not-allowed" : "pointer",
+            boxShadow: blockedMessage ? "none" : `0 8px 20px color-mix(in srgb, ${PRIMARY} 32%, transparent)`,
+            transition: "background .15s ease",
           }}
         >
           {onboardCta}

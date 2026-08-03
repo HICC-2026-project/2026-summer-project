@@ -37,8 +37,20 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
   });
 
   if (!res.ok) {
-    throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+    throw new ApiError(res.status, await extractErrorMessage(res));
   }
 
   return res.json() as Promise<T>;
+}
+
+// 백엔드 GlobalExceptionHandler는 { code, message, timestamp } 형태로 응답한다.
+// 검증 실패 메시지("학점은 필수입니다." 등)를 그대로 화면에 보여주기 위해 꺼낸다.
+async function extractErrorMessage(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { message?: string };
+    if (body?.message) return body.message;
+  } catch {
+    // 본문이 비었거나 JSON이 아니면 상태 코드로 대체한다.
+  }
+  return `${res.status} ${res.statusText}`;
 }
