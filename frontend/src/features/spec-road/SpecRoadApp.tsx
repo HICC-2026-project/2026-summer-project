@@ -67,6 +67,8 @@ export function SpecRoadApp() {
   const [spec, setSpec] = useState<Spec>(INITIAL_SPEC);
   const [target, setTarget] = useState<Target>(INITIAL_TARGET);
   const [nickname, setNickname] = useState<string | null>(null);
+  // 비로그인 예시 화면 여부. 저장할 계정이 없으므로 프로필에서 수정 대신 로그인을 유도한다.
+  const [isDemo, setIsDemo] = useState(false);
 
   // 추천 목록 상태. 로그인 유저는 실 API(GET /recommendations)로 채우고,
   // 둘러보기(비로그인)는 목업으로 채운다. meta는 응답 최상단 요약(matchScore 등).
@@ -87,6 +89,7 @@ export function SpecRoadApp() {
     setRecommendations([]);
     setRecMeta(null);
     setRoadmap([]);
+    setIsDemo(false);
     setScreen("login");
   }
 
@@ -277,6 +280,7 @@ export function SpecRoadApp() {
             onBack={() => setScreen("login")}
             onLoginKakao={startKakaoLogin}
             onPreviewDemo={() => {
+              setIsDemo(true);
               setTab("home");
               setScreen("app");
             }}
@@ -322,8 +326,14 @@ export function SpecRoadApp() {
             roadmap={roadmap}
             roadmapLoading={roadmapLoading}
             roadmapError={roadmapError}
+            isDemo={isDemo}
             onOpenDetail={setDetailId}
             onEditSpec={() => {
+              // 예시 화면에는 저장할 계정이 없어, 수정 대신 로그인으로 보낸다.
+              if (isDemo) {
+                startKakaoLogin();
+                return;
+              }
               setOnboardStep(0);
               setScreen("onboard");
             }}

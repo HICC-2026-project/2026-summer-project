@@ -1,6 +1,6 @@
 "use client";
 
-import { PASSER_COUNT, PRIMARY, READINESS, READINESS_RANK, USER_NAME } from "../../data";
+import { DEMO_USER_NAME, PASSER_COUNT, PRIMARY, READINESS, READINESS_RANK } from "../../data";
 import { dday, ddayColor, jobLabel } from "../../helpers";
 import type { Recommendation, RecommendationMeta, Target } from "../../types";
 
@@ -16,7 +16,7 @@ interface HomeTabProps {
 
 export function HomeTab({ target, nickname, recommendations, recMeta, recLoading, recError, onOpenDetail }: HomeTabProps) {
   const targetSummary = `${target.size} ${jobLabel(target.job)}`;
-  const displayName = nickname ?? USER_NAME;
+  const displayName = nickname ?? DEMO_USER_NAME;
 
   // 로그인 유저는 실 API 응답(recMeta)의 matchScore·비교 메시지를, 둘러보기는 목업 값을 쓴다.
   const readinessScore = recMeta?.matchScore ?? READINESS;
