@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { PRIMARY } from "../data";
 
 const ANALYZE_STEPS = [
@@ -8,7 +9,17 @@ const ANALYZE_STEPS = [
   { label: "AI 맞춤 추천 생성", done: false },
 ];
 
+// AI 생성이 길어질 때 멈춘 것처럼 보이지 않도록 안내를 덧붙이는 시점.
+const LONG_WAIT_MS = 8000;
+
 export function AnalyzingScreen() {
+  const [longWait, setLongWait] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLongWait(true), LONG_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <div
       style={{
@@ -78,6 +89,23 @@ export function AnalyzingScreen() {
           </div>
         ))}
       </div>
+
+      {longWait && (
+        <p
+          style={{
+            fontSize: 12.5,
+            color: "#9797A1",
+            margin: "22px 0 0",
+            textAlign: "center",
+            lineHeight: 1.55,
+            animation: "cfFade .4s ease both",
+          }}
+        >
+          AI가 활동을 하나씩 검토하고 있어요.
+          <br />
+          최대 30초 정도 걸릴 수 있어요.
+        </p>
+      )}
     </div>
   );
 }

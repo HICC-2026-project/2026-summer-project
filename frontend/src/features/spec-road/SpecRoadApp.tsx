@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, KAKAO_LOGIN_URL } from "@/lib/api";
 import { clearTokens, getAccessToken, onSessionExpired } from "@/lib/auth";
 import { getMe, getRecommendations, getRoadmap, postLogout, putSpec, putTarget } from "./api";
@@ -59,6 +59,10 @@ const EMPTY_TARGET: Target = {
   industry: "IT·플랫폼",
 };
 
+// 분석 화면 표시 시간의 하한·상한 (AI 응답을 기다리되 양 극단을 막는다).
+const ANALYZING_MIN_MS = 1800;
+const ANALYZING_MAX_MS = 40000;
+
 export function SpecRoadApp() {
   const [screen, setScreen] = useState<Screen>("login");
   const [onboardStep, setOnboardStep] = useState<OnboardStep>(0);
@@ -69,6 +73,11 @@ export function SpecRoadApp() {
   const [nickname, setNickname] = useState<string | null>(null);
   // 비로그인 예시 화면 여부. 저장할 계정이 없으므로 프로필에서 수정 대신 로그인을 유도한다.
   const [isDemo, setIsDemo] = useState(false);
+
+  // 분석 화면 진입 시각. 로딩 상태가 바뀌어도 기준 시각이 초기화되지 않도록 ref로 둔다.
+  const analyzingStartedAt = useRef<number | null>(null);
+  // 분석 화면과 앱 화면에서 같은 데이터를 중복 요청하지 않기 위한 1회 실행 표시.
+  const dataRequested = useRef(false);
 
   // 추천 목록 상태. 로그인 유저는 실 API(GET /recommendations)로 채우고,
   // 둘러보기(비로그인)는 목업으로 채운다. meta는 응답 최상단 요약(matchScore 등).
@@ -93,21 +102,41 @@ export function SpecRoadApp() {
     setScreen("login");
   }
 
+  // 분석 화면은 AI 응답이 도착할 때까지 유지한다.
+  // 응답이 빨리 오면 화면이 깜빡이므로 최소 시간을 두고,
+  // 백엔드 타임아웃(30초)을 넘겨도 멈춘 것처럼 보이지 않도록 최대 시간을 둔다.
   useEffect(() => {
-    if (screen !== "analyzing") return;
+    if (screen !== "analyzing") {
+      analyzingStartedAt.current = null;
+      return;
+    }
+    if (analyzingStartedAt.current == null) analyzingStartedAt.current = Date.now();
+
+    const elapsed = Date.now() - analyzingStartedAt.current;
+    const stillLoading = recLoading || roadmapLoading;
+    const wait = stillLoading
+      ? Math.max(0, ANALYZING_MAX_MS - elapsed)
+      : Math.max(0, ANALYZING_MIN_MS - elapsed);
+
     const timer = setTimeout(() => {
       setScreen("app");
       setTab("home");
-    }, 2100);
+    }, wait);
     return () => clearTimeout(timer);
-  }, [screen]);
+  }, [screen, recLoading, roadmapLoading]);
 
   // 리프레시 토큰까지 만료돼 재발급이 실패하면 로그인 화면으로 돌려보낸다.
   useEffect(() => onSessionExpired(resetToLogin), []);
 
-  // 앱 화면 진입 시 추천을 불러온다. 로그인 상태면 실 API, 아니면(둘러보기) 목업.
+  // 추천·로드맵을 불러온다. 분석 화면에서 요청을 시작해, 결과가 준비된 뒤 홈으로 넘어가게 한다.
+  // (앱 화면에 바로 진입하는 경우 — 기존 유저 재방문·둘러보기 — 도 같은 요청을 쓴다)
   useEffect(() => {
-    if (screen !== "app") return;
+    if (screen !== "analyzing" && screen !== "app") {
+      if (screen === "login") dataRequested.current = false;
+      return;
+    }
+    if (dataRequested.current) return;
+    dataRequested.current = true;
 
     if (!getAccessToken()) {
       setRecommendations(RECOMMENDATIONS);
@@ -234,6 +263,8 @@ export function SpecRoadApp() {
         return;
       }
     }
+    // 스펙이 바뀌었으니 분석 화면에서 추천을 새로 요청한다.
+    dataRequested.current = false;
     setScreen("analyzing");
   }
 
