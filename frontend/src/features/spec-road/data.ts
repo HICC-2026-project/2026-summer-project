@@ -1,4 +1,4 @@
-import type { CompareRow, Recommendation, RoadmapMilestone } from "./types";
+import type { CompareRow, JobCode, Recommendation, RoadmapMilestone } from "./types";
 
 export const PRIMARY = "#2F6FED";
 
@@ -143,7 +143,17 @@ export const COMPARE_ROWS: CompareRow[] = [
   { label: "경험", weight: "25%", myVal: "2건", avgVal: "3.1건", myPct: 40, avgPct: 62, status: "부족" },
 ];
 
-export const JOB_OPTIONS = ["SW 개발", "데이터 엔지니어", "AI/ML", "기획/PM", "보안"];
+// 백엔드가 허용하는 직무 코드(TargetJobRequest @Pattern)와 화면 라벨 쌍.
+// 7/14 회의 결정에 따라 기존 "SW 개발"을 프론트엔드·백엔드로 분리했다.
+// (합격자 데이터도 같은 코드로 저장돼 있어, 직무가 섞여 비교되는 문제를 막는다)
+export const JOB_OPTIONS: { code: JobCode; label: string }[] = [
+  { code: "BACKEND", label: "백엔드" },
+  { code: "FRONTEND", label: "프론트엔드" },
+  { code: "DATA_ENGINEER", label: "데이터 엔지니어" },
+  { code: "AI_ML", label: "AI/ML" },
+  { code: "PM", label: "기획/PM" },
+  { code: "SECURITY", label: "보안" },
+];
 export const SIZE_OPTIONS: [string, string][] = [
   ["대기업", "공채 중심"],
   ["중견·중소", "수시 채용"],
@@ -168,7 +178,13 @@ export const LANG_MAX: Record<string, number | null> = {
 
 export const OPIC_GRADES = ["NL", "NM", "NH", "IL", "IM1", "IM2", "IM3", "IH", "AL"];
 
-export const TODAY = new Date("2026-07-07");
+// D-day 계산 기준일. 날짜를 고정하면 시간이 지날수록 마감일 표시가 어긋나므로
+// 실행 시점의 오늘(자정 기준)을 쓴다.
+export const TODAY = (() => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+})();
 export const COMPARE_TARGET = "삼성 청년 SW 아카데미";
 export const PASSER_COUNT = 24;
 export const READINESS = 78;

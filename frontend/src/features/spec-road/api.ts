@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api";
+import { getRefreshToken } from "@/lib/auth";
 import { toLanguageScoresPayload } from "./helpers";
 import type {
   RecommendationsResponse,
@@ -12,6 +13,18 @@ import type {
 
 export function getMe(): Promise<UserMeResponse> {
   return apiFetch<UserMeResponse>("/api/v1/users/me");
+}
+
+// 로그아웃 시 서버의 리프레시 토큰까지 폐기한다.
+// 로컬 토큰만 지우면 폐기되지 않은 리프레시 토큰이 서버에 남는다.
+export function postLogout(): Promise<void> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return Promise.resolve();
+
+  return apiFetch<void>("/api/v1/auth/logout", {
+    method: "POST",
+    body: JSON.stringify({ refreshToken }),
+  });
 }
 
 // F-03 맞춤 활동 추천. JWT 필수 — apiFetch가 저장된 토큰을 Authorization 헤더로 붙인다.
