@@ -18,6 +18,9 @@ public class RoadmapResponse {
 
     private List<TimelineStep> timeline;
 
+    @Builder.Default
+    private boolean isAiRoadmap = true;
+
     @Getter
     @Builder
     public static class TimelineStep {

@@ -11,9 +11,11 @@ import com.career.recommendation.entity.PasserData;
 import com.career.recommendation.entity.TargetJob;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.entity.UserSpec;
+import com.career.recommendation.entity.RoadmapCache;
 import com.career.recommendation.repository.ActivityRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
+import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.util.PromptDataBuilder;
 import com.career.recommendation.util.SimilarSpecFinder;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -51,10 +53,13 @@ public class RoadmapService {
     private final ActivityRepository activityRepository;
     private final SimilarSpecFinder similarSpecFinder;
     private final RecommendationService recommendationService;
+    private final RoadmapCacheRepository roadmapCacheRepository;
+    private final RoadmapCacheService roadmapCacheService;
     private final GeminiService geminiService;
     private final PromptDataBuilder promptDataBuilder;
     private final ObjectMapper objectMapper;
 
+    private static final int CACHE_HOURS = 24;
     private static final int MAX_RECOMMENDABLE_ACTIVITIES = 50;
     private static final ZoneId SERVICE_ZONE_ID = ZoneId.of("Asia/Seoul");
 
@@ -64,6 +69,19 @@ public class RoadmapService {
      */
     public RoadmapResponse getRoadmap(Authentication authentication) {
         User user = currentUserService.getCurrentUser(authentication);
+
+        // 1. 유효 캐시 확인
+        RoadmapCache cached = roadmapCacheRepository.findByUser_Id(user.getId()).orElse(null);
+        if (cached != null && cached.isValid()) {
+            try {
+                RoadmapResponse deserialized = objectMapper.readValue(cached.getResultJson(), RoadmapResponse.class);
+                if (deserialized != null && deserialized.getTimeline() != null && !deserialized.getTimeline().isEmpty()) {
+                    return deserialized;
+                }
+            } catch (Exception e) {
+                log.warn("로드맵 캐시 파싱 실패: {}", e.getMessage());
+            }
+        }
 
         UserSpec userSpec   = userSpecRepository.findByUser_Id(user.getId()).orElse(null);
         TargetJob targetJob = targetJobRepository.findByUser_Id(user.getId()).orElse(null);
@@ -103,8 +121,14 @@ public class RoadmapService {
         String availableActivitiesJson = promptDataBuilder.buildAvailableActivitiesJson(activeActivities);
 
         // 4. Gemini API 호출 (최대 2회 시도)
-        return callGeminiWithRetry(userSpecJson, targetJobStr, grade,
+        RoadmapResponse response = callGeminiWithRetry(userSpecJson, targetJobStr, grade,
                 similarCasesStr, topRecommendedJson, availableActivitiesJson, activeActivities);
+
+        if (response.isAiRoadmap()) {
+            roadmapCacheService.save(user, response, CACHE_HOURS);
+        }
+        
+        return response;
     }
 
     private RoadmapResponse callGeminiWithRetry(String userSpecJson, String targetJobStr, Integer grade,
@@ -201,9 +225,9 @@ public class RoadmapService {
 
     /** Gemini 미사용/실패 시 DB 등록 활동 기반 기본 로드맵 반환 */
     private RoadmapResponse buildFallbackRoadmap(Integer grade, List<Activity> activeActivities) {
-        String semester1 = (grade != null) ? grade + "학년 1학기 (9~11월)" : "1~2개월 차";
+        String semester1 = (grade != null) ? grade + "학년 2학기 (9~11월)" : "1~2개월 차";
         String semester2 = (grade != null) ? grade + "학년 겨울방학 (12~2월)" : "3~4개월 차";
-        String semester3 = (grade != null) ? (grade < 4 ? (grade + 1) + "학년 1학기" : "4학년 2학기") : "5~6개월 차";
+        String semester3 = (grade != null) ? (grade < 4 ? (grade + 1) + "학년 1학기 (3~6월)" : "졸업 후 취업 준비") : "5~6개월 차";
 
         List<MatchedActivity> step1Matched = new ArrayList<>();
         List<MatchedActivity> step2Matched = new ArrayList<>();
@@ -223,25 +247,26 @@ public class RoadmapService {
                         TimelineStep.builder()
                                 .period(semester1)
                                 .priority("HIGH")
-                                .activity("핵심 SW 교육 및 인턴십 지원")
-                                .reason("서류 가점 및 기초 실무 역량을 다지는 핵심 시기입니다.")
+                                .activity("[AI 응답 지연] 핵심 SW 교육 및 인턴십 지원")
+                                .reason("[서버 지연 임시 로드맵] 서류 가점 및 기초 실무 역량을 다지는 핵심 시기입니다.")
                                 .matchedActivities(step1Matched)
                                 .build(),
                         TimelineStep.builder()
                                 .period(semester2)
                                 .priority("HIGH")
-                                .activity("부트캠프 및 프로젝트 몰입")
-                                .reason("방학 기간을 활용하여 포트폴리오를 대폭 강화합니다.")
+                                .activity("[AI 응답 지연] 부트캠프 및 프로젝트 몰입")
+                                .reason("[서버 지연 임시 로드맵] 방학 기간을 활용하여 포트폴리오를 대폭 강화합니다.")
                                 .matchedActivities(step2Matched)
                                 .build(),
                         TimelineStep.builder()
                                 .period(semester3)
                                 .priority("MEDIUM")
-                                .activity("오픈소스 기여 및 해커톤 공모전 참가")
-                                .reason("실무 협업 역량을 입증하고 채용 우대 혜택을 획득합니다.")
+                                .activity("[AI 응답 지연] 오픈소스 기여 및 해커톤 공모전 참가")
+                                .reason("[서버 지연 임시 로드맵] 실무 협업 역량을 입증하고 채용 우대 혜택을 획득합니다.")
                                 .matchedActivities(step3Matched)
                                 .build()
                 ))
+                .isAiRoadmap(false)
                 .build();
     }
 }
