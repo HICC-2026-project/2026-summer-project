@@ -20,6 +20,7 @@ interface AppScreenProps {
   roadmap: RoadmapMilestone[];
   roadmapLoading: boolean;
   roadmapError: boolean;
+  isDemo: boolean;
   onOpenDetail: (id: string | number) => void;
   onEditSpec: () => void;
   onLogout: () => void;
@@ -38,6 +39,7 @@ export function AppScreen({
   roadmap,
   roadmapLoading,
   roadmapError,
+  isDemo,
   onOpenDetail,
   onEditSpec,
   onLogout,
@@ -61,7 +63,14 @@ export function AppScreen({
         )}
         {tab === "compare" && <CompareTab />}
         {tab === "profile" && (
-          <ProfileTab spec={spec} target={target} nickname={nickname} onEditSpec={onEditSpec} onLogout={onLogout} />
+          <ProfileTab
+            spec={spec}
+            target={target}
+            nickname={nickname}
+            isDemo={isDemo}
+            onEditSpec={onEditSpec}
+            onLogout={onLogout}
+          />
         )}
       </div>
       <BottomNav active={tab} onChange={onTabChange} />
