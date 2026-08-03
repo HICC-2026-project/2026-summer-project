@@ -1,4 +1,4 @@
-export type Screen = "login" | "onboard" | "analyzing" | "app";
+export type Screen = "login" | "intro" | "onboard" | "analyzing" | "app";
 export type OnboardStep = 0 | 1;
 export type Tab = "home" | "roadmap" | "compare" | "profile";
 export type Priority = "HIGH" | "MEDIUM" | "LOW";

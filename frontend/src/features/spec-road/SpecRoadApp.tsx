@@ -15,6 +15,7 @@ import {
 import { AnalyzingScreen } from "./screens/AnalyzingScreen";
 import { AppScreen } from "./screens/AppScreen";
 import { DetailSheet } from "./screens/DetailSheet";
+import { IntroScreen } from "./screens/IntroScreen";
 import { LoginScreen } from "./screens/LoginScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
 import type {
@@ -186,6 +187,11 @@ export function SpecRoadApp() {
       });
   }, []);
 
+  // 백엔드 OAuth 엔드포인트로 이동 → 카카오 로그인 → /oauth/callback으로 토큰과 함께 복귀
+  function startKakaoLogin() {
+    window.location.href = KAKAO_LOGIN_URL;
+  }
+
   function addCert(value: string) {
     setSpec((s) => (s.certs.includes(value) ? s : { ...s, certs: [...s.certs, value] }));
   }
@@ -247,11 +253,17 @@ export function SpecRoadApp() {
       >
         {screen === "login" && (
           <LoginScreen
-            onLoginKakao={() => {
-              // 백엔드 OAuth 엔드포인트로 이동 → 카카오 로그인 → /oauth/callback으로 토큰과 함께 복귀
-              window.location.href = KAKAO_LOGIN_URL;
-            }}
-            onLoginDemo={() => {
+            onLoginKakao={startKakaoLogin}
+            // 7/14 회의 결정: 게스트 모드 대신 서비스 소개 페이지를 보여준다.
+            onLoginDemo={() => setScreen("intro")}
+          />
+        )}
+
+        {screen === "intro" && (
+          <IntroScreen
+            onBack={() => setScreen("login")}
+            onLoginKakao={startKakaoLogin}
+            onPreviewDemo={() => {
               setTab("home");
               setScreen("app");
             }}
