@@ -111,7 +111,10 @@ public class RecommendationService {
         );
 
         // 6. 결과 캐싱 (24시간) — 별도 Bean에서 호출해야 @Transactional 프록시가 정상 동작함
-        recommendationCacheService.save(user, response, CACHE_HOURS);
+        // AI 실패로 인한 Fallback 응답(isAiRecommendation=false)일 때는 캐시하지 않는다.
+        if (response.isAiRecommendation()) {
+            recommendationCacheService.save(user, response, CACHE_HOURS);
+        }
 
         return response;
     }
@@ -171,8 +174,8 @@ public class RecommendationService {
                     .type(a.getType())
                     .name(a.getName())
                     .reason(a.getDescription() != null && !a.getDescription().isBlank() 
-                            ? a.getDescription() 
-                            : "사용자의 목표 직무 및 학점 스펙 기반 DB 맞춤 추천 활동입니다.")
+                            ? "[AI 응답 지연 임시 추천] " + a.getDescription() 
+                            : "[AI 응답 지연 임시 추천] 사용자의 목표 직무 및 학점 스펙 기반 DB 맞춤 추천 활동입니다.")
                     .deadline(a.getDeadline())
                     .build());
         }

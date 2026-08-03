@@ -32,10 +32,52 @@ class MatchScoreCalculatorTest {
 
     @Test
     void 토익과_OPIC은_각_시험의_동일한_유형끼리_비교한다() {
+        // user: OPIC IH = 900, TOEIC 800 -> max = 900
+        // passer: OPIC AL = 950, TOEIC 900 -> max = 950
+        // Lang = 900 / 950 * 100 = 94.73
+        // Total = 40 (GPA) + 26.67 (Cert) + 31.58 (Lang) = 98.25 -> 98
         UserSpec user = userSpec("3.80", "4.50", "IH", 800, new String[]{"SQLD"});
         PasserData passer = passer("3.80", "4.50", "AL", 900, new String[]{"SQLD"}, 1);
 
-        assertThat(calculator.calculate(user, List.of(passer))).isEqualTo(96);
+        assertThat(calculator.calculate(user, List.of(passer))).isEqualTo(98);
+    }
+
+    @Test
+    void 서로_다른_시험이라도_환산_점수로_비교한다() {
+        // user: OPIC IM2 -> 750
+        // passer: TOEIC 800
+        // Lang = 750 / 800 * 100 = 93.75
+        // Total = 40 + 26.67 + 31.25 = 97.92 -> 98
+        UserSpec user = UserSpec.builder()
+                .gpa(new BigDecimal("3.80")).gpaMax(new BigDecimal("4.50"))
+                .languageScores(List.of(Map.of("type", "OPIC", "grade", "IM2")))
+                .certifications(new String[]{"SQLD"}).build();
+        
+        PasserData passer = PasserData.builder()
+                .gpa(new BigDecimal("3.80")).gpaMax(new BigDecimal("4.50"))
+                .languageScores(List.of(Map.of("type", "TOEIC", "score", 800)))
+                .certifications(new String[]{"SQLD"}).build();
+
+        assertThat(calculator.calculate(user, List.of(passer))).isEqualTo(98);
+    }
+
+    @Test
+    void TOEFL_점수를_선형보간으로_환산하여_비교한다() {
+        // user: TOEFL 81 -> (77~86 구간 -> 750~800) -> 750 + (81-77)*50/9 = 772.22
+        // passer: TOEIC 800
+        // Lang = 772.22 / 800 * 100 = 96.52
+        // Total = 40 + 26.67 + 32.17 = 98.84 -> 99
+        UserSpec user = UserSpec.builder()
+                .gpa(new BigDecimal("3.80")).gpaMax(new BigDecimal("4.50"))
+                .languageScores(List.of(Map.of("type", "TOEFL", "score", 81)))
+                .certifications(new String[]{"SQLD"}).build();
+
+        PasserData passer = PasserData.builder()
+                .gpa(new BigDecimal("3.80")).gpaMax(new BigDecimal("4.50"))
+                .languageScores(List.of(Map.of("type", "TOEIC", "score", 800)))
+                .certifications(new String[]{"SQLD"}).build();
+
+        assertThat(calculator.calculate(user, List.of(passer))).isEqualTo(99);
     }
 
     @Test

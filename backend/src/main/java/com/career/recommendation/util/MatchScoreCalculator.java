@@ -99,8 +99,8 @@ public class MatchScoreCalculator {
     }
 
     /**
-     * 사용자와 합격자가 공통으로 보유한 시험끼리 비교한다.
-     * 공통 시험이 여러 개면 평균을 사용하고, 비교 가능한 시험이 없으면 중립 50점 처리한다.
+     * 사용자와 합격자가 보유한 모든 어학 성적을 환산 토익 점수(Equivalent TOEIC Score)로 변환한 뒤,
+     * 각각의 최고 점수를 비교하여 비율을 계산한다.
      */
     private double scoreLang(List<Map<String, Object>> userLangScores,
                              List<Map<String, Object>> passerLangScores) {
@@ -109,55 +109,78 @@ public class MatchScoreCalculator {
             return 50.0;
         }
 
-        Map<String, Map<String, Object>> passerByType = new LinkedHashMap<>();
-        passerLangScores.stream()
+        double userMaxToeic = userLangScores.stream()
                 .filter(score -> score != null && score.get("type") != null)
-                .forEach(score -> passerByType.putIfAbsent(
-                        normalize(String.valueOf(score.get("type"))), score));
+                .mapToDouble(this::convertToEquivalentToeic)
+                .max()
+                .orElse(-1);
 
-        return userLangScores.stream()
+        double passerMaxToeic = passerLangScores.stream()
                 .filter(score -> score != null && score.get("type") != null)
-                .mapToDouble(userScore -> {
-                    String type = normalize(String.valueOf(userScore.get("type")));
-                    Map<String, Object> passerScore = passerByType.get(type);
-                    return passerScore == null
-                            ? Double.NaN
-                            : scoreSameLanguageTest(type, userScore, passerScore);
-                })
-                .filter(score -> !Double.isNaN(score))
-                .average()
-                .orElse(50.0);
+                .mapToDouble(this::convertToEquivalentToeic)
+                .max()
+                .orElse(-1);
+
+        if (userMaxToeic < 0 || passerMaxToeic <= 0) {
+            return 50.0;
+        }
+
+        if (userMaxToeic >= passerMaxToeic) {
+            return 100.0;
+        }
+
+        return (userMaxToeic / passerMaxToeic) * 100.0;
     }
 
-    private double scoreSameLanguageTest(String type,
-                                         Map<String, Object> userScore,
-                                         Map<String, Object> passerScore) {
+    /**
+     * 각 어학 시험 성적을 범용 토익 점수로 환산한다.
+     * 지원 시험: TOEIC, TOEFL (iBT), OPIC
+     */
+    private double convertToEquivalentToeic(Map<String, Object> scoreData) {
+        String type = normalize(String.valueOf(scoreData.get("type")));
+
+        if ("TOEIC".equals(type)) {
+            Double score = asDouble(scoreData.get("score"));
+            return score != null ? score : 0;
+        }
+
         if ("OPIC".equals(type)) {
-            Integer userRank = OPIC_RANKS.get(normalize(asString(userScore.get("grade"))));
-            Integer passerRank = OPIC_RANKS.get(normalize(asString(passerScore.get("grade"))));
-            if (userRank == null || passerRank == null) return Double.NaN;
-            if (userRank >= passerRank) return 100.0;
-            return ((double) (userRank + 1) / (passerRank + 1)) * 100.0;
+            String grade = normalize(asString(scoreData.get("grade")));
+            return switch (grade) {
+                case "AL" -> 950.0;
+                case "IH" -> 900.0;
+                case "IM3" -> 800.0;
+                case "IM2" -> 750.0;
+                case "IM1" -> 700.0;
+                case "IL" -> 600.0;
+                case "NH", "NM", "NL" -> 500.0;
+                default -> 0.0;
+            };
         }
 
-        Double userValue = asDouble(userScore.get("score"));
-        Double passerValue = asDouble(passerScore.get("score"));
-        if (userValue == null || passerValue == null || passerValue <= 0) {
-            return Double.NaN;
+        if ("TOEFL".equals(type)) {
+            Double score = asDouble(scoreData.get("score"));
+            if (score == null) return 0.0;
+            
+            // TOEFL iBT to TOEIC mapping table points
+            // (TOEFL, TOEIC): (62, 600), (68, 650), (71, 700), (77, 750), 
+            // (86, 800), (94, 850), (101, 900), (108, 950)
+            if (score >= 108) return 950.0 + ((score - 108) / (120 - 108) * 40.0); // max 990
+            if (score >= 101) return interpolate(score, 101, 108, 900, 950);
+            if (score >= 94) return interpolate(score, 94, 101, 850, 900);
+            if (score >= 86) return interpolate(score, 86, 94, 800, 850);
+            if (score >= 77) return interpolate(score, 77, 86, 750, 800);
+            if (score >= 71) return interpolate(score, 71, 77, 700, 750);
+            if (score >= 68) return interpolate(score, 68, 71, 650, 700);
+            if (score >= 62) return interpolate(score, 62, 68, 600, 650);
+            return (score / 62.0) * 600.0; // below 62
         }
 
-        Double userMax = asDouble(userScore.get("maxScore"));
-        Double passerMax = asDouble(passerScore.get("maxScore"));
-        double normalizedUser = userMax != null && userMax > 0
-                ? userValue / userMax
-                : userValue;
-        double normalizedPasser = passerMax != null && passerMax > 0
-                ? passerValue / passerMax
-                : passerValue;
+        return 0.0;
+    }
 
-        if (normalizedPasser <= 0) return Double.NaN;
-        if (normalizedUser >= normalizedPasser) return 100.0;
-        return Math.max(0.0, (normalizedUser / normalizedPasser) * 100.0);
+    private double interpolate(double x, double x0, double x1, double y0, double y1) {
+        return y0 + (x - x0) * (y1 - y0) / (x1 - x0);
     }
 
     /**
