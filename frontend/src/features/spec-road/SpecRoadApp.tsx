@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, KAKAO_LOGIN_URL } from "@/lib/api";
-import { clearTokens, getAccessToken } from "@/lib/auth";
-import { getMe, getRecommendations, getRoadmap, putSpec, putTarget } from "./api";
+import { clearTokens, getAccessToken, onSessionExpired } from "@/lib/auth";
+import { getMe, getRecommendations, getRoadmap, postLogout, putSpec, putTarget } from "./api";
 import { RECOMMENDATIONS, ROADMAP } from "./data";
 import {
   fromLanguageScoresPayload,
@@ -80,6 +80,16 @@ export function SpecRoadApp() {
   const [roadmapLoading, setRoadmapLoading] = useState(false);
   const [roadmapError, setRoadmapError] = useState(false);
 
+  // 로그인 화면으로 되돌리며 유저별 상태를 모두 비운다(다음 로그인 유저에게 남지 않도록).
+  function resetToLogin() {
+    setNickname(null);
+    setDetailId(null);
+    setRecommendations([]);
+    setRecMeta(null);
+    setRoadmap([]);
+    setScreen("login");
+  }
+
   useEffect(() => {
     if (screen !== "analyzing") return;
     const timer = setTimeout(() => {
@@ -88,6 +98,9 @@ export function SpecRoadApp() {
     }, 2100);
     return () => clearTimeout(timer);
   }, [screen]);
+
+  // 리프레시 토큰까지 만료돼 재발급이 실패하면 로그인 화면으로 돌려보낸다.
+  useEffect(() => onSessionExpired(resetToLogin), []);
 
   // 앱 화면 진입 시 추천을 불러온다. 로그인 상태면 실 API, 아니면(둘러보기) 목업.
   useEffect(() => {
@@ -315,10 +328,10 @@ export function SpecRoadApp() {
               setScreen("onboard");
             }}
             onLogout={() => {
+              // 서버의 리프레시 토큰 폐기는 실패해도 로그아웃 자체는 진행한다.
+              void postLogout().catch(() => {});
               clearTokens();
-              setNickname(null);
-              setDetailId(null);
-              setScreen("login");
+              resetToLogin();
             }}
           />
         )}
