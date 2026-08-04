@@ -1,0 +1,54 @@
+name: Backend CI
+
+# PR이 올라오면 백엔드를 빌드하고 테스트해, 깨진 코드가 main에 들어가는 것을 막는다.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+jobs:
+  test:
+    name: 빌드 & 테스트
+    runs-on: ubuntu-latest
+
+    # 일부 테스트(@SpringBootTest)는 실제 DB에 붙어 Flyway 마이그레이션까지 검증한다.
+    # application.yml의 기본 DB 주소(localhost:5433)에 맞춰 포트를 매핑한다.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: career_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: "1234"
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JDK 17 설치
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: maven
+
+      - name: 테스트 실행
+        working-directory: backend
+        run: ./mvnw -B test
+
+      - name: 패키징 확인
+        working-directory: backend
+        run: ./mvnw -B package -DskipTests

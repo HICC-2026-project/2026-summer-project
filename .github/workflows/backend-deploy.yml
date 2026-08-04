@@ -1,0 +1,72 @@
+name: Backend Deploy
+
+# main에 백엔드 변경이 머지되면 EC2에 접속해 코드를 내려받고 컨테이너를 다시 올린다.
+# (지금까지 수동으로 하던 git pull + docker compose up -d --build 을 대신한다)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-deploy.yml"
+  # 코드 변경 없이 다시 배포하고 싶을 때 Actions 탭에서 수동 실행할 수 있다.
+  workflow_dispatch:
+
+# 배포가 겹치면 컨테이너가 꼬이므로, 나중 실행이 앞선 실행을 기다리게 한다.
+concurrency:
+  group: backend-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: EC2 배포
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH 키 준비
+        env:
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: 코드 배포
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          cd ~/2026-summer-project
+          git pull --ff-only
+          cd backend
+          docker compose -f docker-compose.prod.yml up -d --build
+          REMOTE
+
+      - name: 부팅 확인
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          # 앱이 실제로 응답할 때까지 기다린다. 3분 안에 못 뜨면 배포 실패로 처리한다.
+          for i in $(seq 1 18); do
+            code=$(curl -s -o /dev/null -m 10 -w "%{http_code}" "http://$EC2_HOST:8080/api-docs" || true)
+            if [ "$code" = "200" ]; then
+              echo "배포 성공 — 앱이 정상 응답합니다."
+              exit 0
+            fi
+            echo "대기 중... ($i/18, 응답 코드: $code)"
+            sleep 10
+          done
+          echo "앱이 3분 안에 응답하지 않았습니다. EC2 로그를 확인하세요."
+          exit 1
+
+      - name: 실패 시 로그 출력
+        if: failure()
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" \
+            'docker logs spec-road-api --tail 50' || true
