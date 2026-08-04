@@ -113,15 +113,61 @@ http://<EC2 퍼블릭 IP>:8080/login/oauth2/code/kakao
 
 (로컬용 `http://localhost:8080/login/oauth2/code/kakao`는 그대로 두고 **추가**)
 
-## 7. 재배포 (코드 바뀌었을 때)
+## 7. 재배포
+
+**main에 백엔드 변경이 머지되면 GitHub Actions가 자동으로 배포합니다.** 아래 수동 절차는
+자동 배포가 실패했거나 서버에서 직접 확인해야 할 때만 씁니다.
 
 ```bash
-cd <repo이름>/backend
+cd ~/2026-summer-project/backend
 git pull
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-> 이 부분은 이후 GitHub Actions CI/CD(작업 #17)로 자동화 예정.
+---
+
+# 🤖 자동 배포 (GitHub Actions)
+
+| 워크플로 | 언제 | 하는 일 |
+|---|---|---|
+| `backend-ci.yml` | 백엔드 관련 PR·푸시 | 테스트 + 패키징 (깨진 코드가 main에 못 들어가게) |
+| `backend-deploy.yml` | main에 백엔드 변경 머지 | EC2 접속 → `git pull` → 컨테이너 재빌드 → 부팅 확인 |
+
+프론트엔드는 Vercel이 main 머지 시 자동 배포하므로 별도 워크플로가 없습니다.
+
+## 최초 1회 설정
+
+### 1. GitHub Secrets 등록
+
+저장소 → **Settings → Secrets and variables → Actions → New repository secret**
+
+| 이름 | 값 |
+|---|---|
+| `EC2_HOST` | EC2 탄력적 IP (예: `13.124.80.94`) |
+| `EC2_USER` | `ubuntu` |
+| `EC2_SSH_KEY` | SSH 개인키 **파일 전체 내용** (`-----BEGIN ...` 부터 `-----END ...` 까지) |
+
+> 개인키는 로컬의 `~/.ssh/spec-road-key` 파일을 그대로 복사해 붙여넣습니다.
+> Secrets에 넣은 값은 로그에 노출되지 않고, 저장 후 다시 볼 수 없습니다.
+
+### 2. EC2 보안 그룹에서 SSH 허용
+
+GitHub Actions 실행 서버는 IP가 매번 바뀌므로, SSH(22) 소스가 "내 IP"로 묶여 있으면
+자동 배포가 접속하지 못합니다. 둘 중 하나를 선택하세요.
+
+- **간단함 우선**: SSH(22) 소스를 `0.0.0.0/0`으로 변경
+  Ubuntu AMI는 비밀번호 로그인이 꺼져 있어 키 없이는 접속할 수 없지만,
+  포트가 인터넷에 열리는 것은 사실이므로 프로젝트 기간에만 쓰는 것을 권장합니다.
+- **보안 우선**: [GitHub Actions IP 대역](https://api.github.com/meta)만 허용
+  대역이 많고 주기적으로 바뀌어 관리 부담이 있습니다.
+
+## 배포 확인
+
+저장소 **Actions 탭**에서 실행 결과를 볼 수 있습니다.
+`부팅 확인` 단계는 앱이 실제로 응답할 때까지 최대 3분을 기다리고,
+응답이 없으면 배포를 실패로 표시하며 서버 로그 50줄을 출력합니다.
+
+코드 변경 없이 다시 배포하려면 Actions → **Backend Deploy → Run workflow**를 누릅니다.
 
 ---
 
