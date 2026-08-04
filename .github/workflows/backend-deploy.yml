@@ -28,8 +28,15 @@ jobs:
           EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          # Secrets에 붙여넣는 과정에서 Windows 줄바꿈(CRLF)이 섞이면 OpenSSH가 키를 읽지 못한다.
+          # 캐리지 리턴을 제거하고 끝 개행을 보장해 붙여넣기 환경과 무관하게 동작시킨다.
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          if ! ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null 2>&1; then
+            echo "EC2_SSH_KEY 시크릿을 읽을 수 없습니다."
+            echo "개인키 파일 전체(-----BEGIN ... END-----)를 그대로 붙여넣었는지 확인하세요."
+            exit 1
+          fi
           ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: 코드 배포
