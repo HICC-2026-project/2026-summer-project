@@ -1,6 +1,7 @@
 "use client";
 
 import { PRIMARY } from "../../data";
+import { StateMessage } from "../../components/StateMessage";
 import { dday, ddayColor, jobLabel } from "../../helpers";
 import type { Priority, RoadmapMilestone, Target } from "../../types";
 
@@ -28,19 +29,18 @@ export function RoadmapTab({ target, roadmap, roadmapLoading, roadmapError }: Ro
       </p>
 
       {roadmapLoading ? (
-        <div style={{ padding: "40px 0", textAlign: "center", color: "#9797A1", fontSize: 14, fontWeight: 500 }}>
-          AI가 로드맵을 그리고 있어요…
-        </div>
+        <StateMessage variant="loading" title="AI가 로드맵을 그리고 있어요…" />
       ) : roadmapError ? (
-        <div style={{ padding: "32px 20px", textAlign: "center", background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16 }}>
-          <div style={{ fontSize: 14.5, fontWeight: 700, color: "#E5484D", marginBottom: 6 }}>로드맵을 불러오지 못했어요</div>
-          <div style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5 }}>네트워크를 확인한 뒤 잠시 후 다시 시도해주세요.</div>
-        </div>
+        <StateMessage
+          variant="error"
+          title="로드맵을 불러오지 못했어요"
+          description="네트워크를 확인한 뒤 잠시 후 다시 시도해주세요."
+        />
       ) : roadmap.length === 0 ? (
-        <div style={{ padding: "32px 20px", textAlign: "center", background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16 }}>
-          <div style={{ fontSize: 14.5, fontWeight: 700, color: "#15141B", marginBottom: 6 }}>아직 로드맵이 없어요</div>
-          <div style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5 }}>스펙과 목표 직무를 입력하면 시기별 로드맵을 만들어드려요.</div>
-        </div>
+        <StateMessage
+          title="아직 로드맵이 없어요"
+          description="스펙과 목표 직무를 입력하면 시기별 로드맵을 만들어드려요."
+        />
       ) : (
         <div style={{ position: "relative", paddingLeft: 6 }}>
           {roadmap.map((m, i) => {

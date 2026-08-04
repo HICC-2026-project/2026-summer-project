@@ -138,17 +138,14 @@ export function SpecRoadApp() {
     if (dataRequested.current) return;
     dataRequested.current = true;
 
-    if (!getAccessToken()) {
-      setRecommendations(RECOMMENDATIONS);
-      setRecMeta(null);
-      setRecError(false);
-      setRoadmap(ROADMAP);
-      setRoadmapError(false);
-      return;
-    }
+    // 둘러보기(비로그인)는 API를 부르지 않는다. 목업은 상태에 넣지 않고 렌더 시점에 그대로 쓴다.
+    if (!getAccessToken()) return;
 
     let cancelled = false;
 
+    // 화면 진입을 계기로 데이터를 받아오는 구간이라 로딩 표시를 여기서 켤 수밖에 없다.
+    // (set-state-in-effect 규칙은 파생 가능한 상태를 겨냥한 것이고, 여기서는 외부 요청의 진행 상태다)
+    /* eslint-disable react-hooks/set-state-in-effect */
     setRecLoading(true);
     setRecError(false);
     getRecommendations()
@@ -182,6 +179,7 @@ export function SpecRoadApp() {
       .finally(() => {
         if (!cancelled) setRoadmapLoading(false);
       });
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     return () => {
       cancelled = true;
@@ -350,13 +348,13 @@ export function SpecRoadApp() {
             spec={spec}
             target={target}
             nickname={nickname}
-            recommendations={recommendations}
-            recMeta={recMeta}
-            recLoading={recLoading}
-            recError={recError}
-            roadmap={roadmap}
-            roadmapLoading={roadmapLoading}
-            roadmapError={roadmapError}
+            recommendations={isDemo ? RECOMMENDATIONS : recommendations}
+            recMeta={isDemo ? null : recMeta}
+            recLoading={isDemo ? false : recLoading}
+            recError={isDemo ? false : recError}
+            roadmap={isDemo ? ROADMAP : roadmap}
+            roadmapLoading={isDemo ? false : roadmapLoading}
+            roadmapError={isDemo ? false : roadmapError}
             isDemo={isDemo}
             onOpenDetail={setDetailId}
             onEditSpec={() => {
@@ -380,8 +378,8 @@ export function SpecRoadApp() {
         {screen === "app" && detailId != null && (
           <DetailSheet
             recommendationId={detailId}
-            recommendations={recommendations}
-            recMeta={recMeta}
+            recommendations={isDemo ? RECOMMENDATIONS : recommendations}
+            recMeta={isDemo ? null : recMeta}
             onClose={() => setDetailId(null)}
             onCompare={() => {
               setDetailId(null);

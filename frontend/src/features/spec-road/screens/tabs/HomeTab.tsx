@@ -1,6 +1,7 @@
 "use client";
 
 import { DEMO_USER_NAME, PASSER_COUNT, PRIMARY, READINESS, READINESS_RANK } from "../../data";
+import { StateMessage } from "../../components/StateMessage";
 import { dday, ddayColor, jobLabel } from "../../helpers";
 import type { Recommendation, RecommendationMeta, Target } from "../../types";
 
@@ -127,19 +128,18 @@ export function HomeTab({ target, nickname, recommendations, recMeta, recLoading
       )}
 
       {recLoading ? (
-        <div style={{ padding: "40px 0", textAlign: "center", color: "#9797A1", fontSize: 14, fontWeight: 500 }}>
-          AI가 추천을 준비하고 있어요…
-        </div>
+        <StateMessage variant="loading" title="AI가 추천을 준비하고 있어요…" />
       ) : recError ? (
-        <div style={{ padding: "32px 20px", textAlign: "center", background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16 }}>
-          <div style={{ fontSize: 14.5, fontWeight: 700, color: "#E5484D", marginBottom: 6 }}>추천을 불러오지 못했어요</div>
-          <div style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5 }}>네트워크를 확인한 뒤 잠시 후 다시 시도해주세요.</div>
-        </div>
+        <StateMessage
+          variant="error"
+          title="추천을 불러오지 못했어요"
+          description="네트워크를 확인한 뒤 잠시 후 다시 시도해주세요."
+        />
       ) : recommendations.length === 0 ? (
-        <div style={{ padding: "32px 20px", textAlign: "center", background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16 }}>
-          <div style={{ fontSize: 14.5, fontWeight: 700, color: "#15141B", marginBottom: 6 }}>아직 추천할 활동이 없어요</div>
-          <div style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5 }}>스펙과 목표 직무를 입력하면 맞춤 활동을 추천해드려요.</div>
-        </div>
+        <StateMessage
+          title="아직 추천할 활동이 없어요"
+          description="스펙과 목표 직무를 입력하면 맞춤 활동을 추천해드려요."
+        />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {recommendations.map((r) => (
