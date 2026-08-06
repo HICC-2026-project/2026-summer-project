@@ -1,0 +1,35 @@
+# 한 줄에 링커리어 활동 URL 하나를 적습니다.
+# 이 파일의 공고는 --discover와 --input-csv 실행 모두에서 자동 제외됩니다.
+
+# 컴퓨터공학 활동 범위에서 제외: 반도체 공정 중심 교육
+https://linkareer.com/activity/340677
+
+# 컴퓨터공학 활동 범위에서 제외: 뉴미디어 광고편집 디자인 교육
+https://linkareer.com/activity/340765
+
+# 컴퓨터공학 활동 범위에서 제외: AI 애니메이션 제작 직무
+https://linkareer.com/activity/340796
+
+# 사용자 검수 제외: 청년들이 만드는 첨단 공공서비스 AI영상 공모전
+https://linkareer.com/activity/340148
+
+# 사용자 검수 제외: 2026 국립공원 위성 모니터링 AI 챌린지
+https://linkareer.com/activity/340563
+
+# 사용자 검수 제외: vox.ai B2B Growth Marketer 채용
+https://linkareer.com/activity/340335
+
+# 사용자 검수 제외: 동래구 도시이미지 일러스트 공모전
+https://linkareer.com/activity/340636
+
+# 사용자 검수 제외: IN:SENSE Design Award 2027 국제 감각디자인 공모전
+https://linkareer.com/activity/340640
+
+# 사용자 검수 제외: LG유플러스 2026 US Fair 모집 (Security)
+https://linkareer.com/activity/340604
+
+# 사용자 검수 제외: AI 마케팅 실무 교육 및 인턴십 연계 과정
+https://linkareer.com/activity/340351
+
+# 사용자 검수 제외: 국립대구과학관 전국청소년 과학신문공모전
+https://linkareer.com/activity/340300
