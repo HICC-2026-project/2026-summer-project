@@ -49,8 +49,10 @@ export function AppScreen({
       <div className="cf-scroll" style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
         {tab === "home" && (
           <HomeTab
+            spec={spec}
             target={target}
             nickname={nickname}
+            isDemo={isDemo}
             recommendations={recommendations}
             recMeta={recMeta}
             recLoading={recLoading}
@@ -61,7 +63,7 @@ export function AppScreen({
         {tab === "roadmap" && (
           <RoadmapTab target={target} roadmap={roadmap} roadmapLoading={roadmapLoading} roadmapError={roadmapError} />
         )}
-        {tab === "compare" && <CompareTab />}
+        {tab === "compare" && <CompareTab isDemo={isDemo} />}
         {tab === "profile" && (
           <ProfileTab
             spec={spec}
