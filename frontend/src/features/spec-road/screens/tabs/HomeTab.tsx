@@ -3,11 +3,13 @@
 import { DEMO_USER_NAME, PASSER_COUNT, PRIMARY, READINESS, READINESS_RANK } from "../../data";
 import { StateMessage } from "../../components/StateMessage";
 import { dday, ddayColor, jobLabel } from "../../helpers";
-import type { Recommendation, RecommendationMeta, Target } from "../../types";
+import type { Recommendation, RecommendationMeta, Spec, Target } from "../../types";
 
 interface HomeTabProps {
+  spec: Spec;
   target: Target;
   nickname: string | null;
+  isDemo: boolean;
   recommendations: Recommendation[];
   recMeta: RecommendationMeta | null;
   recLoading: boolean;
@@ -15,9 +17,18 @@ interface HomeTabProps {
   onOpenDetail: (id: string | number) => void;
 }
 
-export function HomeTab({ target, nickname, recommendations, recMeta, recLoading, recError, onOpenDetail }: HomeTabProps) {
+export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMeta, recLoading, recError, onOpenDetail }: HomeTabProps) {
   const targetSummary = `${target.size} ${jobLabel(target.job)}`;
   const displayName = nickname ?? DEMO_USER_NAME;
+
+  // 입력한 어학·자격증을 요약한다. 둘 다 없으면 안내 문구를 보여준다.
+  const langCount = Object.values(spec.langScores).filter((v) => v).length;
+  const specSummary =
+    langCount + spec.certs.length === 0
+      ? "미입력"
+      : [langCount > 0 ? `어학 ${langCount}개` : null, spec.certs.length > 0 ? `자격증 ${spec.certs.length}개` : null]
+          .filter(Boolean)
+          .join(" · ");
 
   // 로그인 유저는 실 API 응답(recMeta)의 matchScore·비교 메시지를, 둘러보기는 목업 값을 쓴다.
   const readinessScore = recMeta?.matchScore ?? READINESS;
@@ -88,15 +99,34 @@ export function HomeTab({ target, nickname, recommendations, recMeta, recLoading
         </div>
       </div>
 
+      {/* 강점·보완 판정은 합격자 평균과의 비교(F-04)가 있어야 가능하다.
+          아직 그 API가 없어, 로그인 사용자에게는 판정 대신 본인이 입력한 값을 그대로 보여준다. */}
       <div style={{ display: "flex", gap: 10, marginBottom: 26 }}>
-        <div style={{ flex: 1, background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16, padding: 14 }}>
-          <div style={{ fontSize: 12, color: "#9797A1", fontWeight: 600, marginBottom: 6 }}>강점</div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#12A150" }}>학점 · 자격증</div>
-        </div>
-        <div style={{ flex: 1, background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16, padding: 14 }}>
-          <div style={{ fontSize: 12, color: "#9797A1", fontWeight: 600, marginBottom: 6 }}>보완 필요</div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#E5484D" }}>어학 · 실무경험</div>
-        </div>
+        {isDemo ? (
+          <>
+            <div style={{ flex: 1, background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16, padding: 14 }}>
+              <div style={{ fontSize: 12, color: "#9797A1", fontWeight: 600, marginBottom: 6 }}>강점</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#12A150" }}>학점 · 자격증</div>
+            </div>
+            <div style={{ flex: 1, background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16, padding: 14 }}>
+              <div style={{ fontSize: 12, color: "#9797A1", fontWeight: 600, marginBottom: 6 }}>보완 필요</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#E5484D" }}>어학 · 실무경험</div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ flex: 1, background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16, padding: 14 }}>
+              <div style={{ fontSize: 12, color: "#9797A1", fontWeight: 600, marginBottom: 6 }}>내 학점</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#15141B" }}>
+                {spec.gpa ? `${spec.gpa} / ${spec.gpaScale}` : "미입력"}
+              </div>
+            </div>
+            <div style={{ flex: 1, background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16, padding: 14 }}>
+              <div style={{ fontSize: 12, color: "#9797A1", fontWeight: 600, marginBottom: 6 }}>어학 · 자격증</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#15141B" }}>{specSummary}</div>
+            </div>
+          </>
+        )}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>

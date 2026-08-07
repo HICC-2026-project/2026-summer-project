@@ -1,14 +1,31 @@
 "use client";
 
 import { COMPARE_DEG, COMPARE_ROWS, COMPARE_SCORE, COMPARE_TARGET, PASSER_COUNT, PRIMARY, READINESS_RANK } from "../../data";
+import { StateMessage } from "../../components/StateMessage";
 
-export function CompareTab() {
+interface CompareTabProps {
+  /** 비로그인 예시 화면 여부. 아래 수치는 전부 예시값이라 로그인 사용자에게는 보여주지 않는다. */
+  isDemo: boolean;
+}
+
+export function CompareTab({ isDemo }: CompareTabProps) {
   return (
     <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
       <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 6px", color: "#15141B" }}>합격자 스펙 비교</h1>
       <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 20px", lineHeight: 1.55 }}>
         내 스펙을 익명 합격자 데이터와 항목별로 비교해요.
       </p>
+
+      {/* F-04 비교 API가 아직 없어, 로그인 사용자에게 예시 수치를 실제처럼 보여주지 않는다. */}
+      {!isDemo && (
+        <StateMessage
+          title="비교 결과를 준비하고 있어요"
+          description="합격자 데이터와 항목별로 비교하는 기능을 만들고 있어요. 조금만 기다려주세요."
+        />
+      )}
+
+      {isDemo && (
+        <>
 
       <div
         style={{
@@ -131,7 +148,9 @@ export function CompareTab() {
             </div>
           );
         })}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
