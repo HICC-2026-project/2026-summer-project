@@ -1,7 +1,7 @@
 "use client";
 
-import { COMPARE_DEG, COMPARE_ROWS, COMPARE_SCORE, COMPARE_TARGET, PASSER_COUNT, PRIMARY, READINESS_RANK } from "../../data";
-import { RecommendationMeta } from "../../types";
+import { COMPARE_ROWS, COMPARE_SCORE, COMPARE_TARGET, PASSER_COUNT, PRIMARY } from "../../data";
+import type { RecommendationMeta } from "../../types";
 import { StateMessage } from "../../components/StateMessage";
 
 interface CompareTabProps {
@@ -48,16 +48,11 @@ export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
     );
   }
 
-  // 부족한 항목 찾기 (메시지용)
-  const weakLabels = compareRows.filter(r => r.status === "부족").map(r => r.label);
-  const strongLabels = compareRows.filter(r => r.status === "충족").map(r => r.label);
-  
-  let summaryMessage = "항목별로 고르게 준비되어 있어요. 안정권입니다!";
-  if (weakLabels.length > 0) {
-    const weakStr = weakLabels.map(l => l.split("/")[0]).join("·");
-    const strongStr = strongLabels.length > 0 ? strongLabels.map(l => l.split("/")[0]).join("·") + "은 합격선을 넘었어요. " : "";
-    summaryMessage = `${strongStr}<b style="color: #E5484D">${weakStr}</b>을(를) 보완하면 안정권이에요.`;
-  }
+  // 항목별 결과로 요약 문구를 만든다. 강조는 JSX로 처리해 HTML 주입을 피한다.
+  const weakLabels = compareRows.filter((r) => r.status === "부족").map((r) => r.label);
+  const strongLabels = compareRows.filter((r) => r.status === "충족").map((r) => r.label);
+  const strongText = strongLabels.join("·");
+  const weakText = weakLabels.join("·");
 
   return (
     <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
@@ -125,10 +120,21 @@ export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
           </div>
         </div>
         <div style={{ flex: 1 }}>
+          {/* '상위 N%'는 전체 사용자 분포를 알아야 나오는 값이라 매치 점수로 대신할 수 없다.
+              백엔드가 주는 비교 대상 정보만 사실 그대로 표기한다. */}
           <div style={{ fontSize: 15, fontWeight: 800, color: "#15141B", marginBottom: 6, letterSpacing: "-0.01em" }}>
-            상위 {Math.max(1, 100 - matchScore)}% 수준
+            유사 합격자 {passerCount}명과 비교했어요
           </div>
-          <p style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5, margin: 0 }} dangerouslySetInnerHTML={{ __html: summaryMessage }} />
+          <p style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5, margin: 0 }}>
+            {weakLabels.length === 0 ? (
+              "항목별로 고르게 준비되어 있어요."
+            ) : (
+              <>
+                {strongLabels.length > 0 && `합격선을 넘은 항목: ${strongText}. `}
+                <b style={{ color: "#E5484D" }}>{weakText}</b> 항목을 보완하면 좋아요.
+              </>
+            )}
+          </p>
         </div>
       </div>
 
