@@ -1,31 +1,70 @@
 "use client";
 
 import { COMPARE_DEG, COMPARE_ROWS, COMPARE_SCORE, COMPARE_TARGET, PASSER_COUNT, PRIMARY, READINESS_RANK } from "../../data";
+import { RecommendationMeta } from "../../types";
 import { StateMessage } from "../../components/StateMessage";
 
 interface CompareTabProps {
   /** 비로그인 예시 화면 여부. 아래 수치는 전부 예시값이라 로그인 사용자에게는 보여주지 않는다. */
   isDemo: boolean;
+  recMeta?: RecommendationMeta | null;
 }
 
-export function CompareTab({ isDemo }: CompareTabProps) {
+export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
+  const targetJob = isDemo ? COMPARE_TARGET : (recMeta?.targetJobName ?? "미설정");
+  const passerCount = isDemo ? PASSER_COUNT : (recMeta?.similarPasserCount ?? 0);
+  const matchScore = isDemo ? COMPARE_SCORE : (recMeta?.matchScore ?? 0);
+  const compareRows = isDemo ? COMPARE_ROWS : (recMeta?.compareRows ?? []);
+  
+  // 데이터 로딩 중 (비로그인 아님 & API 아직 안 옴)
+  if (!isDemo && !recMeta) {
+    return (
+      <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
+        <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 6px", color: "#15141B" }}>합격자 스펙 비교</h1>
+        <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 20px", lineHeight: 1.55 }}>
+          내 스펙을 익명 합격자 데이터와 항목별로 비교해요.
+        </p>
+        <StateMessage
+          title="비교 결과를 준비하고 있어요"
+          description="항목별 분석 데이터를 불러오는 중입니다..."
+        />
+      </div>
+    );
+  }
+
+  // 합격자 데이터 부족 (또는 에러)
+  if (!isDemo && passerCount === 0) {
+    return (
+      <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
+        <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 6px", color: "#15141B" }}>합격자 스펙 비교</h1>
+        <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 20px", lineHeight: 1.55 }}>
+          내 스펙을 익명 합격자 데이터와 항목별로 비교해요.
+        </p>
+        <StateMessage
+          title="비교 가능한 데이터가 부족해요"
+          description="입력해주신 직무와 학점에 딱 맞는 유사 합격자 데이터가 아직 부족하여 분석 결과를 제공해 드릴 수 없어요. 더 많은 데이터가 모일 때까지 기다려 주세요!"
+        />
+      </div>
+    );
+  }
+
+  // 부족한 항목 찾기 (메시지용)
+  const weakLabels = compareRows.filter(r => r.status === "부족").map(r => r.label);
+  const strongLabels = compareRows.filter(r => r.status === "충족").map(r => r.label);
+  
+  let summaryMessage = "항목별로 고르게 준비되어 있어요. 안정권입니다!";
+  if (weakLabels.length > 0) {
+    const weakStr = weakLabels.map(l => l.split("/")[0]).join("·");
+    const strongStr = strongLabels.length > 0 ? strongLabels.map(l => l.split("/")[0]).join("·") + "은 합격선을 넘었어요. " : "";
+    summaryMessage = `${strongStr}<b style="color: #E5484D">${weakStr}</b>을(를) 보완하면 안정권이에요.`;
+  }
+
   return (
     <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
       <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 6px", color: "#15141B" }}>합격자 스펙 비교</h1>
       <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 20px", lineHeight: 1.55 }}>
         내 스펙을 익명 합격자 데이터와 항목별로 비교해요.
       </p>
-
-      {/* F-04 비교 API가 아직 없어, 로그인 사용자에게 예시 수치를 실제처럼 보여주지 않는다. */}
-      {!isDemo && (
-        <StateMessage
-          title="비교 결과를 준비하고 있어요"
-          description="합격자 데이터와 항목별로 비교하는 기능을 만들고 있어요. 조금만 기다려주세요."
-        />
-      )}
-
-      {isDemo && (
-        <>
 
       <div
         style={{
@@ -40,8 +79,8 @@ export function CompareTab({ isDemo }: CompareTabProps) {
       >
         <span style={{ fontSize: 16 }}>🎯</span>
         <div style={{ fontSize: 13.5, color: "#4A4954", lineHeight: 1.45 }}>
-          비교 대상: <b style={{ color: "#15141B" }}>{COMPARE_TARGET}</b> · 유사 합격자{" "}
-          <b style={{ color: PRIMARY }}>{PASSER_COUNT}명</b>
+          비교 대상: <b style={{ color: "#15141B" }}>{targetJob}</b> · 유사 합격자{" "}
+          <b style={{ color: PRIMARY }}>{passerCount}명</b>
         </div>
       </div>
 
@@ -64,7 +103,7 @@ export function CompareTab({ isDemo }: CompareTabProps) {
             height: 108,
             flexShrink: 0,
             borderRadius: "50%",
-            background: `conic-gradient(${PRIMARY} ${COMPARE_DEG}deg, #EDEDF2 0)`,
+            background: `conic-gradient(${PRIMARY} ${matchScore * 3.6}deg, #EDEDF2 0)`,
           }}
         >
           <div
@@ -80,27 +119,25 @@ export function CompareTab({ isDemo }: CompareTabProps) {
             }}
           >
             <span style={{ fontSize: 32, fontWeight: 800, color: "#15141B", lineHeight: 1, letterSpacing: "-0.03em" }}>
-              {COMPARE_SCORE}
+              {matchScore}
             </span>
             <span style={{ fontSize: 11, fontWeight: 700, color: "#9797A1", marginTop: 3 }}>종합 매치</span>
           </div>
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: "#15141B", marginBottom: 6, letterSpacing: "-0.01em" }}>
-            상위 {READINESS_RANK} 수준
+            상위 {Math.max(1, 100 - matchScore)}% 수준
           </div>
-          <p style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5, margin: 0 }}>
-            학점·자격증은 합격선을 넘었어요. <b style={{ color: "#E5484D" }}>어학·경험</b>을 보완하면 안정권이에요.
-          </p>
+          <p style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5, margin: 0 }} dangerouslySetInnerHTML={{ __html: summaryMessage }} />
         </div>
       </div>
 
       <div style={{ background: "#fff", border: "1px solid #EDEDF2", borderRadius: 22, padding: "8px 20px" }}>
-        {COMPARE_ROWS.map((c, i) => {
+        {compareRows.map((c, i) => {
           const ok = c.status === "충족";
           const statusColor = ok ? "#12A150" : "#E5484D";
           const statusBg = ok ? "#E7F6EE" : "#FCECEC";
-          const divider = i === COMPARE_ROWS.length - 1 ? "transparent" : "#F1F0F6";
+          const divider = i === compareRows.length - 1 ? "transparent" : "#F1F0F6";
 
           return (
             <div key={c.label} style={{ padding: "17px 0", borderBottom: `1px solid ${divider}` }}>
@@ -148,9 +185,7 @@ export function CompareTab({ isDemo }: CompareTabProps) {
             </div>
           );
         })}
-          </div>
-        </>
-      )}
+      </div>
     </div>
   );
 }

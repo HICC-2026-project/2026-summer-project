@@ -8,6 +8,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import com.career.recommendation.dto.recommendation.CompareRowDto;
+
 /**
  * GET /api/v1/recommendations 응답 DTO.
  *
@@ -23,8 +25,6 @@ public class RecommendationResponse {
 
     /**
      * MatchScoreCalculator가 계산한 0~100 점수.
-     * 유저 스펙과 유사 합격자 전체를 비교한 단일 점수이므로
-     * 개별 활동이 아닌 응답 최상단에 위치한다.
      */
     private int matchScore;
 
@@ -33,6 +33,15 @@ public class RecommendationResponse {
 
     /** false면 프론트에서 "일반 추천" 배지 표시 */
     private boolean isAiRecommendation;
+
+    /** 비교 대상 직무명 (예: BACKEND) */
+    private String targetJobName;
+
+    /** 비교 대상 유사 합격자 수 */
+    private Integer similarPasserCount;
+
+    /** 항목별 세부 비교 내역 */
+    private List<CompareRowDto> compareRows;
 
     @Getter
     @Builder

@@ -88,8 +88,13 @@ public class GeminiService {
                 2. 각 활동의 id 값을 그대로 사용하세요 (UUID 형식). 목록에 없는 ID는 절대로 임의로 생성하지 마세요.
                 3. 사용자의 스펙과 목표 직무에 가장 적합한 활동을 최대 5개 골라 추천하세요.
                 4. 목록에 적합한 활동이 5개 미만이면 있는 만큼만 추천하세요.
-                5. 각 추천에는 id(UUID), name, type, reason(이 사용자에게 추천하는 구체적 이유), deadline(YYYY-MM-DD) 필드를 포함하세요.
-                6. 응답은 {"activities": [...]} JSON 형식으로만 출력하세요.
+                5. required_qualifications는 공고의 필수 지원 조건입니다. 사용자가 명확하게 충족하지 못하는 활동은 우선 추천하지 마세요.
+                6. UserSpec에 해당 정보가 없으면 불충족으로 단정하지 말고 '확인 필요'로 처리하세요.
+                7. 우대사항은 targetSpec에 포함되지 않습니다.
+                8. UserSpec에 없는 경력·전공·학력 정보는 임의로 생성하지 마세요.
+                9. 각 추천에는 id(UUID), name, type, reason(이 사용자에게 추천하는 구체적 이유), deadline(YYYY-MM-DD) 필드를 포함하세요.
+                10. 추천 이유(reason)에는 사용자가 충족한 조건과 확인이 필요한 조건을 구분하여 작성하세요.
+                11. 응답은 {"activities": [...]} JSON 형식으로만 출력하세요.
                 """, spec, job, cases, availableActivities);
     }
 

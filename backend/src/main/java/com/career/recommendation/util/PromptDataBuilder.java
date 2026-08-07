@@ -39,7 +39,8 @@ public class PromptDataBuilder {
                 item.put("name", a.getName());
                 item.put("organization", a.getOrganization());
                 if (a.getDescription() != null) {
-                    item.put("description", a.getDescription());
+                    String desc = a.getDescription();
+                    item.put("description", desc.length() > 100 ? desc.substring(0, 100) + "..." : desc);
                 }
                 if (a.getDeadline() != null) {
                     item.put("deadline", a.getDeadline().toString());
@@ -102,7 +103,8 @@ public class PromptDataBuilder {
     public String buildSimilarCasesText(List<PasserData> passerList) {
         if (passerList.isEmpty()) return "유사 합격자 데이터 없음";
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < passerList.size(); i++) {
+        int limit = Math.min(passerList.size(), 5);
+        for (int i = 0; i < limit; i++) {
             PasserData p = passerList.get(i);
             sb.append(String.format("합격자%d: 학점=%s/%s, 어학=%s, 자격증=%s\n",
                     i + 1,
@@ -111,6 +113,9 @@ public class PromptDataBuilder {
                     p.getLanguageScores() != null ? p.getLanguageScores() : List.of(),
                     p.getCertifications() != null ? String.join(", ", p.getCertifications()) : "없음"
             ));
+        }
+        if (passerList.size() > 5) {
+            sb.append(String.format("... 외 %d명\n", passerList.size() - 5));
         }
         return sb.toString();
     }

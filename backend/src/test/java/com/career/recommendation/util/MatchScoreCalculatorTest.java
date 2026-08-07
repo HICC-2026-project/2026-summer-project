@@ -19,7 +19,7 @@ class MatchScoreCalculatorTest {
         UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"SQLD"});
         PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"SQLD"}, 1);
 
-        assertThat(calculator.calculate(user, List.of(passer))).isEqualTo(100);
+        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(100);
     }
 
     @Test
@@ -27,7 +27,7 @@ class MatchScoreCalculatorTest {
         UserSpec user = userSpec("4.00", "4.50", "IH", 900, new String[]{"SQLD"});
         PasserData passer = passer("3.55", "4.00", "IH", 900, new String[]{"SQLD"}, 1);
 
-        assertThat(calculator.calculate(user, List.of(passer))).isEqualTo(100);
+        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(100);
     }
 
     @Test
@@ -39,7 +39,7 @@ class MatchScoreCalculatorTest {
         UserSpec user = userSpec("3.80", "4.50", "IH", 800, new String[]{"SQLD"});
         PasserData passer = passer("3.80", "4.50", "AL", 900, new String[]{"SQLD"}, 1);
 
-        assertThat(calculator.calculate(user, List.of(passer))).isEqualTo(98);
+        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(98);
     }
 
     @Test
@@ -58,7 +58,7 @@ class MatchScoreCalculatorTest {
                 .languageScores(List.of(Map.of("type", "TOEIC", "score", 800)))
                 .certifications(new String[]{"SQLD"}).build();
 
-        assertThat(calculator.calculate(user, List.of(passer))).isEqualTo(98);
+        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(98);
     }
 
     @Test
@@ -77,7 +77,7 @@ class MatchScoreCalculatorTest {
                 .languageScores(List.of(Map.of("type", "TOEIC", "score", 800)))
                 .certifications(new String[]{"SQLD"}).build();
 
-        assertThat(calculator.calculate(user, List.of(passer))).isEqualTo(99);
+        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(99);
     }
 
     @Test
@@ -86,13 +86,13 @@ class MatchScoreCalculatorTest {
         PasserData noExperience = passer("3.80", "4.50", "IH", 900, new String[]{"SQLD"}, 0);
         PasserData manyExperiences = passer("3.80", "4.50", "IH", 900, new String[]{"SQLD"}, 100);
 
-        assertThat(calculator.calculate(user, List.of(noExperience)))
-                .isEqualTo(calculator.calculate(user, List.of(manyExperiences)));
+        assertThat(calculator.calculate(user, List.of(noExperience)).getTotalScore())
+                .isEqualTo(calculator.calculate(user, List.of(manyExperiences)).getTotalScore());
     }
 
     @Test
     void 사용자_스펙이_없으면_0점을_반환한다() {
-        assertThat(calculator.calculate(null, List.of(PasserData.builder().build()))).isZero();
+        assertThat(calculator.calculate(null, List.of(PasserData.builder().build())).getTotalScore()).isZero();
     }
 
     private UserSpec userSpec(String gpa, String gpaMax, String opicGrade,

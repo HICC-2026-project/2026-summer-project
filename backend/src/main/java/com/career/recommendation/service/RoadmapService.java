@@ -59,8 +59,7 @@ public class RoadmapService {
     private final PromptDataBuilder promptDataBuilder;
     private final ObjectMapper objectMapper;
 
-    private static final int CACHE_HOURS = 24;
-    private static final int MAX_RECOMMENDABLE_ACTIVITIES = 50;
+    private static final int MAX_RECOMMENDABLE_ACTIVITIES = 20;
     private static final ZoneId SERVICE_ZONE_ID = ZoneId.of("Asia/Seoul");
 
     /**
@@ -70,21 +69,29 @@ public class RoadmapService {
     public RoadmapResponse getRoadmap(Authentication authentication) {
         User user = currentUserService.getCurrentUser(authentication);
 
-        // 1. 유효 캐시 확인
+        // 1. 캐시 확인 및 스펙 변경 여부 판별 (추천과 동일한 일일 3회 제한 정책)
         RoadmapCache cached = roadmapCacheRepository.findByUser_Id(user.getId()).orElse(null);
-        if (cached != null && cached.isValid()) {
+        UserSpec userSpec   = userSpecRepository.findByUser_Id(user.getId()).orElse(null);
+        TargetJob targetJob = targetJobRepository.findByUser_Id(user.getId()).orElse(null);
+        LocalDate today = LocalDate.now(SERVICE_ZONE_ID);
+
+        if (cached != null) {
             try {
                 RoadmapResponse deserialized = objectMapper.readValue(cached.getResultJson(), RoadmapResponse.class);
                 if (deserialized != null && deserialized.getTimeline() != null && !deserialized.getTimeline().isEmpty()) {
-                    return deserialized;
+                    boolean isSpecChanged = isSpecModifiedSince(userSpec, targetJob, cached.getCreatedAt());
+                    if (!isSpecChanged) {
+                        return deserialized;
+                    }
+                    // 스펙이 변경되었으나 하루 제한(3회) 내인지 확인
+                    if (cached.getLastUpdatedDate() != null && today.equals(cached.getLastUpdatedDate()) && cached.getDailyUpdateCount() >= 3) {
+                        return deserialized;
+                    }
                 }
             } catch (Exception e) {
                 log.warn("로드맵 캐시 파싱 실패: {}", e.getMessage());
             }
         }
-
-        UserSpec userSpec   = userSpecRepository.findByUser_Id(user.getId()).orElse(null);
-        TargetJob targetJob = targetJobRepository.findByUser_Id(user.getId()).orElse(null);
 
         String userSpecJson = promptDataBuilder.serializeSpecForRoadmap(userSpec);
         String targetJobStr = promptDataBuilder.buildTargetJobString(targetJob);
@@ -125,7 +132,7 @@ public class RoadmapService {
                 similarCasesStr, topRecommendedJson, availableActivitiesJson, activeActivities);
 
         if (response.isAiRoadmap()) {
-            roadmapCacheService.save(user, response, CACHE_HOURS);
+            roadmapCacheService.save(user, response);
         }
         
         return response;
@@ -147,6 +154,9 @@ public class RoadmapService {
                 if (parsed != null) return parsed;
             } catch (Exception e) {
                 log.warn("Gemini 로드맵 파싱 실패 (시도 {}회): {}", attempt, e.getMessage());
+            }
+            if (attempt < 2) {
+                try { Thread.sleep(2000); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
             }
         }
         log.info("Gemini 로드맵 미사용/실패 → DB 저장 활동 기반 로드맵 반환");
@@ -268,5 +278,16 @@ public class RoadmapService {
                 ))
                 .isAiRoadmap(false)
                 .build();
+    }
+
+    private boolean isSpecModifiedSince(UserSpec userSpec, TargetJob targetJob, java.time.LocalDateTime cacheCreatedAt) {
+        if (cacheCreatedAt == null) return true;
+        if (userSpec != null && userSpec.getUpdatedAt() != null && userSpec.getUpdatedAt().isAfter(cacheCreatedAt)) {
+            return true;
+        }
+        if (targetJob != null && targetJob.getUpdatedAt() != null && targetJob.getUpdatedAt().isAfter(cacheCreatedAt)) {
+            return true;
+        }
+        return false;
     }
 }

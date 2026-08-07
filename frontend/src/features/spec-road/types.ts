@@ -93,6 +93,9 @@ export interface ApiRecommendationItem {
 export interface RecommendationsResponse {
   activities: ApiRecommendationItem[];
   matchScore: number;
+  targetJobName?: string;
+  similarPasserCount?: number;
+  compareRows?: CompareRow[];
   comparisonMessage: string;
   aiRecommendation?: boolean;
   isAiRecommendation?: boolean;
@@ -103,6 +106,9 @@ export interface RecommendationMeta {
   matchScore: number;
   comparisonMessage: string;
   isAiRecommendation: boolean;
+  targetJobName?: string;
+  similarPasserCount?: number;
+  compareRows?: CompareRow[];
 }
 
 // 화면에서 쓰는 로드맵 단계 모델.

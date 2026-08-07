@@ -16,7 +16,7 @@ import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
 import com.career.recommendation.util.MatchScoreCalculator;
 import com.career.recommendation.util.PromptDataBuilder;
-import com.career.recommendation.util.RecommendationFallbackData;
+import com.career.recommendation.dto.recommendation.MatchScoreResult;
 import com.career.recommendation.util.SimilarSpecFinder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -37,8 +37,8 @@ import java.util.UUID;
 /**
  * BE-1 담당 — F-03 활동 추천 비즈니스 로직.
  *
- * 캐시 전략: 유저당 1건, 24시간 만료.
- * Gemini 실패 처리: 1회 재시도 → 2회 연속 실패 시 Fallback 데이터 반환 + isAiRecommendation=false.
+ * 캐시 전략: 유저당 1건, 스펙 변경 시 즉시 갱신 (하루 최대 3회).
+ * Gemini 실패 처리: 1회 재시도(2초 백오프) → 2회 연속 실패 시 Fallback 데이터 반환 + isAiRecommendation=false.
  */
 @Slf4j
 @Service
@@ -58,8 +58,7 @@ public class RecommendationService {
     private final PromptDataBuilder promptDataBuilder;
     private final ObjectMapper objectMapper;
 
-    private static final int CACHE_HOURS = 24;
-    private static final int MAX_RECOMMENDABLE_ACTIVITIES = 50;
+    private static final int MAX_RECOMMENDABLE_ACTIVITIES = 20;
     private static final ZoneId SERVICE_ZONE_ID = ZoneId.of("Asia/Seoul");
 
     /**
@@ -71,18 +70,36 @@ public class RecommendationService {
         User user = currentUserService.getCurrentUser(authentication);
         LocalDate today = LocalDate.now(SERVICE_ZONE_ID);
 
-        // 1. 유효 캐시 확인 (활동 목록이 포함된 정상 캐시만 사용)
+        // 1. 유효 캐시 확인 및 업데이트 필요 여부 판별
         Recommendation cached = recommendationRepository.findByUser_Id(user.getId()).orElse(null);
-        if (cached != null && cached.isValid()) {
-            RecommendationResponse deserialized = deserialize(cached.getResultJson());
-            if (hasUsableCachedActivities(deserialized, today)) {
-                return deserialized;
+        UserSpec userSpec = userSpecRepository.findByUser_Id(user.getId()).orElse(null);
+        TargetJob targetJob = targetJobRepository.findByUser_Id(user.getId()).orElse(null);
+
+        boolean needsNewAiCall = false;
+        RecommendationResponse cachedResponse = null;
+
+        if (cached == null) {
+            needsNewAiCall = true;
+        } else {
+            cachedResponse = deserialize(cached.getResultJson());
+            boolean isSpecChanged = isSpecModifiedSince(userSpec, targetJob, cached.getCreatedAt());
+            boolean hasUsableActivities = hasUsableCachedActivities(cachedResponse, today);
+
+            if (!hasUsableActivities) {
+                needsNewAiCall = true; // 만료된 활동이 있으면 갱신 필요
+            } else if (isSpecChanged) {
+                // 스펙이 변경되었으나 하루 제한(3회) 내인지 확인
+                if (cached.getLastUpdatedDate() == null || !today.equals(cached.getLastUpdatedDate())) {
+                    needsNewAiCall = true;
+                } else if (cached.getDailyUpdateCount() < 3) {
+                    needsNewAiCall = true;
+                }
             }
         }
 
-        // 2. 스펙 및 목표 직무 조회
-        UserSpec userSpec = userSpecRepository.findByUser_Id(user.getId()).orElse(null);
-        TargetJob targetJob = targetJobRepository.findByUser_Id(user.getId()).orElse(null);
+        if (!needsNewAiCall && cachedResponse != null) {
+            return cachedResponse;
+        }
 
         // 3. 유사 합격자 검색 (SimilarSpecFinder)
         String jobType = (targetJob != null) ? targetJob.getJobType() : null;
@@ -107,13 +124,13 @@ public class RecommendationService {
 
         RecommendationResponse response = callGeminiWithRetry(
                 userSpecJson, targetJobStr, similarCasesStr, availableActivitiesJson,
-                userSpec, similarPassers, comparisonMessage, activeActivities
+                userSpec, similarPassers, comparisonMessage, activeActivities,
+                targetJob != null ? targetJob.getJobType() : "미설정", similarPassers.size()
         );
 
-        // 6. 결과 캐싱 (24시간) — 별도 Bean에서 호출해야 @Transactional 프록시가 정상 동작함
-        // AI 실패로 인한 Fallback 응답(isAiRecommendation=false)일 때는 캐시하지 않는다.
+        // 6. 결과 캐싱 (일일 제한 카운트 증가) — 별도 Bean에서 호출
         if (response.isAiRecommendation()) {
-            recommendationCacheService.save(user, response, CACHE_HOURS);
+            recommendationCacheService.save(user, response);
         }
 
         return response;
@@ -128,45 +145,58 @@ public class RecommendationService {
                         && activity.getDeadline().isBefore(today));
     }
 
+    private boolean isSpecModifiedSince(UserSpec userSpec, TargetJob targetJob, java.time.LocalDateTime cacheCreatedAt) {
+        if (cacheCreatedAt == null) return true;
+        if (userSpec != null && userSpec.getUpdatedAt() != null && userSpec.getUpdatedAt().isAfter(cacheCreatedAt)) {
+            return true;
+        }
+        if (targetJob != null && targetJob.getUpdatedAt() != null && targetJob.getUpdatedAt().isAfter(cacheCreatedAt)) {
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Gemini API를 호출하고 JSON 파싱을 시도한다. 실패 시 1회 재시도 후 Fallback 반환.
      */
     private RecommendationResponse callGeminiWithRetry(
             String userSpecJson, String targetJobStr, String similarCasesStr, String availableActivitiesJson,
             UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage,
-            List<Activity> activeActivities) {
+            List<Activity> activeActivities, String targetJobName, int similarPasserCount) {
 
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
                 String rawJson = geminiService.generateRecommendation(
                         userSpecJson, targetJobStr, similarCasesStr, availableActivitiesJson);
-                if (rawJson.isBlank()) {
-                    log.warn("Gemini 추천 응답 비어있음 (시도 {}회)", attempt);
-                    continue;
-                }
-
-                RecommendationResponse parsed = parseGeminiResponse(
-                        rawJson, userSpec, similarPassers, comparisonMessage, activeActivities);
-                if (parsed != null) {
-                    return parsed;
+                if (rawJson != null && !rawJson.isBlank()) {
+                    RecommendationResponse res = parseGeminiResponse(
+                            rawJson, userSpec, similarPassers, comparisonMessage, activeActivities,
+                            targetJobName, similarPasserCount);
+                    if (res != null) return res;
                 }
             } catch (Exception e) {
-                log.warn("Gemini 추천 파싱 실패 (시도 {}회): {}", attempt, e.getMessage());
+                log.warn("Gemini 호출 또는 파싱 실패 (시도 {}/2): {}", attempt, e.getMessage());
+            }
+            if (attempt < 2) {
+                try { Thread.sleep(2000); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
             }
         }
 
-        log.info("Gemini 추천 미사용/실패 → DB 저장 활동 기반 맞춤 추천 반환");
-        return buildDbFallbackRecommendation(userSpec, similarPassers, comparisonMessage, activeActivities);
+        // 최종 실패 시 Fallback 반환
+        log.error("Gemini 추천 생성 모두 실패. DB 활동 기반 기본 추천 반환.");
+        return buildFallbackResponse(activeActivities, userSpec, similarPassers, comparisonMessage, targetJobName, similarPasserCount);
     }
 
-    private RecommendationResponse buildDbFallbackRecommendation(
-            UserSpec userSpec, List<PasserData> similarPassers,
-            String comparisonMessage, List<Activity> activeActivities) {
+    /** Gemini 미사용/실패 시 DB 등록 활동 기반 기본 추천 반환 (방어 로직) */
+    private RecommendationResponse buildFallbackResponse(List<Activity> activeActivities, UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage, String targetJobName, int similarPasserCount) {
+        if (activeActivities == null || activeActivities.isEmpty()) {
+            return null;
+        }
 
-        int overallMatchScore = matchScoreCalculator.calculate(userSpec, similarPassers);
+        MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers);
+
         List<ActivityRecommendation> recs = new ArrayList<>();
-
-        int count = Math.min(5, activeActivities.size());
+        int count = Math.min(3, activeActivities.size());
         for (int i = 0; i < count; i++) {
             Activity a = activeActivities.get(i);
             recs.add(ActivityRecommendation.builder()
@@ -182,7 +212,10 @@ public class RecommendationService {
 
         return RecommendationResponse.builder()
                 .activities(recs)
-                .matchScore(overallMatchScore)
+                .matchScore(matchResult.getTotalScore())
+                .compareRows(matchResult.getCompareRows())
+                .targetJobName(targetJobName)
+                .similarPasserCount(similarPasserCount)
                 .comparisonMessage(comparisonMessage)
                 .isAiRecommendation(false)
                 .build();
@@ -195,7 +228,8 @@ public class RecommendationService {
      */
     private RecommendationResponse parseGeminiResponse(
             String rawJson, UserSpec userSpec, List<PasserData> similarPassers,
-            String comparisonMessage, List<Activity> activeActivities) throws Exception {
+            String comparisonMessage, List<Activity> activeActivities,
+            String targetJobName, int similarPasserCount) throws Exception {
 
         // DB 활동을 UUID → Activity Map으로 변환 (빠른 검증용)
         Map<UUID, Activity> activityMap = new HashMap<>();
@@ -208,7 +242,7 @@ public class RecommendationService {
 
         if (geminiResult.getActivities() == null || geminiResult.getActivities().isEmpty()) return null;
 
-        int overallMatchScore = matchScoreCalculator.calculate(userSpec, similarPassers);
+        MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers);
 
         List<ActivityRecommendation> result = new ArrayList<>();
         for (GeminiActivity a : geminiResult.getActivities()) {
@@ -237,7 +271,10 @@ public class RecommendationService {
 
         return RecommendationResponse.builder()
                 .activities(result)
-                .matchScore(overallMatchScore)
+                .matchScore(matchResult.getTotalScore())
+                .compareRows(matchResult.getCompareRows())
+                .targetJobName(targetJobName)
+                .similarPasserCount(similarPasserCount)
                 .comparisonMessage(comparisonMessage)
                 .isAiRecommendation(true)
                 .build();

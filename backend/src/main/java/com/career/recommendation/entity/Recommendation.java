@@ -6,6 +6,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -35,11 +36,10 @@ public class Recommendation {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    @Column(name = "expires_at")
-    private LocalDateTime expiresAt;
+    @Column(name = "daily_update_count")
+    @Builder.Default
+    private Integer dailyUpdateCount = 0;
 
-    /** 캐시가 아직 유효한지 확인 */
-    public boolean isValid() {
-        return expiresAt != null && LocalDateTime.now().isBefore(expiresAt);
-    }
+    @Column(name = "last_updated_date")
+    private LocalDate lastUpdatedDate;
 }

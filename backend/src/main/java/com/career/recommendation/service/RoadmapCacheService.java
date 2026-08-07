@@ -29,7 +29,7 @@ public class RoadmapCacheService {
     private final ObjectMapper objectMapper;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void save(User user, RoadmapResponse response, int cacheHours) {
+    public void save(User user, RoadmapResponse response) {
         if (response == null || response.getTimeline() == null || response.getTimeline().isEmpty()) {
             return;
         }
@@ -37,8 +37,16 @@ public class RoadmapCacheService {
             String json = objectMapper.writeValueAsString(response);
             RoadmapCache rec = roadmapCacheRepository.findByUser_Id(user.getId())
                     .orElseGet(() -> RoadmapCache.builder().user(user).build());
+
+            java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+            if (today.equals(rec.getLastUpdatedDate())) {
+                rec.setDailyUpdateCount(rec.getDailyUpdateCount() != null ? rec.getDailyUpdateCount() + 1 : 1);
+            } else {
+                rec.setDailyUpdateCount(1);
+                rec.setLastUpdatedDate(today);
+            }
+
             rec.setResultJson(json);
-            rec.setExpiresAt(LocalDateTime.now().plusHours(cacheHours));
             roadmapCacheRepository.save(rec);
         } catch (Exception e) {
             log.warn("로드맵 캐시 저장 실패 (서비스 영향 없음): {}", e.getMessage());

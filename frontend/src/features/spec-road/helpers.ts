@@ -111,8 +111,10 @@ export function toRecommendationMeta(res: RecommendationsResponse): Recommendati
   return {
     matchScore: res.matchScore,
     comparisonMessage: res.comparisonMessage,
-    // 실제 응답 키는 aiRecommendation이고, 백엔드가 이름을 되돌리면 isAiRecommendation이 온다.
     isAiRecommendation: res.aiRecommendation ?? res.isAiRecommendation ?? false,
+    targetJobName: res.targetJobName,
+    similarPasserCount: res.similarPasserCount,
+    compareRows: res.compareRows,
   };
 }
 

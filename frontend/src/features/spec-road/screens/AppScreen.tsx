@@ -63,7 +63,7 @@ export function AppScreen({
         {tab === "roadmap" && (
           <RoadmapTab target={target} roadmap={roadmap} roadmapLoading={roadmapLoading} roadmapError={roadmapError} />
         )}
-        {tab === "compare" && <CompareTab isDemo={isDemo} />}
+        {tab === "compare" && <CompareTab isDemo={isDemo} recMeta={recMeta} />}
         {tab === "profile" && (
           <ProfileTab
             spec={spec}

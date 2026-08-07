@@ -29,7 +29,7 @@ public class RecommendationCacheService {
     private final ObjectMapper objectMapper;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void save(User user, RecommendationResponse response, int cacheHours) {
+    public void save(User user, RecommendationResponse response) {
         if (response == null || response.getActivities() == null || response.getActivities().isEmpty()) {
             return;
         }
@@ -37,8 +37,16 @@ public class RecommendationCacheService {
             String json = objectMapper.writeValueAsString(response);
             Recommendation rec = recommendationRepository.findByUser_Id(user.getId())
                     .orElseGet(() -> Recommendation.builder().user(user).build());
+            
+            java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+            if (today.equals(rec.getLastUpdatedDate())) {
+                rec.setDailyUpdateCount(rec.getDailyUpdateCount() != null ? rec.getDailyUpdateCount() + 1 : 1);
+            } else {
+                rec.setDailyUpdateCount(1);
+                rec.setLastUpdatedDate(today);
+            }
+            
             rec.setResultJson(json);
-            rec.setExpiresAt(LocalDateTime.now().plusHours(cacheHours));
             recommendationRepository.save(rec);
         } catch (Exception e) {
             log.warn("추천 캐시 저장 실패 (서비스 영향 없음): {}", e.getMessage());
