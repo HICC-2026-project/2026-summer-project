@@ -167,7 +167,8 @@ export function DetailSheet({ recommendationId, recommendations, recMeta, onClos
             onClick={onClose}
             style={{ flex: 1.4, height: 54, border: "none", borderRadius: 16, background: PRIMARY, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}
           >
-            관심 활동 담기
+            {/* 관심 활동 저장 기능은 아직 없어, 실제 동작(닫기)과 일치하는 문구를 쓴다. */}
+            닫기
           </button>
         </div>
       </div>
