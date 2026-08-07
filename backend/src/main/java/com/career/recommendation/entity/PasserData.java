@@ -21,7 +21,7 @@ public class PasserData {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "activity_id", nullable = false)
+    @JoinColumn(name = "activity_id")
     private Activity activity;
 
     @Column(name = "job_type")
@@ -52,6 +52,11 @@ public class PasserData {
     @Column(name = "is_verified")
     @Builder.Default
     private Boolean isVerified = false;
+
+    /** DEMO | PUBLIC_REVIEW | USER_REPORT | UNKNOWN */
+    @Column(name = "data_origin", nullable = false, length = 20)
+    @Builder.Default
+    private String dataOrigin = "UNKNOWN";
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

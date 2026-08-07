@@ -61,6 +61,23 @@ export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
         내 스펙을 익명 합격자 데이터와 항목별로 비교해요.
       </p>
 
+      {!isDemo && recMeta?.sampleComparisonData && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "11px 14px",
+            border: "1px solid #F0D8A8",
+            borderRadius: 12,
+            background: "#FFF9ED",
+            color: "#79551F",
+            fontSize: 12.5,
+            lineHeight: 1.5,
+          }}
+        >
+          발표 검증용 합성 샘플 또는 출처 미분류 데이터가 포함된 결과예요. 실제 합격 기준이나 합격 가능성을 의미하지 않아요.
+        </div>
+      )}
+
       <div
         style={{
           display: "flex",

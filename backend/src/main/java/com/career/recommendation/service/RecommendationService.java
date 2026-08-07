@@ -84,8 +84,12 @@ public class RecommendationService {
             cachedResponse = deserialize(cached.getResultJson());
             boolean isSpecChanged = isSpecModifiedSince(userSpec, targetJob, cached.getCreatedAt());
             boolean hasUsableActivities = hasUsableCachedActivities(cachedResponse, today);
+            boolean isLegacyCache = cachedResponse == null
+                    || cachedResponse.getSampleComparisonData() == null;
 
-            if (!hasUsableActivities) {
+            if (isLegacyCache) {
+                needsNewAiCall = true; // 출처 표시 필드가 없는 구버전 캐시는 한 번 재생성
+            } else if (!hasUsableActivities) {
                 needsNewAiCall = true; // 만료된 활동이 있으면 갱신 필요
             } else if (isSpecChanged) {
                 // 스펙이 변경되었으나 하루 제한(3회) 내인지 확인
@@ -194,6 +198,7 @@ public class RecommendationService {
         }
 
         MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers);
+        boolean sampleComparisonData = containsSampleOrUnclassifiedData(similarPassers);
 
         List<ActivityRecommendation> recs = new ArrayList<>();
         int count = Math.min(3, activeActivities.size());
@@ -218,6 +223,7 @@ public class RecommendationService {
                 .similarPasserCount(similarPasserCount)
                 .comparisonMessage(comparisonMessage)
                 .isAiRecommendation(false)
+                .sampleComparisonData(sampleComparisonData)
                 .build();
     }
 
@@ -243,6 +249,7 @@ public class RecommendationService {
         if (geminiResult.getActivities() == null || geminiResult.getActivities().isEmpty()) return null;
 
         MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers);
+        boolean sampleComparisonData = containsSampleOrUnclassifiedData(similarPassers);
 
         List<ActivityRecommendation> result = new ArrayList<>();
         for (GeminiActivity a : geminiResult.getActivities()) {
@@ -277,7 +284,15 @@ public class RecommendationService {
                 .similarPasserCount(similarPasserCount)
                 .comparisonMessage(comparisonMessage)
                 .isAiRecommendation(true)
+                .sampleComparisonData(sampleComparisonData)
                 .build();
+    }
+
+    private boolean containsSampleOrUnclassifiedData(List<PasserData> similarPassers) {
+        return similarPassers != null && similarPassers.stream()
+                .anyMatch(passer -> passer.getDataOrigin() == null
+                        || "DEMO".equalsIgnoreCase(passer.getDataOrigin())
+                        || "UNKNOWN".equalsIgnoreCase(passer.getDataOrigin()));
     }
 
     private RecommendationResponse deserialize(String json) {

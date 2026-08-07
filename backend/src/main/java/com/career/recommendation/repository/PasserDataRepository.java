@@ -20,7 +20,7 @@ public interface PasserDataRepository extends JpaRepository<PasserData, UUID> {
     @Query("""
             SELECT p
             FROM PasserData p
-            WHERE p.isVerified = true
+            WHERE (p.isVerified = true OR p.dataOrigin = 'DEMO')
               AND p.gpa IS NOT NULL
               AND p.gpaMax IS NOT NULL
               AND p.gpaMax > 0
@@ -35,7 +35,7 @@ public interface PasserDataRepository extends JpaRepository<PasserData, UUID> {
     @Query("""
             SELECT p
             FROM PasserData p
-            WHERE p.isVerified = true
+            WHERE (p.isVerified = true OR p.dataOrigin = 'DEMO')
               AND p.jobType = :jobType
               AND p.gpa IS NOT NULL
               AND p.gpaMax IS NOT NULL
