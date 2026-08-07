@@ -30,9 +30,12 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
           .filter(Boolean)
           .join(" · ");
 
-  // 로그인 유저는 실 API 응답(recMeta)의 matchScore·비교 메시지를, 둘러보기는 목업 값을 쓴다.
+  // 준비도는 실 API 응답(recMeta)에서만 나온다.
+  // 예시 화면에서만 목업 수치를 쓰고, 로그인 사용자는 응답이 없으면(로딩·실패) 수치를 감춘다.
+  // 값이 없을 때 목업으로 대체하면 실제 점수인 것처럼 보이기 때문이다.
+  const hasReadiness = recMeta != null || isDemo;
   const readinessScore = recMeta?.matchScore ?? READINESS;
-  const readinessSubtitle = recMeta?.comparisonMessage ?? `유사 합격자 ${PASSER_COUNT}명 기준`;
+  const readinessSubtitle = recMeta?.comparisonMessage ?? (isDemo ? `유사 합격자 ${PASSER_COUNT}명 기준` : "");
   const isFallbackRec = recMeta != null && !recMeta.isAiRecommendation;
 
   return (
@@ -76,13 +79,15 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
         </div>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 14 }}>
           <div style={{ fontSize: 46, fontWeight: 800, lineHeight: 1, letterSpacing: "-0.03em" }}>
-            {recLoading ? "–" : readinessScore}
+            {hasReadiness && !recLoading ? readinessScore : "–"}
             <span style={{ fontSize: 20, fontWeight: 700 }}>점</span>
           </div>
           <div style={{ paddingBottom: 6 }}>
-            {/* 상위 N% 랭크는 백엔드가 주지 않아 목업(둘러보기)에서만 표시한다. */}
-            {recMeta == null && <div style={{ fontSize: 13, fontWeight: 700 }}>상위 {READINESS_RANK}</div>}
-            <div style={{ fontSize: 12, opacity: 0.85, whiteSpace: "nowrap", maxWidth: 190 }}>{readinessSubtitle}</div>
+            {/* 상위 N% 랭크는 백엔드가 주지 않아 예시 화면에서만 표시한다. */}
+            {isDemo && <div style={{ fontSize: 13, fontWeight: 700 }}>상위 {READINESS_RANK}</div>}
+            <div style={{ fontSize: 12, opacity: 0.85, whiteSpace: "nowrap", maxWidth: 190 }}>
+              {recLoading ? "분석 중이에요" : readinessSubtitle}
+            </div>
           </div>
         </div>
         <div style={{ marginTop: 14, height: 7, borderRadius: 999, background: "rgba(255,255,255,0.24)", overflow: "hidden" }}>
@@ -91,7 +96,7 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
               height: "100%",
               borderRadius: 999,
               background: "#fff",
-              width: `${recLoading ? 0 : readinessScore}%`,
+              width: `${hasReadiness && !recLoading ? readinessScore : 0}%`,
               transformOrigin: "left",
               animation: "cfGrow .7s cubic-bezier(.2,.8,.2,1) both",
             }}
