@@ -96,6 +96,7 @@ export interface RecommendationsResponse {
   targetJobName?: string;
   similarPasserCount?: number;
   compareRows?: CompareRow[];
+  sampleComparisonData?: boolean;
   comparisonMessage: string;
   aiRecommendation?: boolean;
   isAiRecommendation?: boolean;
@@ -109,6 +110,7 @@ export interface RecommendationMeta {
   targetJobName?: string;
   similarPasserCount?: number;
   compareRows?: CompareRow[];
+  sampleComparisonData: boolean;
 }
 
 // 화면에서 쓰는 로드맵 단계 모델.

@@ -43,6 +43,9 @@ public class RecommendationResponse {
     /** 항목별 세부 비교 내역 */
     private List<CompareRowDto> compareRows;
 
+    /** 비교 대상에 합성 DEMO 데이터가 한 건이라도 포함되었는지 여부 */
+    private Boolean sampleComparisonData;
+
     @Getter
     @Builder
     @JsonDeserialize(builder = ActivityRecommendation.ActivityRecommendationBuilder.class)

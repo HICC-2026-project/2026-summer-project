@@ -115,6 +115,7 @@ export function toRecommendationMeta(res: RecommendationsResponse): Recommendati
     targetJobName: res.targetJobName,
     similarPasserCount: res.similarPasserCount,
     compareRows: res.compareRows,
+    sampleComparisonData: res.sampleComparisonData ?? false,
   };
 }
 
