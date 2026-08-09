@@ -29,11 +29,11 @@ public class RecommendationController {
     private final RoadmapService roadmapService;
 
     /**
-     * F-03: Claude AI 기반 맞춤 활동 추천 (24시간 캐싱 적용).
+     * F-03: AI 기반 맞춤 활동 추천 (스펙 변경 시에만 재생성, 하루 3회 제한).
      * isAiRecommendation 필드가 false이면 프론트에서 "일반 추천" 배지를 표시한다.
      */
     @Operation(summary = "맞춤 활동 추천 (F-03)",
-            description = "스펙·목표 직무 기반 AI 활동 추천. 결과는 24시간 캐싱되며, isAiRecommendation이 false면 기본 추천(fallback)이다.")
+            description = "스펙·목표 직무 기반 AI 활동 추천. 스펙을 바꾸지 않으면 저장된 결과를 그대로 반환하고, 바꾸면 하루 3회까지 새로 생성한다. isAiRecommendation이 false면 기본 추천(fallback)이다.")
     @GetMapping("/recommendations")
     public RecommendationResponse getRecommendations(Authentication authentication) {
         return recommendationService.getRecommendations(authentication);

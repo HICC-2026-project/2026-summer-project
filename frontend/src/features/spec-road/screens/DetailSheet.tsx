@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { getActivity } from "../api";
 import { PRIMARY } from "../data";
 import { dday, ddayColor, fmtDate } from "../helpers";
-import type { Recommendation, RecommendationMeta } from "../types";
+import type { ActivityDetailResponse, Recommendation, RecommendationMeta } from "../types";
 
 interface DetailSheetProps {
   recommendationId: string | number;
@@ -14,6 +16,30 @@ interface DetailSheetProps {
 
 export function DetailSheet({ recommendationId, recommendations, recMeta, onClose, onCompare }: DetailSheetProps) {
   const rec = recommendations.find((r) => r.id === recommendationId);
+
+  // 추천 응답에는 지원 링크·주최·태그가 없어, 활동 상세를 따로 불러와 채운다.
+  // (둘러보기의 목업 id는 실제 활동이 아니라 요청하지 않는다)
+  const [detail, setDetail] = useState<ActivityDetailResponse | null>(null);
+
+  useEffect(() => {
+    if (typeof recommendationId !== "string") return;
+
+    let cancelled = false;
+    getActivity(recommendationId)
+      .then((res) => {
+        if (!cancelled) setDetail(res);
+      })
+      .catch(() => {
+        // 링크는 부가 정보라, 실패해도 상세 시트는 그대로 보여준다.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [recommendationId]);
+
+  // 다른 활동을 열었을 때 이전 응답이 잠깐 섞이지 않도록 id가 일치할 때만 사용한다.
+  const activityDetail = detail?.id === recommendationId ? detail : null;
+
   if (!rec) return null;
 
   // 개별 점수(score)는 목업에만 있고, 실 API는 응답 최상단 matchScore 하나만 준다.
@@ -26,6 +52,11 @@ export function DetailSheet({ recommendationId, recommendations, recMeta, onClos
     rec.passers != null
       ? `유사 합격자 ${rec.passers}명의 스펙과 비교한 결과예요.`
       : (recMeta?.comparisonMessage ?? "나와 잘 맞는 활동이에요.");
+
+  // 주최·태그·지원 링크는 목업(둘러보기)과 활동 상세 중 있는 쪽을 쓴다.
+  const organization = rec.org ?? activityDetail?.organization ?? null;
+  const tags = rec.tags && rec.tags.length > 0 ? rec.tags : (activityDetail?.tags ?? []);
+  const applyUrl = activityDetail?.url ?? null;
 
   return (
     <>
@@ -68,7 +99,7 @@ export function DetailSheet({ recommendationId, recommendations, recMeta, onClos
             {rec.name}
           </h2>
           <div style={{ fontSize: 14, color: "#9797A1", fontWeight: 500, marginBottom: 20 }}>
-            {rec.org ? `${rec.org} · ` : ""}마감 {fmtDate(rec.deadline)}
+            {organization ? `${organization} · ` : ""}마감 {fmtDate(rec.deadline)}
           </div>
 
           <div
@@ -144,9 +175,9 @@ export function DetailSheet({ recommendationId, recommendations, recMeta, onClos
             ))}
           </div>
 
-          {rec.tags && rec.tags.length > 0 && (
+          {tags.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 8 }}>
-              {rec.tags.map((t) => (
+              {tags.map((t) => (
                 <span key={t} style={{ fontSize: 12.5, fontWeight: 600, color: "#61616C", background: "#F1F0F6", padding: "6px 12px", borderRadius: 999 }}>
                   #{t}
                 </span>
@@ -162,6 +193,30 @@ export function DetailSheet({ recommendationId, recommendations, recMeta, onClos
           >
             합격자 비교
           </button>
+          {/* 지원 링크는 활동 상세에 있을 때만 노출한다. */}
+          {applyUrl && (
+            <a
+              href={applyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                flex: 1,
+                height: 54,
+                border: "1px solid #E1E0EA",
+                borderRadius: 16,
+                background: "#fff",
+                color: "#15141B",
+                fontSize: 15,
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                textDecoration: "none",
+              }}
+            >
+              지원하기 ↗
+            </a>
+          )}
           <button
             type="button"
             onClick={onClose}

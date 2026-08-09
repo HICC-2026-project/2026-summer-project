@@ -12,6 +12,7 @@ import {
   normalizeJobCode,
   toRecommendationMeta,
 } from "./helpers";
+import { clearLastResult, loadLastResult, saveLastResult } from "./recommendationCache";
 import { AnalyzingScreen } from "./screens/AnalyzingScreen";
 import { AppScreen } from "./screens/AppScreen";
 import { DetailSheet } from "./screens/DetailSheet";
@@ -71,6 +72,8 @@ export function SpecRoadApp() {
   const [spec, setSpec] = useState<Spec>(INITIAL_SPEC);
   const [target, setTarget] = useState<Target>(INITIAL_TARGET);
   const [nickname, setNickname] = useState<string | null>(null);
+  // 저장된 직전 결과가 다른 계정 것과 섞이지 않도록 사용자 식별자를 함께 보관한다.
+  const [userId, setUserId] = useState<string | null>(null);
   // 비로그인 예시 화면 여부. 저장할 계정이 없으므로 프로필에서 수정 대신 로그인을 유도한다.
   const [isDemo, setIsDemo] = useState(false);
 
@@ -93,6 +96,8 @@ export function SpecRoadApp() {
 
   // 로그인 화면으로 되돌리며 유저별 상태를 모두 비운다(다음 로그인 유저에게 남지 않도록).
   function resetToLogin() {
+    clearLastResult();
+    setUserId(null);
     setNickname(null);
     setDetailId(null);
     setRecommendations([]);
@@ -143,19 +148,40 @@ export function SpecRoadApp() {
 
     let cancelled = false;
 
+    // 직전 결과가 있으면 먼저 보여준다. 스펙을 바꾸지 않았다면 서버도 같은 값을 돌려주므로,
+    // 매번 "AI가 준비하고 있어요"를 다시 보는 대신 화면이 곧바로 채워진다.
+    const cached = userId ? loadLastResult(userId) : null;
+    const hasCache = cached != null;
+
     // 화면 진입을 계기로 데이터를 받아오는 구간이라 로딩 표시를 여기서 켤 수밖에 없다.
     // (set-state-in-effect 규칙은 파생 가능한 상태를 겨냥한 것이고, 여기서는 외부 요청의 진행 상태다)
     /* eslint-disable react-hooks/set-state-in-effect */
-    setRecLoading(true);
+    if (cached) {
+      setRecommendations(cached.recommendations);
+      setRecMeta(cached.recMeta);
+      setRoadmap(cached.roadmap);
+    }
+
+    // 캐시를 이미 띄웠으면 로딩 문구 대신 기존 화면을 유지한 채 뒤에서 갱신한다.
+    setRecLoading(!hasCache);
     setRecError(false);
+    setRoadmapLoading(!hasCache);
+    setRoadmapError(false);
+
+    const latest: { recommendations?: Recommendation[]; recMeta?: RecommendationMeta | null; roadmap?: RoadmapMilestone[] } = {};
+
     getRecommendations()
       .then((res) => {
         if (cancelled) return;
-        setRecommendations(fromRecommendationsResponse(res));
-        setRecMeta(toRecommendationMeta(res));
+        const list = fromRecommendationsResponse(res);
+        const meta = toRecommendationMeta(res);
+        latest.recommendations = list;
+        latest.recMeta = meta;
+        setRecommendations(list);
+        setRecMeta(meta);
       })
       .catch(() => {
-        if (cancelled) return;
+        if (cancelled || hasCache) return; // 캐시가 있으면 기존 화면을 유지한다.
         setRecommendations([]);
         setRecMeta(null);
         setRecError(true);
@@ -164,27 +190,37 @@ export function SpecRoadApp() {
         if (!cancelled) setRecLoading(false);
       });
 
-    setRoadmapLoading(true);
-    setRoadmapError(false);
     getRoadmap()
       .then((res) => {
         if (cancelled) return;
-        setRoadmap(fromRoadmapResponse(res));
+        const steps = fromRoadmapResponse(res);
+        latest.roadmap = steps;
+        setRoadmap(steps);
       })
       .catch(() => {
-        if (cancelled) return;
+        if (cancelled || hasCache) return;
         setRoadmap([]);
         setRoadmapError(true);
       })
       .finally(() => {
-        if (!cancelled) setRoadmapLoading(false);
+        if (cancelled) return;
+        setRoadmapLoading(false);
+        // 두 요청이 모두 끝난 시점에 최신 결과를 저장한다(다음 로그인 때 즉시 표시용).
+        if (userId && latest.recommendations) {
+          saveLastResult({
+            userId,
+            recommendations: latest.recommendations,
+            recMeta: latest.recMeta ?? null,
+            roadmap: latest.roadmap ?? [],
+          });
+        }
       });
     /* eslint-enable react-hooks/set-state-in-effect */
 
     return () => {
       cancelled = true;
     };
-  }, [screen]);
+  }, [screen, userId]);
 
   // 카카오 로그인 콜백(app/oauth/callback)이 토큰을 저장해두면 로그인 화면을 건너뛰고
   // 실제 로그인한 유저 정보를 가져온다. 스펙이 이미 있으면 홈으로, 없으면(첫 로그인) 온보딩으로.
@@ -194,6 +230,7 @@ export function SpecRoadApp() {
     getMe()
       .then((me) => {
         setNickname(me.nickname);
+        setUserId(me.id);
 
         if (me.spec) {
           setSpec({
