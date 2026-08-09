@@ -153,6 +153,19 @@ export interface RoadmapResponse {
   timeline: RoadmapStep[];
 }
 
+// GET /api/v1/activities/{id} 응답. 추천 카드에는 없는 지원 링크·주최·태그를 담고 있어,
+// 상세 시트를 열 때 불러와 보강한다.
+export interface ActivityDetailResponse {
+  id: string;
+  type: string;
+  name: string;
+  organization: string | null;
+  description: string | null;
+  deadline: string;
+  tags: string[] | null;
+  url: string | null;
+}
+
 export interface CompareRow {
   label: string;
   weight: string;

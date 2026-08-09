@@ -2,6 +2,7 @@ import { apiFetch } from "@/lib/api";
 import { getRefreshToken } from "@/lib/auth";
 import { toLanguageScoresPayload } from "./helpers";
 import type {
+  ActivityDetailResponse,
   RecommendationsResponse,
   RoadmapResponse,
   Spec,
@@ -27,8 +28,14 @@ export function postLogout(): Promise<void> {
   });
 }
 
+// 활동 상세. 추천 응답에는 지원 링크가 없어, 상세 시트를 열 때 이걸로 보강한다.
+export function getActivity(activityId: string): Promise<ActivityDetailResponse> {
+  return apiFetch<ActivityDetailResponse>(`/api/v1/activities/${activityId}`);
+}
+
 // F-03 맞춤 활동 추천. JWT 필수 — apiFetch가 저장된 토큰을 Authorization 헤더로 붙인다.
-// 응답은 24시간 캐싱되며, isAiRecommendation이 false면 기본 추천(fallback)이다.
+// 스펙을 바꾸지 않으면 저장된 결과를 그대로 돌려주고, 바꾸면 하루 3회까지 새로 생성한다.
+// isAiRecommendation이 false면 기본 추천(fallback)이다.
 export function getRecommendations(): Promise<RecommendationsResponse> {
   return apiFetch<RecommendationsResponse>("/api/v1/recommendations");
 }

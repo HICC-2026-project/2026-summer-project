@@ -108,7 +108,7 @@ public class RoadmapService {
 
         // 2. F-03 맞춤 추천 결과 조회 (추천 활동 우선 반영)
         // ⚠️ 주의: getRecommendations()는 내부에서 Gemini를 호출할 수 있음.
-        //    프론트가 /recommendations 먼저 호출 후 /roadmaps를 호출하면 24시간 캐시가 효력을 발휘하므로
+        //    프론트가 /recommendations 먼저 호출 후 /roadmaps를 호출하면 저장된 결과가 재사용되므로
         //    반드시 추천 API 먼저 호출 후 로드맵 호출 순서를 유지할 것.
         String topRecommendedJson = "[]";
         try {

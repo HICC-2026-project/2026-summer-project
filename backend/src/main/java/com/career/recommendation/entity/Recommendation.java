@@ -12,7 +12,7 @@ import java.util.UUID;
 
 /**
  * 유저별 AI 추천 결과 캐시 테이블 (recommendations).
- * 유저당 1건, 24시간 만료 구조.
+ * 유저당 1건. 스펙 변경 시에만 재생성하며 하루 갱신 횟수를 3회로 제한한다.
  */
 @Entity
 @Table(name = "recommendations")

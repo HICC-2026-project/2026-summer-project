@@ -155,10 +155,10 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
         </span>
       </div>
 
-      {/* 스펙 수정 후 추천 반영까지 24시간 캐시 정책 안내 (API 명세서 기준). 로그인 유저에게만 표시. */}
+      {/* 추천 갱신 정책 안내: 스펙을 바꿔야 새로 생성되고, 하루 3회까지만 가능하다. 로그인 유저에게만 표시. */}
       {recMeta != null && (
         <p style={{ fontSize: 12, color: "#9797A1", margin: "0 0 12px", lineHeight: 1.5 }}>
-          스펙을 수정하면 추천은 최대 24시간 후 반영돼요.
+          스펙을 수정하면 추천을 새로 만들어요. 하루 3번까지 갱신할 수 있어요.
         </p>
       )}
 
