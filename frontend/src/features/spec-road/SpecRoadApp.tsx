@@ -181,7 +181,9 @@ export function SpecRoadApp() {
         setRecMeta(meta);
       })
       .catch(() => {
-        if (cancelled || hasCache) return; // 캐시가 있으면 기존 화면을 유지한다.
+        if (cancelled) return;
+        // 갱신에 실패하면 캐시가 있어도 그대로 두지 않는다.
+        // 옛 점수를 계속 보여주면 사용자는 최신 결과로 오해하게 된다.
         setRecommendations([]);
         setRecMeta(null);
         setRecError(true);
@@ -198,7 +200,7 @@ export function SpecRoadApp() {
         setRoadmap(steps);
       })
       .catch(() => {
-        if (cancelled || hasCache) return;
+        if (cancelled) return;
         setRoadmap([]);
         setRoadmapError(true);
       })
@@ -299,6 +301,8 @@ export function SpecRoadApp() {
       }
     }
     // 스펙이 바뀌었으니 분석 화면에서 추천을 새로 요청한다.
+    // 저장해 둔 직전 결과는 지운다. 남겨두면 예전 점수를 새 결과인 것처럼 보여주게 된다.
+    clearLastResult();
     dataRequested.current = false;
     setScreen("analyzing");
   }
