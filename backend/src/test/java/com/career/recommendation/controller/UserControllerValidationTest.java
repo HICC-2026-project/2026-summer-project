@@ -9,10 +9,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -111,5 +116,25 @@ class UserControllerValidationTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
         verifyNoInteractions(userSpecService);
+    }
+
+    @Test
+    void 내_프로필_조회시_인증_정보가_없으면_401을_반환한다() throws Exception {
+        when(userService.getMe(any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 정보가 없습니다."));
+
+        mockMvc.perform(get("/api/v1/users/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("인증 정보가 없습니다."));
+    }
+
+    @Test
+    void 내_프로필_조회시_사용자가_없으면_404를_반환한다() throws Exception {
+        when(userService.getMe(any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자가 존재하지 않습니다."));
+
+        mockMvc.perform(get("/api/v1/users/me"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("사용자가 존재하지 않습니다."));
     }
 }
