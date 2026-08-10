@@ -26,7 +26,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -69,7 +68,7 @@ class RecommendationServiceFallbackTest {
         when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
 
         when(similarSpecFinder.find(any(), any(), any())).thenReturn(List.of());
-        when(similarSpecFinder.buildComparisonMessage(anyInt(), any())).thenReturn("비교 데이터가 부족합니다.");
+        when(similarSpecFinder.buildComparisonMessage(any(), any())).thenReturn("비교 데이터가 부족합니다.");
 
         // 핵심 조건: 추천 가능한 활동이 한 건도 없다.
         when(activityRepository.findRecommendableActivities(any(), any())).thenReturn(List.of());

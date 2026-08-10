@@ -78,13 +78,38 @@ public class SimilarSpecFinder {
     }
 
     /**
-     * 유사 합격자 수에 따른 비교 요약 메시지를 반환한다.
+     * 유사 합격자 목록에 따른 비교 요약 메시지를 반환한다.
+     *
+     * find()는 목표 직무 + 학점 범위로 못 찾으면 2차(직무 무시, 학점만)·4차(직무 무시,
+     * 학점 최근접) 폴백을 탄다. 예전엔 이 메서드가 count만 받아 폴백 여부와 무관하게
+     * 항상 "유사 {jobType} 합격자 N명과 비교한 결과입니다"라고 단언했다 — 실제로는 다른
+     * 직무 합격자와 비교했는데도 그렇게 말한 것이다. v6(직무별 자격증 가중치) 도입 후엔
+     * 이게 문구 수준을 넘어선다: 같은 요청 안에서 자격증 가중치는 목표 직무 기준
+     * (jobPasserCertRows)으로 유도되는데, 정작 비교 대상(passers)이 다른 직무면 "그 직무
+     * 보유율로 만든 가중치로 다른 직무 합격자를 채점"하는 불일치가 생긴다. 그래서 목록
+     * 자체를 받아 실제로 전원이 목표 직무인지 확인한 뒤에만 직무명을 단언한다.
      */
-    public String buildComparisonMessage(int count, String jobType) {
-        if (count == 0) {
-            return "아직 이 직무는 데이터가 부족해 AI 일반 추천을 제공합니다.";
+    public String buildComparisonMessage(List<PasserData> passers, String jobType) {
+        if (passers == null || passers.isEmpty()) {
+            return "아직 비교할 합격자 데이터가 부족해 AI 일반 추천을 제공합니다.";
         }
-        String jobLabel = (jobType != null && !jobType.isBlank()) ? jobType + " " : "";
-        return String.format("유사 %s합격자 %d명과 비교한 결과입니다.", jobLabel, count);
+
+        int count = passers.size();
+        boolean hasJobType = jobType != null && !jobType.isBlank();
+        boolean allMatchJob = hasJobType
+                && passers.stream().allMatch(p -> jobType.equals(p.getJobType()));
+
+        if (allMatchJob) {
+            return String.format("유사 %s 합격자 %d명과 비교한 결과입니다.", jobType, count);
+        }
+        if (!hasJobType) {
+            // find()는 gpa/gpaMax가 없으면 DB를 보지도 않고 빈 리스트를 반환하므로,
+            // 이 분기는 "직무가 없어서"가 아니라 이 갈래에 실제로 도달했다면 항상
+            // gpa는 있고 jobType만 없는 경우다. "목표 직무 미설정"이 원인이 정확하다.
+            return String.format("목표 직무 미설정 상태로, 학점이 비슷한 전체 합격자 %d명과 비교한 결과입니다.", count);
+        }
+        // 목표 직무는 있지만 그 직무 데이터가 부족해 학점 기준 폴백(2·4차)을 탄 경우.
+        return String.format("%s 합격자 데이터가 부족해, 직무 구분 없이 학점이 비슷한 합격자 %d명과 비교한 결과입니다.",
+                jobType, count);
     }
 }

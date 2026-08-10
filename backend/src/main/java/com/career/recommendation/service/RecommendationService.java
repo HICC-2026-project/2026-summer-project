@@ -118,7 +118,7 @@ public class RecommendationService {
                 (userSpec != null) ? userSpec.getGpa() : null,
                 (userSpec != null) ? userSpec.getGpaMax() : null
         );
-        String comparisonMessage = similarSpecFinder.buildComparisonMessage(similarPassers.size(), jobType);
+        String comparisonMessage = similarSpecFinder.buildComparisonMessage(similarPassers, jobType);
 
         // 4. 현재 신청 가능한 DB 활동 조회 (RAG 패턴 — Gemini에 선택지 제공)
         List<Activity> activeActivities = activityRepository.findRecommendableActivities(

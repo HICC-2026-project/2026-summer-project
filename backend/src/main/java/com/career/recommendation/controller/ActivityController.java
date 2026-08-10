@@ -14,7 +14,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
+import java.util.Set;
 import java.util.UUID;
 
 @Tag(name = "활동", description = "인턴십·대외활동·공모전·교육  목록 조회 (로그인 불필요)")
@@ -25,6 +28,18 @@ public class ActivityController {
 
     private final ActivityService activityService;
 
+    /**
+     * 정렬 가능한 필드 화이트리스트. Activity 엔티티 필드명을 그대로 Sort.by()에 넘기면
+     * 존재하지 않는 필드가 PropertyReferenceException으로 터지고(그 메시지엔 엔티티의
+     * 실제 프로퍼티 목록이 담긴다), 이 엔드포인트는 인증 없이 호출 가능해(PUBLIC_URLS)
+     * 도메인 모델을 정찰하는 데 악용될 수 있다. 화이트리스트로 사전에 막는다.
+     */
+    private static final Set<String> SORTABLE_FIELDS =
+            Set.of("createdAt", "deadline", "name", "startDate", "endDate");
+
+    /** 미인증으로 호출 가능한 엔드포인트라 비정상적으로 큰 size로 DB 전체를 끌어오는 걸 막는다. */
+    private static final int MAX_PAGE_SIZE = 100;
+
     @Operation(summary = "활동 목록 조회", description = "활동 목록을 페이지네이션으로 조회한다. type으로 필터링 가능.")
     @GetMapping
     public Page<ActivityResponse> getActivities(
@@ -32,13 +47,25 @@ public class ActivityController {
             @RequestParam(required = false) String type,
             @Parameter(description = "페이지 번호 (0부터 시작)")
             @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "페이지 크기")
+            @Parameter(description = "페이지 크기 (최대 " + MAX_PAGE_SIZE + ")")
             @RequestParam(defaultValue = "10") int size,
             @Parameter(description = "정렬 기준 필드")
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @Parameter(description = "정렬 방향 (ASC/DESC)")
             @RequestParam(defaultValue = "DESC") Sort.Direction direction
     ) {
+        if (page < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "page는 0 이상이어야 합니다.");
+        }
+        if (size < 1 || size > MAX_PAGE_SIZE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "size는 1~" + MAX_PAGE_SIZE + " 사이여야 합니다.");
+        }
+        if (!SORTABLE_FIELDS.contains(sortBy)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "sortBy는 " + SORTABLE_FIELDS + " 중 하나여야 합니다.");
+        }
+
         PageRequest pageRequest = PageRequest.of(
                 page,
                 size,
