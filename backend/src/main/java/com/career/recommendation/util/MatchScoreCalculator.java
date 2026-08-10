@@ -138,31 +138,36 @@ public class MatchScoreCalculator {
 
     private double scoreGpa(BigDecimal userGpa, BigDecimal userGpaMax,
                             BigDecimal passerGpa, BigDecimal passerGpaMax) {
-        if (userGpa == null || userGpaMax == null
-                || passerGpa == null || passerGpaMax == null
-                || userGpaMax.signum() <= 0 || passerGpaMax.signum() <= 0) {
-            return 50.0;
+        // 합격자 쪽 학점이 없으면 비교 자체가 불가능하다. 사용자 잘못이 아니므로 감점하지 않는다
+        // (합격자가 자격증을 갖고 있지 않을 때 scoreCert가 100을 주는 것과 같은 원칙).
+        if (passerGpa == null || passerGpaMax == null || passerGpaMax.signum() <= 0) {
+            return 100.0;
+        }
+        // 사용자가 입력하지 않은 항목은 0점이다.
+        // 예전에는 50점을 줘서, 스펙을 하나도 넣지 않아도 종합 점수가 37점쯤 나오는 문제가 있었다.
+        if (userGpa == null || userGpaMax == null || userGpaMax.signum() <= 0) {
+            return 0.0;
         }
 
         double userVal = userGpa.doubleValue() / userGpaMax.doubleValue();
         double passerVal = passerGpa.doubleValue() / passerGpaMax.doubleValue();
-        if (passerVal <= 0) return 50.0;
+        if (passerVal <= 0) return 100.0;
         if (userVal >= passerVal) return 100.0;
         return Math.max(0.0, (userVal / passerVal) * 100.0);
     }
 
     private double scoreLang(List<Map<String, Object>> userLangScores,
                              List<Map<String, Object>> passerLangScores) {
-        if (userLangScores == null || userLangScores.isEmpty()
-                || passerLangScores == null || passerLangScores.isEmpty()) {
-            return 50.0;
+        // 합격자가 어학 성적을 갖고 있지 않으면 이 항목은 변별력이 없다 → 감점하지 않는다.
+        double passerMaxToeic = getMaxEquivalentToeic(passerLangScores);
+        if (passerMaxToeic <= 0) {
+            return 100.0;
         }
 
+        // 사용자가 입력하지 않은 항목은 0점 (예전 50점 기본값 제거).
         double userMaxToeic = getMaxEquivalentToeic(userLangScores);
-        double passerMaxToeic = getMaxEquivalentToeic(passerLangScores);
-
-        if (userMaxToeic <= 0 || passerMaxToeic <= 0) {
-            return 50.0;
+        if (userMaxToeic <= 0) {
+            return 0.0;
         }
 
         if (userMaxToeic >= passerMaxToeic) {

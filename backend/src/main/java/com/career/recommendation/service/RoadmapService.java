@@ -83,11 +83,18 @@ public class RoadmapService {
                 RoadmapResponse deserialized = objectMapper.readValue(cached.getResultJson(), RoadmapResponse.class);
                 if (deserialized != null && deserialized.getTimeline() != null && !deserialized.getTimeline().isEmpty()) {
                     boolean isSpecChanged = isSpecModifiedSince(userSpec, targetJob, cached.getCreatedAt());
-                    if (!isSpecChanged) {
+                    // 마감이 지난 활동이 캐시에 남아 있으면 스펙이 그대로여도 다시 만든다.
+                    // 그러지 않으면 이미 마감된 활동을 로드맵에 무기한 보여주게 된다.
+                    boolean hasUsableActivities = hasUsableCachedActivities(deserialized, today);
+
+                    if (!isSpecChanged && hasUsableActivities) {
                         return deserialized;
                     }
-                    // 스펙이 변경되었으나 하루 제한(3회) 내인지 확인
-                    if (cached.getLastUpdatedDate() != null && today.equals(cached.getLastUpdatedDate()) && cached.getDailyUpdateCount() >= 3) {
+                    // 갱신이 필요하더라도 하루 제한(3회)을 넘으면 캐시를 그대로 준다.
+                    // 만료 활동이 계속 남아 있거나 Gemini가 실패를 반복할 때
+                    // 매 요청마다 API를 호출하는 것을 막는 안전장치다.
+                    if (cached.getLastUpdatedDate() != null && today.equals(cached.getLastUpdatedDate())
+                            && cached.getDailyUpdateCount() != null && cached.getDailyUpdateCount() >= 3) {
                         return deserialized;
                     }
                 }
@@ -281,6 +288,22 @@ public class RoadmapService {
                 ))
                 .isAiRoadmap(false)
                 .build();
+    }
+
+    /**
+     * 캐시된 로드맵에 붙어 있는 실제 DB 활동(matchedActivities)이 아직 유효한지 확인한다.
+     * 마감이 지난 활동이 하나라도 있으면 로드맵을 다시 생성해야 한다.
+     * (RecommendationService.hasUsableCachedActivities와 같은 목적)
+     */
+    private boolean hasUsableCachedActivities(RoadmapResponse response, LocalDate today) {
+        if (response == null || response.getTimeline() == null) {
+            return false;
+        }
+        return response.getTimeline().stream()
+                .filter(step -> step != null && step.getMatchedActivities() != null)
+                .flatMap(step -> step.getMatchedActivities().stream())
+                .noneMatch(activity -> activity.getDeadline() != null
+                        && activity.getDeadline().isBefore(today));
     }
 
     private boolean isSpecModifiedSince(UserSpec userSpec, TargetJob targetJob, java.time.LocalDateTime cacheCreatedAt) {
