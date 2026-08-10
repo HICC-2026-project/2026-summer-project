@@ -1,4 +1,4 @@
--- 발표 및 개발 검증 전용 합성 PasserData 30건.
+-- 발표 및 개발 검증 전용 합성 PasserData 60건(직무별 10건).
 -- 실제 개인의 합격 기록이 아니며, 개인정보와 특정 기업 합격 여부를 포함하지 않는다.
 -- JobKorea의 공개 기업별 합격 스펙 집계는 값의 대략적인 범위를 정하는 참고 자료로만 사용했다.
 -- 상세 산정 원칙과 출처: backend/seed/passer-demo-seed.README.md
@@ -15,6 +15,11 @@ VALUES
 ('d0000000-0000-0000-0001-000000000003', NULL, 'BACKEND', 2025, 3.67, 4.50, '[{"type":"TOEIC","score":820,"maxScore":990}]'::jsonb, ARRAY['정보처리기사','SQLD'], 2, NULL, FALSE, 'DEMO'),
 ('d0000000-0000-0000-0001-000000000004', NULL, 'BACKEND', 2026, 3.78, 4.50, '[{"type":"OPIC","grade":"IH"}]'::jsonb, ARRAY['정보처리기사','AWS SAA'], 3, NULL, FALSE, 'DEMO'),
 ('d0000000-0000-0000-0001-000000000005', NULL, 'BACKEND', 2026, 3.91, 4.50, '[{"type":"TOEFL","score":103,"maxScore":120}]'::jsonb, ARRAY['정보처리기사','SQLD','AWS SAA'], 3, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0001-000000000006', NULL, 'BACKEND', 2023, 3.18, 4.50, '[{"type":"TOEIC","score":720,"maxScore":990}]'::jsonb, ARRAY['정보처리기사'], 1, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0001-000000000007', NULL, 'BACKEND', 2024, 3.49, 4.50, '[{"type":"OPIC","grade":"IM3"}]'::jsonb, ARRAY['SQLD'], 2, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0001-000000000008', NULL, 'BACKEND', 2025, 3.72, 4.50, '[{"type":"TOEIC","score":865,"maxScore":990}]'::jsonb, ARRAY['정보처리기사','리눅스마스터 2급'], 2, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0001-000000000009', NULL, 'BACKEND', 2025, 3.96, 4.50, '[{"type":"OPIC","grade":"IH"}]'::jsonb, ARRAY['정보처리기사','SQLD'], 3, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0001-000000000010', NULL, 'BACKEND', 2026, 4.16, 4.50, '[{"type":"TOEFL","score":109,"maxScore":120}]'::jsonb, ARRAY['정보처리기사','SQLD','AWS SAA'], 4, NULL, FALSE, 'DEMO'),
 
 -- FRONTEND
 ('d0000000-0000-0000-0002-000000000001', NULL, 'FRONTEND', 2024, 3.35, 4.50, '[{"type":"TOEIC","score":735,"maxScore":990}]'::jsonb, ARRAY['웹디자인기능사'], 1, NULL, FALSE, 'DEMO'),
@@ -22,6 +27,11 @@ VALUES
 ('d0000000-0000-0000-0002-000000000003', NULL, 'FRONTEND', 2025, 3.63, 4.50, '[{"type":"TOEIC","score":805,"maxScore":990}]'::jsonb, ARRAY['정보처리기사'], 2, NULL, FALSE, 'DEMO'),
 ('d0000000-0000-0000-0002-000000000004', NULL, 'FRONTEND', 2026, 3.74, 4.50, '[{"type":"OPIC","grade":"IH"}]'::jsonb, ARRAY['정보처리기사','SQLD'], 3, NULL, FALSE, 'DEMO'),
 ('d0000000-0000-0000-0002-000000000005', NULL, 'FRONTEND', 2026, 3.88, 4.50, '[{"type":"TOEFL","score":99,"maxScore":120}]'::jsonb, ARRAY['정보처리기사','웹디자인기능사'], 3, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0002-000000000006', NULL, 'FRONTEND', 2023, 3.14, 4.50, '[{"type":"TOEIC","score":710,"maxScore":990}]'::jsonb, ARRAY['웹디자인기능사'], 1, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0002-000000000007', NULL, 'FRONTEND', 2024, 3.46, 4.50, '[{"type":"OPIC","grade":"IM3"}]'::jsonb, ARRAY['정보처리기사'], 2, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0002-000000000008', NULL, 'FRONTEND', 2025, 3.69, 4.50, '[{"type":"TOEIC","score":850,"maxScore":990}]'::jsonb, ARRAY['SQLD','웹디자인기능사'], 2, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0002-000000000009', NULL, 'FRONTEND', 2025, 3.93, 4.50, '[{"type":"OPIC","grade":"IH"}]'::jsonb, ARRAY['정보처리기사','SQLD'], 3, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0002-000000000010', NULL, 'FRONTEND', 2026, 4.12, 4.50, '[{"type":"TOEFL","score":105,"maxScore":120}]'::jsonb, ARRAY['정보처리기사','웹디자인기능사'], 4, NULL, FALSE, 'DEMO'),
 
 -- AI_ML
 ('d0000000-0000-0000-0003-000000000001', NULL, 'AI_ML', 2024, 3.48, 4.50, '[{"type":"TOEIC","score":780,"maxScore":990}]'::jsonb, ARRAY['ADsP'], 1, NULL, FALSE, 'DEMO'),
@@ -29,6 +39,11 @@ VALUES
 ('d0000000-0000-0000-0003-000000000003', NULL, 'AI_ML', 2025, 3.73, 4.50, '[{"type":"TOEIC","score":835,"maxScore":990}]'::jsonb, ARRAY['정보처리기사','ADsP'], 2, NULL, FALSE, 'DEMO'),
 ('d0000000-0000-0000-0003-000000000004', NULL, 'AI_ML', 2026, 3.86, 4.50, '[{"type":"OPIC","grade":"IH"}]'::jsonb, ARRAY['ADsP','빅데이터분석기사'], 3, NULL, FALSE, 'DEMO'),
 ('d0000000-0000-0000-0003-000000000005', NULL, 'AI_ML', 2026, 4.02, 4.50, '[{"type":"TOEFL","score":106,"maxScore":120}]'::jsonb, ARRAY['정보처리기사','ADsP','빅데이터분석기사'], 3, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0003-000000000006', NULL, 'AI_ML', 2023, 3.24, 4.50, '[{"type":"TOEIC","score":740,"maxScore":990}]'::jsonb, ARRAY['ADsP'], 1, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0003-000000000007', NULL, 'AI_ML', 2024, 3.54, 4.50, '[{"type":"OPIC","grade":"IM3"}]'::jsonb, ARRAY['SQLD','ADsP'], 2, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0003-000000000008', NULL, 'AI_ML', 2025, 3.79, 4.50, '[{"type":"TOEIC","score":875,"maxScore":990}]'::jsonb, ARRAY['정보처리기사','ADsP'], 2, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0003-000000000009', NULL, 'AI_ML', 2025, 4.05, 4.50, '[{"type":"OPIC","grade":"IH"}]'::jsonb, ARRAY['ADsP','빅데이터분석기사'], 3, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0003-000000000010', NULL, 'AI_ML', 2026, 4.22, 4.50, '[{"type":"TOEFL","score":112,"maxScore":120}]'::jsonb, ARRAY['정보처리기사','SQLD','빅데이터분석기사'], 4, NULL, FALSE, 'DEMO'),
 
 -- DATA_ENGINEER
 ('d0000000-0000-0000-0004-000000000001', NULL, 'DATA_ENGINEER', 2024, 3.40, 4.50, '[{"type":"TOEIC","score":750,"maxScore":990}]'::jsonb, ARRAY['SQLD'], 1, NULL, FALSE, 'DEMO'),
@@ -36,6 +51,11 @@ VALUES
 ('d0000000-0000-0000-0004-000000000003', NULL, 'DATA_ENGINEER', 2025, 3.68, 4.50, '[{"type":"TOEIC","score":825,"maxScore":990}]'::jsonb, ARRAY['정보처리기사','SQLD'], 2, NULL, FALSE, 'DEMO'),
 ('d0000000-0000-0000-0004-000000000004', NULL, 'DATA_ENGINEER', 2026, 3.81, 4.50, '[{"type":"OPIC","grade":"IH"}]'::jsonb, ARRAY['SQLD','빅데이터분석기사'], 3, NULL, FALSE, 'DEMO'),
 ('d0000000-0000-0000-0004-000000000005', NULL, 'DATA_ENGINEER', 2026, 3.95, 4.50, '[{"type":"TOEFL","score":101,"maxScore":120}]'::jsonb, ARRAY['정보처리기사','SQLD','AWS SAA'], 3, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0004-000000000006', NULL, 'DATA_ENGINEER', 2023, 3.20, 4.50, '[{"type":"TOEIC","score":730,"maxScore":990}]'::jsonb, ARRAY['SQLD'], 1, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0004-000000000007', NULL, 'DATA_ENGINEER', 2024, 3.50, 4.50, '[{"type":"OPIC","grade":"IM3"}]'::jsonb, ARRAY['SQLD','ADsP'], 2, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0004-000000000008', NULL, 'DATA_ENGINEER', 2025, 3.74, 4.50, '[{"type":"TOEIC","score":860,"maxScore":990}]'::jsonb, ARRAY['정보처리기사','SQLD'], 2, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0004-000000000009', NULL, 'DATA_ENGINEER', 2025, 4.00, 4.50, '[{"type":"OPIC","grade":"IH"}]'::jsonb, ARRAY['SQLD','빅데이터분석기사'], 3, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0004-000000000010', NULL, 'DATA_ENGINEER', 2026, 4.18, 4.50, '[{"type":"TOEFL","score":108,"maxScore":120}]'::jsonb, ARRAY['정보처리기사','SQLD','ADsP'], 4, NULL, FALSE, 'DEMO'),
 
 -- PM
 ('d0000000-0000-0000-0005-000000000001', NULL, 'PM', 2024, 3.31, 4.50, '[{"type":"TOEIC","score":770,"maxScore":990}]'::jsonb, ARRAY['SQLD'], 1, NULL, FALSE, 'DEMO'),
@@ -43,11 +63,21 @@ VALUES
 ('d0000000-0000-0000-0005-000000000003', NULL, 'PM', 2025, 3.61, 4.50, '[{"type":"TOEIC","score":830,"maxScore":990}]'::jsonb, ARRAY['SQLD','ADsP'], 2, NULL, FALSE, 'DEMO'),
 ('d0000000-0000-0000-0005-000000000004', NULL, 'PM', 2026, 3.76, 4.50, '[{"type":"OPIC","grade":"IH"}]'::jsonb, ARRAY['정보처리기사','SQLD'], 3, NULL, FALSE, 'DEMO'),
 ('d0000000-0000-0000-0005-000000000005', NULL, 'PM', 2026, 3.89, 4.50, '[{"type":"TOEFL","score":100,"maxScore":120}]'::jsonb, ARRAY['SQLD','ADsP','빅데이터분석기사'], 3, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0005-000000000006', NULL, 'PM', 2023, 3.10, 4.50, '[{"type":"TOEIC","score":725,"maxScore":990}]'::jsonb, ARRAY['컴퓨터활용능력 1급'], 1, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0005-000000000007', NULL, 'PM', 2024, 3.44, 4.50, '[{"type":"OPIC","grade":"IM3"}]'::jsonb, ARRAY['SQLD'], 2, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0005-000000000008', NULL, 'PM', 2025, 3.66, 4.50, '[{"type":"TOEIC","score":855,"maxScore":990}]'::jsonb, ARRAY['SQLD','ADsP'], 2, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0005-000000000009', NULL, 'PM', 2025, 3.94, 4.50, '[{"type":"OPIC","grade":"IH"}]'::jsonb, ARRAY['ADsP','컴퓨터활용능력 1급'], 3, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0005-000000000010', NULL, 'PM', 2026, 4.10, 4.50, '[{"type":"TOEFL","score":104,"maxScore":120}]'::jsonb, ARRAY['정보처리기사','SQLD','ADsP'], 4, NULL, FALSE, 'DEMO'),
 
 -- SECURITY
 ('d0000000-0000-0000-0006-000000000001', NULL, 'SECURITY', 2024, 3.38, 4.50, '[{"type":"TOEIC","score":745,"maxScore":990}]'::jsonb, ARRAY['리눅스마스터 2급'], 1, NULL, FALSE, 'DEMO'),
 ('d0000000-0000-0000-0006-000000000002', NULL, 'SECURITY', 2025, 3.53, 4.50, '[{"type":"OPIC","grade":"IM2"}]'::jsonb, ARRAY['네트워크관리사 2급'], 2, NULL, FALSE, 'DEMO'),
 ('d0000000-0000-0000-0006-000000000003', NULL, 'SECURITY', 2025, 3.66, 4.50, '[{"type":"TOEIC","score":815,"maxScore":990}]'::jsonb, ARRAY['정보처리기사','리눅스마스터 2급'], 2, NULL, FALSE, 'DEMO'),
 ('d0000000-0000-0000-0006-000000000004', NULL, 'SECURITY', 2026, 3.80, 4.50, '[{"type":"OPIC","grade":"IH"}]'::jsonb, ARRAY['정보보안기사','네트워크관리사 2급'], 3, NULL, FALSE, 'DEMO'),
-('d0000000-0000-0000-0006-000000000005', NULL, 'SECURITY', 2026, 3.94, 4.50, '[{"type":"TOEFL","score":102,"maxScore":120}]'::jsonb, ARRAY['정보처리기사','정보보안기사','리눅스마스터 2급'], 3, NULL, FALSE, 'DEMO')
+('d0000000-0000-0000-0006-000000000005', NULL, 'SECURITY', 2026, 3.94, 4.50, '[{"type":"TOEFL","score":102,"maxScore":120}]'::jsonb, ARRAY['정보처리기사','정보보안기사','리눅스마스터 2급'], 3, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0006-000000000006', NULL, 'SECURITY', 2023, 3.16, 4.50, '[{"type":"TOEIC","score":715,"maxScore":990}]'::jsonb, ARRAY['리눅스마스터 2급'], 1, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0006-000000000007', NULL, 'SECURITY', 2024, 3.47, 4.50, '[{"type":"OPIC","grade":"IM3"}]'::jsonb, ARRAY['네트워크관리사 2급'], 2, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0006-000000000008', NULL, 'SECURITY', 2025, 3.71, 4.50, '[{"type":"TOEIC","score":845,"maxScore":990}]'::jsonb, ARRAY['정보처리기사','리눅스마스터 2급'], 2, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0006-000000000009', NULL, 'SECURITY', 2025, 3.98, 4.50, '[{"type":"OPIC","grade":"IH"}]'::jsonb, ARRAY['정보보안기사','네트워크관리사 2급'], 3, NULL, FALSE, 'DEMO'),
+('d0000000-0000-0000-0006-000000000010', NULL, 'SECURITY', 2026, 4.14, 4.50, '[{"type":"TOEFL","score":107,"maxScore":120}]'::jsonb, ARRAY['정보처리기사','정보보안기사','리눅스마스터 2급'], 4, NULL, FALSE, 'DEMO')
 ON CONFLICT (id) DO NOTHING;
