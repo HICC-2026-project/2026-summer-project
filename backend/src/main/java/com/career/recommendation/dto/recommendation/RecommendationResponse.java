@@ -1,8 +1,8 @@
 package com.career.recommendation.dto.recommendation;
 
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.extern.jackson.Jacksonized;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -15,10 +15,19 @@ import com.career.recommendation.dto.recommendation.CompareRowDto;
  *
  * isAiRecommendation: Gemini 정상 응답이면 true, Fallback이면 false → 프론트에서 "일반 추천" 배지 표시.
  * comparisonMessage: 유사 합격자 수에 따른 요약 메시지.
+ *
+ * ⚠️ @Jacksonized가 필수다. Lombok @Builder가 만드는 빌더 메서드는 접두사가 없는데
+ * (activities(...), matchScore(...)), Jackson @JsonPOJOBuilder의 기본 접두사는 "with"라서
+ * @JsonDeserialize(builder=...)만 손으로 붙이면 JSON의 어떤 프로퍼티도 빌더 메서드와
+ * 매칭되지 않는다. Spring Boot 기본 ObjectMapper는 FAIL_ON_UNKNOWN_PROPERTIES가 꺼져 있어
+ * 이 매칭 실패가 예외 없이 조용히 "빈 객체"를 만들어버린다 — 캐시(Recommendation.resultJson)를
+ * 역직렬화하는 모든 경로가 활동 없음·점수 0·플래그 전부 false인 껍데기를 돌려받으면서도
+ * 아무 에러도 남기지 않았다. @Jacksonized가 @JsonDeserialize(builder=...)와
+ * @JsonPOJOBuilder(withPrefix="")를 함께 생성해 이 매칭을 정상화한다.
  */
 @Getter
 @Builder
-@JsonDeserialize(builder = RecommendationResponse.RecommendationResponseBuilder.class)
+@Jacksonized
 public class RecommendationResponse {
 
     private List<ActivityRecommendation> activities;
@@ -31,8 +40,19 @@ public class RecommendationResponse {
     /** "유사 합격자 N명과 비교한 결과" 또는 "데이터가 부족해 AI 일반 추천을 제공합니다" */
     private String comparisonMessage;
 
-    /** false면 프론트에서 "일반 추천" 배지 표시 */
-    private boolean isAiRecommendation;
+    /**
+     * false면 프론트에서 "일반 추천" 배지 표시.
+     *
+     * ⚠️ 필드명을 isAiRecommendation이 아니라 aiRecommendation으로 둔다. 필드명이 "is"로
+     * 시작하면 Lombok 빌더 메서드도 필드명 그대로 isAiRecommendation(...)이 되는데, Jackson
+     * getter 직렬화는 isAiRecommendation()에서 "is"를 떼고 프로퍼티명을 "aiRecommendation"으로
+     * 쓴다(JavaBean boolean 관례). 그러면 직렬화 키("aiRecommendation")와 빌더 메서드명
+     * ("isAiRecommendation")이 어긋나 @Jacksonized를 붙여도 이 필드만 역직렬화에서 계속
+     * 빠진다. 필드명을 aiRecommendation으로 두면 getter는 그대로 isAiRecommendation()이라
+     * API 응답 필드명(getter 기준 직렬화)도 안 바뀌고, 빌더 메서드명(aiRecommendation)이
+     * 직렬화 키와 정확히 일치해 역직렬화도 된다.
+     */
+    private boolean aiRecommendation;
 
     /** 비교 대상 직무명 (예: BACKEND) */
     private String targetJobName;
@@ -64,7 +84,7 @@ public class RecommendationResponse {
 
     @Getter
     @Builder
-    @JsonDeserialize(builder = ActivityRecommendation.ActivityRecommendationBuilder.class)
+    @Jacksonized
     public static class ActivityRecommendation {
 
         /** activities 테이블 PK (UUID로 통일 — 기획서 예시의 정수 id 사용 안 함) */

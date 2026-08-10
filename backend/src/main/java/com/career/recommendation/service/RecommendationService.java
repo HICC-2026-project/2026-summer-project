@@ -246,7 +246,7 @@ public class RecommendationService {
                 .targetJobName(targetJobName)
                 .similarPasserCount(similarPasserCount)
                 .comparisonMessage(comparisonMessage)
-                .isAiRecommendation(false)
+                .aiRecommendation(false)
                 .sampleComparisonData(sampleComparisonData)
                 .scoreFormulaVersion(MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION)
                 .build();
@@ -309,7 +309,7 @@ public class RecommendationService {
                 .targetJobName(targetJobName)
                 .similarPasserCount(similarPasserCount)
                 .comparisonMessage(comparisonMessage)
-                .isAiRecommendation(true)
+                .aiRecommendation(true)
                 .sampleComparisonData(sampleComparisonData)
                 .scoreFormulaVersion(MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION)
                 .build();
