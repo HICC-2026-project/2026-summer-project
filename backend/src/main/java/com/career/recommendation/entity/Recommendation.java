@@ -32,6 +32,15 @@ public class Recommendation {
     @Column(name = "result_json", columnDefinition = "jsonb", nullable = false)
     private String resultJson;
 
+    /**
+     * ⚠️ 이름은 createdAt이지만 @UpdateTimestamp라서 실제로는 "마지막 캐시 갱신 시각"이다.
+     * 생성 시각이 아니다. 캐시 저장(save)이 일어날 때마다 현재 시각으로 덮어써진다.
+     *
+     * 스펙 변경 여부 판정(isSpecModifiedSince)이 이 값을 기준으로 동작한다.
+     * "userSpec.updatedAt이 마지막 갱신 시각보다 뒤면 스펙이 바뀐 것"이라는 의미이므로,
+     * 이 필드를 @CreationTimestamp로 바꾸면 한 번 스펙을 수정한 뒤로는
+     * 매 요청마다 스펙이 바뀐 것으로 판정되어 Gemini를 계속 호출하게 된다.
+     */
     @UpdateTimestamp
     @Column(name = "created_at")
     private LocalDateTime createdAt;

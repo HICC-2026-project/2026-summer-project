@@ -89,10 +89,10 @@ public class RecommendationService {
 
             if (isLegacyCache) {
                 needsNewAiCall = true; // 출처 표시 필드가 없는 구버전 캐시는 한 번 재생성
-            } else if (!hasUsableActivities) {
-                needsNewAiCall = true; // 만료된 활동이 있으면 갱신 필요
-            } else if (isSpecChanged) {
-                // 스펙이 변경되었으나 하루 제한(3회) 내인지 확인
+            } else if (!hasUsableActivities || isSpecChanged) {
+                // 활동 만료 또는 스펙 변경으로 갱신이 필요하지만, 하루 제한(3회) 내인지 확인한다.
+                // 이 체크가 없으면 Gemini가 장애로 폴백만 반환할 때(캐시 미저장) 만료 활동이
+                // 계속 남아 매 요청마다 API를 호출하게 된다(RoadmapService와 동일한 안전장치).
                 if (cached.getLastUpdatedDate() == null || !today.equals(cached.getLastUpdatedDate())) {
                     needsNewAiCall = true;
                 } else if (cached.getDailyUpdateCount() < 3) {

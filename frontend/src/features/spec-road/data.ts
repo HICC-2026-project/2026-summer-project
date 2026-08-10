@@ -190,7 +190,6 @@ export const PASSER_COUNT = 24;
 export const READINESS = 78;
 export const READINESS_RANK = "18%";
 export const COMPARE_SCORE = 82;
-export const COMPARE_DEG = 295;
 // 예시 화면(비로그인 미리보기)에서 쓰는 익명 표기.
 // 실명을 넣으면 남의 계정처럼 보이므로 자리표시자를 쓴다.
 export const DEMO_USER_NAME = "○○○";

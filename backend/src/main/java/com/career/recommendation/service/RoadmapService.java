@@ -12,10 +12,12 @@ import com.career.recommendation.entity.TargetJob;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.entity.UserSpec;
 import com.career.recommendation.entity.RoadmapCache;
+import com.career.recommendation.entity.Recommendation;
 import com.career.recommendation.repository.ActivityRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
 import com.career.recommendation.repository.RoadmapCacheRepository;
+import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.util.PromptDataBuilder;
 import com.career.recommendation.util.SimilarSpecFinder;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,6 +55,7 @@ public class RoadmapService {
     private final ActivityRepository activityRepository;
     private final SimilarSpecFinder similarSpecFinder;
     private final RecommendationService recommendationService;
+    private final RecommendationRepository recommendationRepository;
     private final RoadmapCacheRepository roadmapCacheRepository;
     private final RoadmapCacheService roadmapCacheService;
     private final GeminiService geminiService;
@@ -80,11 +83,18 @@ public class RoadmapService {
                 RoadmapResponse deserialized = objectMapper.readValue(cached.getResultJson(), RoadmapResponse.class);
                 if (deserialized != null && deserialized.getTimeline() != null && !deserialized.getTimeline().isEmpty()) {
                     boolean isSpecChanged = isSpecModifiedSince(userSpec, targetJob, cached.getCreatedAt());
-                    if (!isSpecChanged) {
+                    // 마감이 지난 활동이 캐시에 남아 있으면 스펙이 그대로여도 다시 만든다.
+                    // 그러지 않으면 이미 마감된 활동을 로드맵에 무기한 보여주게 된다.
+                    boolean hasUsableActivities = hasUsableCachedActivities(deserialized, today);
+
+                    if (!isSpecChanged && hasUsableActivities) {
                         return deserialized;
                     }
-                    // 스펙이 변경되었으나 하루 제한(3회) 내인지 확인
-                    if (cached.getLastUpdatedDate() != null && today.equals(cached.getLastUpdatedDate()) && cached.getDailyUpdateCount() >= 3) {
+                    // 갱신이 필요하더라도 하루 제한(3회)을 넘으면 캐시를 그대로 준다.
+                    // 만료 활동이 계속 남아 있거나 Gemini가 실패를 반복할 때
+                    // 매 요청마다 API를 호출하는 것을 막는 안전장치다.
+                    if (cached.getLastUpdatedDate() != null && today.equals(cached.getLastUpdatedDate())
+                            && cached.getDailyUpdateCount() != null && cached.getDailyUpdateCount() >= 3) {
                         return deserialized;
                     }
                 }
@@ -106,18 +116,18 @@ public class RoadmapService {
         );
         String similarCasesStr = promptDataBuilder.buildSimilarCasesText(similarPassers);
 
-        // 2. F-03 맞춤 추천 결과 조회 (추천 활동 우선 반영)
-        // ⚠️ 주의: getRecommendations()는 내부에서 Gemini를 호출할 수 있음.
-        //    프론트가 /recommendations 먼저 호출 후 /roadmaps를 호출하면 저장된 결과가 재사용되므로
-        //    반드시 추천 API 먼저 호출 후 로드맵 호출 순서를 유지할 것.
+        // 2. F-03 맞춤 추천 결과 조회 (DB 캐시만 참조하여 Gemini 중복 API 호출 방지)
         String topRecommendedJson = "[]";
         try {
-            RecommendationResponse recResponse = recommendationService.getRecommendations(authentication);
-            if (recResponse != null && recResponse.getActivities() != null) {
-                topRecommendedJson = objectMapper.writeValueAsString(recResponse.getActivities());
+            Recommendation cachedRec = recommendationRepository.findByUser_Id(user.getId()).orElse(null);
+            if (cachedRec != null && cachedRec.getResultJson() != null) {
+                RecommendationResponse recResponse = objectMapper.readValue(cachedRec.getResultJson(), RecommendationResponse.class);
+                if (recResponse != null && recResponse.getActivities() != null) {
+                    topRecommendedJson = objectMapper.writeValueAsString(recResponse.getActivities());
+                }
             }
         } catch (Exception e) {
-            log.warn("F-03 추천 결과 연동 중 오류 (기본값 사용): {}", e.getMessage());
+            log.warn("F-03 추천 캐시 조회 중 오류 (기본값 [] 사용): {}", e.getMessage());
         }
 
         // 3. 현재 신청 가능한 DB 활동 조회 (RAG 패턴)
@@ -278,6 +288,22 @@ public class RoadmapService {
                 ))
                 .isAiRoadmap(false)
                 .build();
+    }
+
+    /**
+     * 캐시된 로드맵에 붙어 있는 실제 DB 활동(matchedActivities)이 아직 유효한지 확인한다.
+     * 마감이 지난 활동이 하나라도 있으면 로드맵을 다시 생성해야 한다.
+     * (RecommendationService.hasUsableCachedActivities와 같은 목적)
+     */
+    private boolean hasUsableCachedActivities(RoadmapResponse response, LocalDate today) {
+        if (response == null || response.getTimeline() == null) {
+            return false;
+        }
+        return response.getTimeline().stream()
+                .filter(step -> step != null && step.getMatchedActivities() != null)
+                .flatMap(step -> step.getMatchedActivities().stream())
+                .noneMatch(activity -> activity.getDeadline() != null
+                        && activity.getDeadline().isBefore(today));
     }
 
     private boolean isSpecModifiedSince(UserSpec userSpec, TargetJob targetJob, java.time.LocalDateTime cacheCreatedAt) {

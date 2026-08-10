@@ -68,4 +68,22 @@ class SimilarSpecFinderTest {
         assertThat(finder.find("BACKEND", new BigDecimal("3.60"), null)).isEmpty();
         verifyNoInteractions(passerDataRepository);
     }
+
+    @Test
+    void 학점_범위_내_결과가_없으면_가장_가까운_학점_비율로_다시_조회한다() {
+        PasserData expected = PasserData.builder().build();
+        when(passerDataRepository.findSimilarByJobTypeAndGpaRatio(eq("BACKEND"), any(), any(), any()))
+                .thenReturn(List.of());
+        when(passerDataRepository.findSimilarByGpaRatio(any(), any(), any()))
+                .thenReturn(List.of());
+        when(passerDataRepository.findClosestByJobTypeAndGpaRatio(eq("BACKEND"), any(), any()))
+                .thenReturn(List.of(expected));
+
+        SimilarSpecFinder finder = new SimilarSpecFinder(passerDataRepository);
+
+        List<PasserData> result = finder.find("BACKEND", new BigDecimal("4.50"), new BigDecimal("4.50"));
+
+        assertThat(result).containsExactly(expected);
+        verify(passerDataRepository).findClosestByJobTypeAndGpaRatio(eq("BACKEND"), eq(new BigDecimal("1.0000")), any());
+    }
 }

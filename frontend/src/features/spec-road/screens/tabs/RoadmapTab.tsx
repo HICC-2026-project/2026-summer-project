@@ -89,35 +89,44 @@ export function RoadmapTab({ target, roadmap, roadmapLoading, roadmapError }: Ro
                 {/* 백엔드가 RAG로 검증해 붙여주는 실제 DB 활동(이름·마감·지원 링크). 있을 때만 표시. */}
                 {m.matchedActivities && m.matchedActivities.length > 0 && (
                   <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                    {m.matchedActivities.map((a) => (
-                      <a
-                        key={a.activityId}
-                        href={a.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: 10,
-                          padding: "10px 12px",
-                          background: "#F8F7FC",
-                          border: "1px solid #EDEDF2",
-                          borderRadius: 12,
-                          textDecoration: "none",
-                        }}
-                      >
-                        <span style={{ minWidth: 0, flex: 1 }}>
-                          <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, color: "#15141B", lineHeight: 1.35 }}>
-                            {a.name}
+                    {m.matchedActivities.map((a) => {
+                      const body = (
+                        <>
+                          <span style={{ minWidth: 0, flex: 1 }}>
+                            <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, color: "#15141B", lineHeight: 1.35 }}>
+                              {a.name}
+                            </span>
+                            {a.organization && (
+                              <span style={{ display: "block", fontSize: 12, color: "#9797A1", fontWeight: 500 }}>{a.organization}</span>
+                            )}
                           </span>
-                          {a.organization && (
-                            <span style={{ display: "block", fontSize: 12, color: "#9797A1", fontWeight: 500 }}>{a.organization}</span>
-                          )}
-                        </span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: ddayColor(a.deadline), flexShrink: 0 }}>{dday(a.deadline)}</span>
-                      </a>
-                    ))}
+                          <span style={{ fontSize: 12, fontWeight: 700, color: ddayColor(a.deadline), flexShrink: 0 }}>{dday(a.deadline)}</span>
+                        </>
+                      );
+                      const cardStyle = {
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 10,
+                        padding: "10px 12px",
+                        background: "#F8F7FC",
+                        border: "1px solid #EDEDF2",
+                        borderRadius: 12,
+                        textDecoration: "none",
+                      } as const;
+
+                      // 지원 링크가 없는 활동도 있다. 그때 <a>로 감싸면 눌러도 아무 일이 없는
+                      // "죽은 링크"가 되므로, 링크가 있을 때만 <a>로 렌더한다.
+                      return a.url ? (
+                        <a key={a.activityId} href={a.url} target="_blank" rel="noopener noreferrer" style={cardStyle}>
+                          {body}
+                        </a>
+                      ) : (
+                        <div key={a.activityId} style={cardStyle}>
+                          {body}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
