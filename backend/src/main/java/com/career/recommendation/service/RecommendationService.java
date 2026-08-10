@@ -11,7 +11,6 @@ import com.career.recommendation.entity.TargetJob;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.entity.UserSpec;
 import com.career.recommendation.repository.ActivityRepository;
-import com.career.recommendation.repository.PasserDataRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
@@ -25,18 +24,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * BE-1 담당 — F-03 활동 추천 비즈니스 로직.
@@ -47,7 +43,6 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class RecommendationService {
 
     private final CurrentUserService currentUserService;
@@ -56,7 +51,7 @@ public class RecommendationService {
     private final RecommendationRepository recommendationRepository;
     private final RecommendationCacheService recommendationCacheService;
     private final ActivityRepository activityRepository;
-    private final PasserDataRepository passerDataRepository;
+    private final GlobalCertPoolService globalCertPoolService;
     private final SimilarSpecFinder similarSpecFinder;
     private final MatchScoreCalculator matchScoreCalculator;
     private final GeminiService geminiService;
@@ -70,7 +65,11 @@ public class RecommendationService {
      * 현재 로그인한 유저의 맞춤 추천 활동 목록을 반환한다.
      * 유효한 캐시가 있으면 DB에서 즉시 반환한다.
      */
-    @Transactional
+    /**
+     * 트랜잭션 없이 전체 흐름을 오케스트레이션한다.
+     * DB 조회는 각 리포지토리 메서드의 기본 트랜잭션에 의존하고,
+     * Gemini API 호출은 트랜잭션 바깥에서 수행하여 DB 커넥션을 점유하지 않는다.
+     */
     public RecommendationResponse getRecommendations(Authentication authentication) {
         User user = currentUserService.getCurrentUser(authentication);
         LocalDate today = LocalDate.now(SERVICE_ZONE_ID);
@@ -133,14 +132,9 @@ public class RecommendationService {
         String targetJobStr = promptDataBuilder.buildTargetJobString(targetJob);
         String similarCasesStr = promptDataBuilder.buildSimilarCasesText(similarPassers);
 
-        // 자격증 2층 인식(MatchScoreCalculator)에 쓸 전역 자격증 풀. 비교 대상 유사 합격자
-        // (similarPassers, Top N)가 아니라 검증된 합격자 DB 전체에서 뽑는다 — Top N은 스펙을
-        // 살짝만 고쳐도 바뀌는 값이라, 그걸 인식 기준으로 쓰면 같은 자격증이 요청마다
-        // 인식됐다 안 됐다 흔들리게 된다.
-        Set<String> globalCertPool = passerDataRepository.findAllVerifiedCertificationArrays().stream()
-                .filter(java.util.Objects::nonNull)
-                .flatMap(Arrays::stream)
-                .collect(Collectors.toSet());
+        // 자격증 2층 인식(MatchScoreCalculator)에 쓸 전역 자격증 풀.
+        // GlobalCertPoolService가 Caffeine 캐시로 1시간 유지하므로 매 요청마다 DB 전체 스캔하지 않는다.
+        Set<String> globalCertPool = globalCertPoolService.getGlobalCertPool();
 
         RecommendationResponse response = callGeminiWithRetry(
                 userSpecJson, targetJobStr, similarCasesStr, availableActivitiesJson,

@@ -91,6 +91,16 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Cache (Caffeine) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <!-- Swagger (SpringDoc) -->
         <dependency>
             <groupId>org.springdoc</groupId>
