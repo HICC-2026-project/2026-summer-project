@@ -438,11 +438,6 @@ class MatchScoreCalculatorTest {
 
     // --- 직무별 자격증 가중치 (v6) ---
 
-    /** 보유율 r인 자격증의 기대 가중치. 계산식과 같은 상수를 쓴다(0.5 + 2.0 × r). */
-    private double expectedJobWeight(double holderRate) {
-        return 0.5 + 2.0 * holderRate;
-    }
-
     @Test
     void 자격증_가중치는_직무_합격자_보유율에서_유도된다() {
         // 합격자 4명 중 웹디자인기능사 3명(75%), SQLD 1명(25%).
@@ -462,8 +457,16 @@ class MatchScoreCalculatorTest {
         int sqldScore = calc(sqldUser, List.of(passer), jobRows).getTotalScore();
 
         assertThat(webScore).isGreaterThan(sqldScore);
-        assertThat(expectedJobWeight(0.75)).isEqualTo(2.0);   // 웹디자인기능사
-        assertThat(expectedJobWeight(0.25)).isEqualTo(1.0);   // SQLD
+
+        // 위 방향성 단언만으로는 helper 함수 자체가 프로덕션 코드를 실제로 거치는지
+        // 증명하지 못한다(계산식을 테스트 안에서 재구현해 비교하면, 상수를 바꿔도
+        // 항상 자기 자신과만 일치해 통과해버린다). 실제 CompareRowDto 값으로 고정한다.
+        // 웹디자인기능사 보유율 75% → weight 2.0 → 2.0/4.5(CERT_SCALE_MAX) = 44%
+        // SQLD 보유율 25% → weight 1.0 → 1.0/4.5 = 22%
+        int webPct = calc(webUser, List.of(passer), jobRows).getCompareRows().get(2).getMyPct();
+        int sqldPct = calc(sqldUser, List.of(passer), jobRows).getCompareRows().get(2).getMyPct();
+        assertThat(webPct).isEqualTo(44);
+        assertThat(sqldPct).isEqualTo(22);
     }
 
     @Test

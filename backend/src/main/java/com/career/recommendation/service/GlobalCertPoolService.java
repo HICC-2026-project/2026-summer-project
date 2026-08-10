@@ -51,8 +51,15 @@ public class GlobalCertPoolService {
      *
      * @param jobType null·공백이면 빈 목록을 반환한다(호출부가 CERT_WEIGHTS 폴백을 타게 됨).
      *                빈 문자열을 캐시 키로 쓰면 불필요한 캐시 슬롯이 생기므로 캐시 진입 전에 막는다.
+     *
+     * ⚠️ condition을 unless로 잘못 쓰면 안 된다. unless는 "메서드 실행 후 결과를 캐시에
+     * 넣을지"만 결정하고, 캐시 키(key = "#jobType")는 그보다 먼저 계산된다. jobType이 null이면
+     * 이 시점에 Spring이 Assert.notNull로 막아 IllegalArgumentException을 던지므로, 메서드
+     * 본문의 null 가드에 도달하기도 전에 프록시에서 터진다. 목표 직무를 아직 설정하지 않은
+     * 유저(TargetJob이 null인 정상 상태) 전원이 추천 API 500을 맞는 경로였다. condition은
+     * 메서드 실행 자체를 막아 캐시 접근이 일어나지 않게 하므로 이 문제가 없다.
      */
-    @Cacheable(value = "jobCertRows", key = "#jobType", unless = "#jobType == null || #jobType.isBlank()")
+    @Cacheable(value = "jobCertRows", key = "#jobType", condition = "#jobType != null && !#jobType.isBlank()")
     @Transactional(readOnly = true)
     public List<String[]> getJobPasserCertRows(String jobType) {
         if (jobType == null || jobType.isBlank()) {
