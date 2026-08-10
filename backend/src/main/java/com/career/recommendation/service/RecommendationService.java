@@ -11,6 +11,7 @@ import com.career.recommendation.entity.TargetJob;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.entity.UserSpec;
 import com.career.recommendation.repository.ActivityRepository;
+import com.career.recommendation.repository.PasserDataRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
@@ -29,10 +30,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * BE-1 담당 — F-03 활동 추천 비즈니스 로직.
@@ -52,6 +56,7 @@ public class RecommendationService {
     private final RecommendationRepository recommendationRepository;
     private final RecommendationCacheService recommendationCacheService;
     private final ActivityRepository activityRepository;
+    private final PasserDataRepository passerDataRepository;
     private final SimilarSpecFinder similarSpecFinder;
     private final MatchScoreCalculator matchScoreCalculator;
     private final GeminiService geminiService;
@@ -85,7 +90,9 @@ public class RecommendationService {
             boolean isSpecChanged = isSpecModifiedSince(userSpec, targetJob, cached.getCreatedAt());
             boolean hasUsableActivities = hasUsableCachedActivities(cachedResponse, today);
             boolean isLegacyCache = cachedResponse == null
-                    || cachedResponse.getSampleComparisonData() == null;
+                    || cachedResponse.getSampleComparisonData() == null
+                    || cachedResponse.getScoreFormulaVersion() == null
+                    || cachedResponse.getScoreFormulaVersion() < MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION;
 
             if (isLegacyCache) {
                 needsNewAiCall = true; // 출처 표시 필드가 없는 구버전 캐시는 한 번 재생성
@@ -126,10 +133,20 @@ public class RecommendationService {
         String targetJobStr = promptDataBuilder.buildTargetJobString(targetJob);
         String similarCasesStr = promptDataBuilder.buildSimilarCasesText(similarPassers);
 
+        // 자격증 2층 인식(MatchScoreCalculator)에 쓸 전역 자격증 풀. 비교 대상 유사 합격자
+        // (similarPassers, Top N)가 아니라 검증된 합격자 DB 전체에서 뽑는다 — Top N은 스펙을
+        // 살짝만 고쳐도 바뀌는 값이라, 그걸 인식 기준으로 쓰면 같은 자격증이 요청마다
+        // 인식됐다 안 됐다 흔들리게 된다.
+        Set<String> globalCertPool = passerDataRepository.findAllVerifiedCertificationArrays().stream()
+                .filter(java.util.Objects::nonNull)
+                .flatMap(Arrays::stream)
+                .collect(Collectors.toSet());
+
         RecommendationResponse response = callGeminiWithRetry(
                 userSpecJson, targetJobStr, similarCasesStr, availableActivitiesJson,
                 userSpec, similarPassers, comparisonMessage, activeActivities,
-                targetJob != null ? targetJob.getJobType() : "미설정", similarPassers.size()
+                targetJob != null ? targetJob.getJobType() : "미설정", similarPassers.size(),
+                globalCertPool
         );
 
         // 6. 결과 캐싱 (일일 제한 카운트 증가) — 별도 Bean에서 호출
@@ -166,7 +183,8 @@ public class RecommendationService {
     private RecommendationResponse callGeminiWithRetry(
             String userSpecJson, String targetJobStr, String similarCasesStr, String availableActivitiesJson,
             UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage,
-            List<Activity> activeActivities, String targetJobName, int similarPasserCount) {
+            List<Activity> activeActivities, String targetJobName, int similarPasserCount,
+            Set<String> globalCertPool) {
 
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
@@ -175,7 +193,7 @@ public class RecommendationService {
                 if (rawJson != null && !rawJson.isBlank()) {
                     RecommendationResponse res = parseGeminiResponse(
                             rawJson, userSpec, similarPassers, comparisonMessage, activeActivities,
-                            targetJobName, similarPasserCount);
+                            targetJobName, similarPasserCount, globalCertPool);
                     if (res != null) return res;
                 }
             } catch (Exception e) {
@@ -188,16 +206,16 @@ public class RecommendationService {
 
         // 최종 실패 시 Fallback 반환
         log.error("Gemini 추천 생성 모두 실패. DB 활동 기반 기본 추천 반환.");
-        return buildFallbackResponse(activeActivities, userSpec, similarPassers, comparisonMessage, targetJobName, similarPasserCount);
+        return buildFallbackResponse(activeActivities, userSpec, similarPassers, comparisonMessage, targetJobName, similarPasserCount, globalCertPool);
     }
 
     /** Gemini 미사용/실패 시 DB 등록 활동 기반 기본 추천 반환 (방어 로직) */
-    private RecommendationResponse buildFallbackResponse(List<Activity> activeActivities, UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage, String targetJobName, int similarPasserCount) {
+    private RecommendationResponse buildFallbackResponse(List<Activity> activeActivities, UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage, String targetJobName, int similarPasserCount, Set<String> globalCertPool) {
         if (activeActivities == null || activeActivities.isEmpty()) {
             return null;
         }
 
-        MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers);
+        MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers, globalCertPool);
         boolean sampleComparisonData = containsSampleOrUnclassifiedData(similarPassers);
 
         List<ActivityRecommendation> recs = new ArrayList<>();
@@ -219,11 +237,13 @@ public class RecommendationService {
                 .activities(recs)
                 .matchScore(matchResult.getTotalScore())
                 .compareRows(matchResult.getCompareRows())
+                .unrecognizedCertifications(matchResult.getUnrecognizedCertifications())
                 .targetJobName(targetJobName)
                 .similarPasserCount(similarPasserCount)
                 .comparisonMessage(comparisonMessage)
                 .isAiRecommendation(false)
                 .sampleComparisonData(sampleComparisonData)
+                .scoreFormulaVersion(MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION)
                 .build();
     }
 
@@ -235,7 +255,7 @@ public class RecommendationService {
     private RecommendationResponse parseGeminiResponse(
             String rawJson, UserSpec userSpec, List<PasserData> similarPassers,
             String comparisonMessage, List<Activity> activeActivities,
-            String targetJobName, int similarPasserCount) throws Exception {
+            String targetJobName, int similarPasserCount, Set<String> globalCertPool) throws Exception {
 
         // DB 활동을 UUID → Activity Map으로 변환 (빠른 검증용)
         Map<UUID, Activity> activityMap = new HashMap<>();
@@ -248,7 +268,7 @@ public class RecommendationService {
 
         if (geminiResult.getActivities() == null || geminiResult.getActivities().isEmpty()) return null;
 
-        MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers);
+        MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers, globalCertPool);
         boolean sampleComparisonData = containsSampleOrUnclassifiedData(similarPassers);
 
         List<ActivityRecommendation> result = new ArrayList<>();
@@ -280,11 +300,13 @@ public class RecommendationService {
                 .activities(result)
                 .matchScore(matchResult.getTotalScore())
                 .compareRows(matchResult.getCompareRows())
+                .unrecognizedCertifications(matchResult.getUnrecognizedCertifications())
                 .targetJobName(targetJobName)
                 .similarPasserCount(similarPasserCount)
                 .comparisonMessage(comparisonMessage)
                 .isAiRecommendation(true)
                 .sampleComparisonData(sampleComparisonData)
+                .scoreFormulaVersion(MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION)
                 .build();
     }
 

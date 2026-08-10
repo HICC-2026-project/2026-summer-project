@@ -46,6 +46,22 @@ public class RecommendationResponse {
     /** 비교 대상에 합성 DEMO 데이터가 한 건이라도 포함되었는지 여부 */
     private Boolean sampleComparisonData;
 
+    /**
+     * 사용자가 입력했지만 자격증 인식 층(MatchScoreCalculator) 어디에서도 매칭되지 않은
+     * 원본 표기 목록. 비어있지 않으면 FE에서 "이 자격증은 점수에 반영되지 않았어요" 같은
+     * 안내를 띄워, 오타·특이 표기를 사용자가 스스로 확인·수정할 수 있게 한다.
+     */
+    private List<String> unrecognizedCertifications;
+
+    /**
+     * matchScore·compareRows를 계산한 점수 공식 버전 (MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION).
+     * 옛 캐시 JSON엔 이 필드가 없어 역직렬화 시 null이 되고, RecommendationService가 이를
+     * legacy로 판정해 다음 요청에서 한 번 강제로 재계산한다. 공식을 바꿀 때마다
+     * CURRENT_SCORE_FORMULA_VERSION을 올리지 않으면 배포 후에도 유저마다 옛 공식/새 공식
+     * 점수가 뒤섞여 보이게 된다.
+     */
+    private Integer scoreFormulaVersion;
+
     @Getter
     @Builder
     @JsonDeserialize(builder = ActivityRecommendation.ActivityRecommendationBuilder.class)
