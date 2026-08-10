@@ -498,6 +498,24 @@ class MatchScoreCalculatorTest {
     }
 
     @Test
+    void 직무_합격자는_있지만_전원_자격증이_0개면_큐레이션_표로_폴백하지_않는다() {
+        // "직무 데이터가 아예 없음"과 "직무 합격자는 있는데 전원 자격증 0개"는 다르다.
+        // buildJobCertWeights()가 둘 다 빈 맵을 만들어서, jobWeights.isEmpty()로만 폴백을
+        // 판단하면 후자도 CERT_WEIGHTS(정보처리기사=2.0)로 잘못 빠진다.
+        // 실데이터가 "이 직무는 자격증 보유율 0%"라고 말하는데, 그걸 무시하고 임의 판단표를
+        // 쓰게 되면 애초에 보유율 기반 가중치를 도입한 이유가 이 케이스에서 무효화된다.
+        List<String[]> jobRowsAllEmpty = Arrays.asList(null, null, new String[]{}, null);
+
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{}, 1);
+
+        CompareRowDto certRow = calc(user, List.of(passer), jobRowsAllEmpty).getCompareRows().get(2);
+
+        // 하한(0.5) / 4.5 = 11%여야 한다. CERT_WEIGHTS로 폴백하면 2.0/4.5 = 44%가 나온다.
+        assertThat(certRow.getMyPct()).isEqualTo(11);
+    }
+
+    @Test
     void 그_직무_합격자가_아무도_안_가진_자격증도_인식되면_하한_가중치를_받는다() {
         // SQLD는 이 직무 합격자 보유율 0%지만 실재하는 자격증이므로 0점이 아니라 하한(0.5)이다.
         // 0점은 "우리가 알아보지 못한 입력"에만 주는 값이라는 v3 불변식을 지켜야 한다.

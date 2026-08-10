@@ -16,9 +16,14 @@ import java.time.LocalDateTime;
 /**
  * 추천 캐시 저장 전용 서비스.
  *
- * RecommendationService는 @Transactional(readOnly=true)이라 내부에서
- * saveCache를 호출하면 Spring 프록시가 개입하지 못해 쓰기가 되지 않는다.
- * 별도 Bean으로 분리하면 프록시가 정상 작동한다.
+ * RecommendationService는 @Transactional이 없다 — DB 조회는 각 리포지토리 메서드의
+ * 기본 트랜잭션에 맡기고, Gemini API 호출(느린 외부 호출)은 트랜잭션 바깥에서 수행해
+ * DB 커넥션을 점유하지 않는다. 그 흐름 중간에 있는 이 저장 로직만은 REQUIRES_NEW로
+ * 독립된 트랜잭션이 필요하다 — 같은 요청 안에서 조회 트랜잭션과 저장 트랜잭션이 섞이지
+ * 않고, 저장 실패가 앞선 조회 결과에 영향을 주지 않게 하기 위함이다. 별도 Bean으로
+ * 분리한 이유는 자기 자신을 호출(self-invocation)하면 Spring 프록시가 트랜잭션
+ * 어드바이스를 가로채지 못하기 때문이다 — REQUIRES_NEW를 같은 클래스 내부 메서드로
+ * 두면 이 프록시 우회 문제가 그대로 재현된다.
  */
 @Slf4j
 @Service

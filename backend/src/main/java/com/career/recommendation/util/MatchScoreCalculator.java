@@ -178,8 +178,15 @@ public class MatchScoreCalculator {
     /**
      * 자격증 가중치 판정에 필요한 문맥. "인식되는가"(observedCerts)와 "이 직무에서 얼마나
      * 중요한가"(jobWeights)는 서로 다른 질문이라 분리해서 들고 다닌다.
+     *
+     * hasJobData를 jobWeights.isEmpty()로 대신하지 않는 이유: "그 직무에 합격자 데이터 자체가
+     * 없다"와 "합격자는 있는데 전원 자격증이 하나도 없다" 둘 다 jobWeights를 빈 맵으로 만들지만
+     * 의미가 다르다. 전자는 큐레이션 표(CERT_WEIGHTS) 폴백이 맞지만, 후자는 실데이터가
+     * "이 직무에서 자격증은 보유율 0%"라고 말하는 것이므로 하한(JOB_WEIGHT_MIN)을 써야 한다 —
+     * 여기서 CERT_WEIGHTS로 빠지면 실데이터가 있는데도 임의 판단표를 쓰게 되어, 애초에
+     * 보유율 기반 가중치를 도입한 이유(임의 판단 제거)가 이 케이스에서 무효화된다.
      */
-    private record CertContext(Set<String> observedCerts, Map<String, Double> jobWeights) {}
+    private record CertContext(Set<String> observedCerts, Map<String, Double> jobWeights, boolean hasJobData) {}
 
     /**
      * 유저 스펙과 합격자 케이스 목록을 비교하여 총점과 상세 내역(CompareRow)을 포함한 결과를 반환한다.
@@ -198,7 +205,8 @@ public class MatchScoreCalculator {
                                       Set<String> globalCertPool, List<String[]> jobPasserCertRows) {
         CertContext certContext = new CertContext(
                 collectObservedCerts(globalCertPool),
-                buildJobCertWeights(jobPasserCertRows));
+                buildJobCertWeights(jobPasserCertRows),
+                jobPasserCertRows != null && !jobPasserCertRows.isEmpty());
 
         if (userSpec == null) {
             return MatchScoreResult.builder()
@@ -557,10 +565,13 @@ public class MatchScoreCalculator {
             return 0.0;
         }
 
-        Map<String, Double> jobWeights = certContext.jobWeights();
-        if (!jobWeights.isEmpty()) {
+        // hasJobData로 폴백 여부를 가른다 — jobWeights.isEmpty()로 판단하면 "직무 데이터가
+        // 아예 없다"와 "직무 합격자는 있는데 전원 자격증이 0개다"가 똑같이 빈 맵이 되어
+        // 후자도 CERT_WEIGHTS로 잘못 폴백한다(그 직무에서 보유율 0%라는 실데이터가 있는데도
+        // 임의 판단표를 쓰게 됨 — 애초에 보유율 기반으로 바꾼 이유가 무효화된다).
+        if (certContext.hasJobData()) {
             // 그 직무 합격자 중 아무도 갖고 있지 않은 자격증도 "인식은 되므로" 하한을 받는다.
-            return jobWeights.getOrDefault(canonicalCert, JOB_WEIGHT_MIN);
+            return certContext.jobWeights().getOrDefault(canonicalCert, JOB_WEIGHT_MIN);
         }
 
         // 직무 미설정이거나 해당 직무에 합격자 데이터가 없을 때의 폴백.
