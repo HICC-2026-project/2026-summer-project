@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.core.env.Environment;
 import org.springframework.security.jackson2.SecurityJackson2Modules;
 import org.springframework.security.oauth2.client.jackson2.OAuth2ClientJackson2Module;
 import org.springframework.security.oauth2.client.web.AuthorizationRequestRepository;
@@ -30,6 +31,11 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
     private static final int COOKIE_EXPIRE_SECONDS = 180;
 
     private final ObjectMapper objectMapper = createObjectMapper();
+    private final Environment environment;
+
+    public HttpCookieOAuth2AuthorizationRequestRepository(Environment environment) {
+        this.environment = environment;
+    }
 
     private static ObjectMapper createObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
@@ -72,11 +78,25 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
                 .findFirst();
     }
 
+    /**
+     * ⚠️ HttpOnly만 있고 Secure·SameSite가 없었다. Secure가 없으면 HTTPS 배포 환경에서도
+     * 평문 HTTP 요청이 한 번이라도 발생하면(리다이렉트 체인 중 실수 등) 이 쿠키(=OAuth state)가
+     * 노출될 수 있다. state 자체의 CSRF 방어(Spring이 생성해 콜백에서 대조)는 이 쿠키가 있어야
+     * 성립하므로, 쿠키 유출은 곧 state 방어 우회로 이어진다.
+     *
+     * SameSite=Lax는 항상 붙인다 — 카카오→백엔드 콜백은 top-level GET 리다이렉트라 Lax에서도
+     * 정상 왕복된다. Secure는 local 프로파일(평문 HTTP로 개발)에서만 끈다 — local에서 Secure를
+     * 강제하면 브라우저가 쿠키를 아예 안 보내 로그인 자체가 깨진다.
+     */
     private void addCookie(HttpServletResponse response, String name, String value, int maxAgeSeconds) {
         Cookie cookie = new Cookie(name, value);
         cookie.setPath("/");
         cookie.setHttpOnly(true);
         cookie.setMaxAge(maxAgeSeconds);
+        cookie.setAttribute("SameSite", "Lax");
+        if (!environment.matchesProfiles("local")) {
+            cookie.setSecure(true);
+        }
         response.addCookie(cookie);
     }
 
