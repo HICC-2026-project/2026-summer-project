@@ -187,9 +187,13 @@ public class MatchScoreCalculator {
 
     private List<CompareRowDto> calculateDetails(UserSpec userSpec, List<PasserData> passerList, Set<String> observedCerts) {
         // --- 1. 학점 (GPA) ---
+        // 학점 데이터가 없는 합격자는 평균 계산에서 제외한다 — 포함시키면 0으로 잡혀 평균이
+        // 실제보다 크게 낮아진다. scoreGpa()가 합격자 학점 결측을 "비교 불가(감점 없음)"로
+        // 처리하는 것과 같은 원칙이다. 정상 학점이 0점일 수는 없으므로 >0 필터로 결측을 걸러낸다.
         double userGpaNorm = normalizeGpaTo45(userSpec.getGpa(), userSpec.getGpaMax());
         double avgPasserGpaNorm = passerList.stream()
                 .mapToDouble(p -> normalizeGpaTo45(p.getGpa(), p.getGpaMax()))
+                .filter(value -> value > 0)
                 .average()
                 .orElse(0.0);
         
@@ -204,9 +208,11 @@ public class MatchScoreCalculator {
                 .build();
 
         // --- 2. 어학 성적 (Language) ---
+        // GPA와 같은 이유로, 어학 성적이 없는(또는 환산 불가한) 합격자는 평균에서 제외한다.
         double userMaxToeic = getMaxEquivalentToeic(userSpec.getLanguageScores());
         double avgPasserToeic = passerList.stream()
                 .mapToDouble(p -> getMaxEquivalentToeic(p.getLanguageScores()))
+                .filter(value -> value > 0)
                 .average()
                 .orElse(0.0);
 
@@ -224,6 +230,9 @@ public class MatchScoreCalculator {
         // 화면 표시는 여전히 "개수"를 쓴다 (사용자에게 익숙한 단위). 단, 충족/부족 판정과 막대 길이는
         // scoreCert와 같은 certValue(가중 합계) 기준으로 통일한다. 예전엔 이 둘이 서로 다른 공식이라
         // "비교탭엔 충족인데 종합 점수엔 0점"처럼 같은 화면 안에서 모순되는 경우가 있었다.
+        //
+        // GPA·어학과 달리 여기엔 ">0 필터"를 일부러 안 넣는다 — 자격증 0개는 "데이터 결측"이 아니라
+        // "실제로 안 가짐"이라는 유효한 값이라, 평균에서 빼면 오히려 왜곡된다.
         int userCertCount = (userSpec.getCertifications() != null) ? (int) Arrays.stream(userSpec.getCertifications()).filter(s -> s != null && !s.isBlank()).count() : 0;
         double avgPasserCertCount = passerList.stream()
                 .mapToDouble(p -> (p.getCertifications() != null) ? Arrays.stream(p.getCertifications()).filter(s -> s != null && !s.isBlank()).count() : 0.0)

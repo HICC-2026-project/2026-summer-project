@@ -1,5 +1,6 @@
 package com.career.recommendation.util;
 
+import com.career.recommendation.dto.recommendation.CompareRowDto;
 import com.career.recommendation.entity.PasserData;
 import com.career.recommendation.entity.UserSpec;
 import org.junit.jupiter.api.Test;
@@ -95,6 +96,61 @@ class MatchScoreCalculatorTest {
     @Test
     void 사용자_스펙이_없으면_0점을_반환한다() {
         assertThat(calculator.calculate(null, List.of(PasserData.builder().build())).getTotalScore()).isZero();
+    }
+
+    // --- 비교탭(CompareRow) 평균 계산 ---
+
+    @Test
+    void 학점_결측_합격자는_비교탭_평균에서_제외된다() {
+        // 합격자 3명 중 1명이 학점 데이터가 없으면(GPA=null), 그 합격자를 평균에 0으로
+        // 끼워 넣지 않고 아예 제외해야 한다. 안 그러면 결측 1명만으로 평균이 크게 왜곡된다
+        // (예: 4.00, 4.00, null → 잘못된 방식이면 avg 2.67, 올바른 방식이면 avg 4.00).
+        UserSpec user = userSpec("4.00", "4.50", "IH", 900, new String[]{"정보처리기사"});
+        PasserData normal1 = passer("4.00", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+        PasserData normal2 = passer("4.00", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+        PasserData missingGpa = PasserData.builder()
+                .gpa(null).gpaMax(null)
+                .languageScores(List.of(Map.of("type", "TOEIC", "score", 900)))
+                .certifications(new String[]{"정보처리기사"})
+                .build();
+
+        List<CompareRowDto> rows = calculator.calculate(user, List.of(normal1, normal2, missingGpa)).getCompareRows();
+        CompareRowDto gpaRow = rows.get(0);
+
+        assertThat(gpaRow.getAvgVal()).isEqualTo("4.00/4.5");
+        assertThat(gpaRow.getAvgPct()).isEqualTo(89);
+    }
+
+    @Test
+    void 어학_결측_합격자는_비교탭_평균에서_제외된다() {
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"});
+        PasserData normal1 = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+        PasserData normal2 = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+        PasserData missingLang = PasserData.builder()
+                .gpa(new BigDecimal("3.80")).gpaMax(new BigDecimal("4.50"))
+                .languageScores(List.of())
+                .certifications(new String[]{"정보처리기사"})
+                .build();
+
+        List<CompareRowDto> rows = calculator.calculate(user, List.of(normal1, normal2, missingLang)).getCompareRows();
+        CompareRowDto langRow = rows.get(1);
+
+        assertThat(langRow.getAvgVal()).isEqualTo("환산 900");
+    }
+
+    @Test
+    void 자격증_0개인_합격자는_평균_계산에서_제외되지_않는다() {
+        // GPA·어학과 달리 자격증 0개는 "결측"이 아니라 "실제로 안 가짐"이므로,
+        // 그 합격자를 평균에서 빼면 안 된다 — 0으로 포함시키는 게 맞다.
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"});
+        PasserData withCert = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+        PasserData withoutCert = passer("3.80", "4.50", "IH", 900, new String[]{}, 1);
+
+        List<CompareRowDto> rows = calculator.calculate(user, List.of(withCert, withoutCert)).getCompareRows();
+        CompareRowDto certRow = rows.get(2);
+
+        // 정보처리기사(2.0) + 0 을 2명으로 나눈 평균 개수는 0.5개여야 한다(제외되면 1.0개가 됨).
+        assertThat(certRow.getAvgVal()).isEqualTo("0.5개");
     }
 
     // --- 자격증 가중치 매칭 (v3 — 인식된 자격증만 점수가 된다) ---
