@@ -29,7 +29,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String token = resolveToken(request);
 
-        if (token != null && jwtTokenProvider.validateToken(token)) {
+        // 리프레시 토큰은 서명·만료 구조가 액세스 토큰과 같아서, isAccessToken()으로 명시적
+        // typ 클레임을 확인하지 않으면 리프레시 토큰도 그대로 API 인증에 통용된다(로그아웃해도
+        // 만료 전까지 계속 쓸 수 있게 됨 — JwtTokenProvider의 CLAIM_TYPE 주석 참고).
+        if (token != null && jwtTokenProvider.validateToken(token) && jwtTokenProvider.isAccessToken(token)) {
             UUID userId = jwtTokenProvider.getUserIdFromToken(token);
             String role = jwtTokenProvider.getRoleFromToken(token);
 
