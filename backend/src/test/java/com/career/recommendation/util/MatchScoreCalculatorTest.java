@@ -162,18 +162,51 @@ class MatchScoreCalculatorTest {
     }
 
     @Test
-    void 합격자_전원이_자격증_0개면_점수와_막대가_모두_만점으로_일치한다() {
-        // 수정 전엔 score=100(자격증 항목)인데 막대는 myPct=0·avgPct=0으로 나와
-        // "만점인데 막대는 텅 빔"이라는 모순이 있었다. 합격자 평균이 0이면(비교 불능)
-        // scoreCert가 100을 주는 것과 같은 이유로 막대도 100%로 맞춘다.
+    void 합격자_전원이_자격증_0개면_막대는_0이고_상태는_충족이다() {
+        // 막대는 "합격자 대비"가 아니라 "절대 수준"이므로, 양쪽 다 자격증이 없으면 0%가 맞다.
+        // 감점되지 않는다는 사실은 status("충족")와 총점이 전달한다.
+        // (예전엔 상대 기준이라 0/0을 100%로 예외 처리했는데, 자격증이 없는 사용자에게
+        //  "만점"이라고 표시하는 셈이라 오해를 만들었다.)
         UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{});
         PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{}, 1);
 
         CompareRowDto certRow = calc(user, List.of(passer)).getCompareRows().get(2);
 
-        assertThat(certRow.getMyPct()).isEqualTo(100);
-        assertThat(certRow.getAvgPct()).isEqualTo(100);
+        assertThat(certRow.getMyPct()).isZero();
+        assertThat(certRow.getAvgPct()).isZero();
         assertThat(certRow.getStatus()).isEqualTo("충족");
+    }
+
+    @Test
+    void 자격증_막대는_합격자_구성이_바뀌면_함께_움직인다() {
+        // 예전엔 합격자 평균 자신으로 나눠서(avg / (avg * 1.5)) 합격자 막대가 데이터와
+        // 무관하게 항상 67%로 고정됐다 — 데이터처럼 보이지만 정보가 없는 막대였다.
+        // 고정 기준으로 나누는 지금은 합격자 자격증이 늘면 막대도 함께 올라가야 한다.
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"});
+
+        PasserData light = passer("3.80", "4.50", "IH", 900, new String[]{"웹디자인기능사"}, 1);       // 0.5
+        PasserData heavy = passer("3.80", "4.50", "IH", 900,
+                new String[]{"정보처리기사", "SQLD", "ADsP"}, 1);                                      // 4.5
+
+        int lightAvgPct = calc(user, List.of(light)).getCompareRows().get(2).getAvgPct();
+        int heavyAvgPct = calc(user, List.of(heavy)).getCompareRows().get(2).getAvgPct();
+
+        assertThat(lightAvgPct).isLessThan(heavyAvgPct);
+        // 고정 기준(4.5) 기준의 실제 값까지 고정해 둔다 — 0.5/4.5 = 11%, 4.5/4.5 = 100%.
+        assertThat(lightAvgPct).isEqualTo(11);
+        assertThat(heavyAvgPct).isEqualTo(100);
+    }
+
+    @Test
+    void 자격증_막대는_사용자_가중치에_비례한다() {
+        // 정보처리기사(2.0) / 4.5 = 44%
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"SQLD"}, 1);
+
+        CompareRowDto certRow = calc(user, List.of(passer)).getCompareRows().get(2);
+
+        assertThat(certRow.getMyPct()).isEqualTo(44);
+        assertThat(certRow.getAvgPct()).isEqualTo(33); // SQLD(1.5) / 4.5
     }
 
     // --- 자격증 가중치 매칭 (v3 — 인식된 자격증만 점수가 된다) ---

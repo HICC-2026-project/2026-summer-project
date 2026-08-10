@@ -40,8 +40,27 @@ public class MatchScoreCalculator {
      *    대신 인식 범위를 3단으로 넓혔다(아래 CERT_WEIGHTS·NATIONAL_TECH_CERTIFICATIONS·
      *    합격자 DB 실관측 자격증). v2는 "정크 자격증 여러 개가 미입력보다 유리해지는" 문제가
      *    구조적으로 남아 있었다(기본 가중치 > 0인 한 상한으로 크기만 줄일 뿐 방향은 못 바꿈).
+     * 4: 자격증 막대(myPct·avgPct)의 기준을 상대값에서 고정값(CERT_SCALE_MAX)으로 교체.
+     *    총점 계산식 자체는 3과 동일하지만, compareRows가 캐시 JSON에 함께 저장되므로
+     *    버전을 올리지 않으면 기존 유저는 계속 옛 막대(합격자 항상 67%)를 보게 된다.
      */
-    public static final int CURRENT_SCORE_FORMULA_VERSION = 3;
+    public static final int CURRENT_SCORE_FORMULA_VERSION = 4;
+
+    /**
+     * 자격증 막대의 100% 기준이 되는 가중치 합. 학점이 4.5, 어학이 990이라는 고정 만점으로
+     * 나누는 것과 같은 역할이다.
+     *
+     * 예전에는 "합격자 평균 × 1.5"로 나눴는데, 그러면 합격자 막대가 언제나
+     * avgPasserCertValue / (avgPasserCertValue × 1.5) = 2/3, 즉 데이터와 무관하게 67%로 고정된다.
+     * 합격자가 자격증을 평균 0.5개를 갖든 3개를 갖든 막대가 똑같아서, 데이터처럼 보이지만
+     * 아무 정보도 담고 있지 않은 막대가 된다.
+     *
+     * 값 근거(2026-08 운영 DB 기준): 합격자 60명의 가중치 합 평균은 약 2.7이고,
+     * 4.5는 "기사 1개(2.0) + SQLD(1.5) + ADsP(1.0)" 수준의 포트폴리오에 해당한다.
+     * 합격자 평균이 대략 60% 지점에 오도록 잡은 값이므로, 합격자 데이터가 크게 바뀌면
+     * 이 상수도 함께 재검토해야 한다.
+     */
+    private static final double CERT_SCALE_MAX = 4.5;
 
     /**
      * 표(CERT_WEIGHTS)에 없어도 NATIONAL_TECH_CERTIFICATIONS나 합격자 DB에서 실제로 관측된
@@ -250,20 +269,18 @@ public class MatchScoreCalculator {
                 .average()
                 .orElse(0.0);
 
-        int certMyPct;
-        int certAvgPct;
-        if (avgPasserCertValue <= 0) {
-            // 합격자 전원이 자격증 0개 → 비교 기준 자체가 없다. scoreCert가 이 경우 100점을
-            // 주는 것과 같은 이유로, 막대도 0%가 아니라 100%로 맞춘다. 0%로 두면 종합 점수는
-            // 만점인데 막대만 텅 비어 보여 화면 안에서 모순된다.
-            certMyPct = 100;
-            certAvgPct = 100;
-        } else {
-            // 막대 기준: 합격자 평균 가중치의 1.5배를 100%로 둔다 (평균이 약 66% 지점에 오도록).
-            double certScale = avgPasserCertValue * 1.5;
-            certMyPct = (int) Math.min(100, Math.round(userCertValue / certScale * 100));
-            certAvgPct = (int) Math.min(100, Math.round(avgPasserCertValue / certScale * 100));
-        }
+        // 막대는 학점(÷4.5)·어학(÷990)과 마찬가지로 고정 기준(CERT_SCALE_MAX)으로 나눈다.
+        // 즉 "합격자 대비 몇 %"가 아니라 "자격증 항목을 절대적으로 얼마나 채웠나"를 나타낸다.
+        // 합격자 평균으로 나누던 예전 방식은 합격자 막대를 항상 67%에 고정시켰다.
+        //
+        // 합격자 평균이 0이어도 별도 분기가 필요 없다 — 분모가 상수라 0으로 나눌 일이 없고,
+        // "합격자도 자격증이 없다"를 0%로 보여주는 게 사실에 맞다. (예전엔 상대 기준이라
+        // 0/0이 정의되지 않아 100%로 예외 처리했는데, 그건 자격증이 하나도 없는 사용자에게
+        // "만점"이라고 표시하는 셈이라 오히려 오해를 만들었다. 자격증 항목이 감점되지 않는다는
+        // 사실은 status의 "충족"과 총점이 이미 전달한다 — 학점·어학 막대가 낮아도 상대 비교에서
+        // 충족이 나올 수 있는 것과 같은 구조다.)
+        int certMyPct = (int) Math.min(100, Math.round(userCertValue / CERT_SCALE_MAX * 100));
+        int certAvgPct = (int) Math.min(100, Math.round(avgPasserCertValue / CERT_SCALE_MAX * 100));
 
         CompareRowDto certRow = CompareRowDto.builder()
                 .label("자격증/수상")
