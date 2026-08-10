@@ -45,19 +45,36 @@ public class SimilarSpecFinder {
         BigDecimal userRatio = gpa.divide(gpaMax, 4, RoundingMode.HALF_UP);
         BigDecimal minRatio = userRatio.subtract(GPA_RATIO_MARGIN).max(BigDecimal.ZERO);
         BigDecimal maxRatio = userRatio.add(GPA_RATIO_MARGIN).min(BigDecimal.ONE);
+        PageRequest pageRequest = PageRequest.of(0, TOP_N);
 
-        // 1차: 직무 + 정규화 학점 비율 복합 검색
+        // 1차: 직무 + 정규화 학점 비율 복합 검색 (±7%p)
         if (jobType != null && !jobType.isBlank()) {
             List<PasserData> result = passerDataRepository.findSimilarByJobTypeAndGpaRatio(
-                    jobType, minRatio, maxRatio, PageRequest.of(0, TOP_N));
+                    jobType, minRatio, maxRatio, pageRequest);
             if (!result.isEmpty()) {
                 return result;
             }
         }
 
-        // 2차 폴백: 해당 직무 데이터 부족 → 정규화 학점 비율만으로 재시도
-        return passerDataRepository.findSimilarByGpaRatio(
-                minRatio, maxRatio, PageRequest.of(0, TOP_N));
+        // 2차 폴백: 해당 직무 범위 내 데이터 부족 → 정규화 학점 비율만으로 재시도 (±7%p)
+        List<PasserData> result = passerDataRepository.findSimilarByGpaRatio(
+                minRatio, maxRatio, pageRequest);
+        if (!result.isEmpty()) {
+            return result;
+        }
+
+        // 3차 폴백: 고학점/저학점 등 ±7%p 범위 이탈 시 해당 직무 학점 차이 최솟값 순 검색
+        if (jobType != null && !jobType.isBlank()) {
+            result = passerDataRepository.findClosestByJobTypeAndGpaRatio(
+                    jobType, userRatio, pageRequest);
+            if (!result.isEmpty()) {
+                return result;
+            }
+        }
+
+        // 4차 폴백: 전체 합격자 데이터 중 학점 차이 최솟값 순 검색
+        return passerDataRepository.findClosestByGpaRatio(
+                userRatio, pageRequest);
     }
 
     /**

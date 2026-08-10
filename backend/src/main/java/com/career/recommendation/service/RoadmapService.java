@@ -12,10 +12,12 @@ import com.career.recommendation.entity.TargetJob;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.entity.UserSpec;
 import com.career.recommendation.entity.RoadmapCache;
+import com.career.recommendation.entity.Recommendation;
 import com.career.recommendation.repository.ActivityRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
 import com.career.recommendation.repository.RoadmapCacheRepository;
+import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.util.PromptDataBuilder;
 import com.career.recommendation.util.SimilarSpecFinder;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,6 +55,7 @@ public class RoadmapService {
     private final ActivityRepository activityRepository;
     private final SimilarSpecFinder similarSpecFinder;
     private final RecommendationService recommendationService;
+    private final RecommendationRepository recommendationRepository;
     private final RoadmapCacheRepository roadmapCacheRepository;
     private final RoadmapCacheService roadmapCacheService;
     private final GeminiService geminiService;
@@ -106,18 +109,18 @@ public class RoadmapService {
         );
         String similarCasesStr = promptDataBuilder.buildSimilarCasesText(similarPassers);
 
-        // 2. F-03 맞춤 추천 결과 조회 (추천 활동 우선 반영)
-        // ⚠️ 주의: getRecommendations()는 내부에서 Gemini를 호출할 수 있음.
-        //    프론트가 /recommendations 먼저 호출 후 /roadmaps를 호출하면 저장된 결과가 재사용되므로
-        //    반드시 추천 API 먼저 호출 후 로드맵 호출 순서를 유지할 것.
+        // 2. F-03 맞춤 추천 결과 조회 (DB 캐시만 참조하여 Gemini 중복 API 호출 방지)
         String topRecommendedJson = "[]";
         try {
-            RecommendationResponse recResponse = recommendationService.getRecommendations(authentication);
-            if (recResponse != null && recResponse.getActivities() != null) {
-                topRecommendedJson = objectMapper.writeValueAsString(recResponse.getActivities());
+            Recommendation cachedRec = recommendationRepository.findByUser_Id(user.getId()).orElse(null);
+            if (cachedRec != null && cachedRec.getResultJson() != null) {
+                RecommendationResponse recResponse = objectMapper.readValue(cachedRec.getResultJson(), RecommendationResponse.class);
+                if (recResponse != null && recResponse.getActivities() != null) {
+                    topRecommendedJson = objectMapper.writeValueAsString(recResponse.getActivities());
+                }
             }
         } catch (Exception e) {
-            log.warn("F-03 추천 결과 연동 중 오류 (기본값 사용): {}", e.getMessage());
+            log.warn("F-03 추천 캐시 조회 중 오류 (기본값 [] 사용): {}", e.getMessage());
         }
 
         // 3. 현재 신청 가능한 DB 활동 조회 (RAG 패턴)
