@@ -136,11 +136,15 @@ public class RecommendationService {
         // GlobalCertPoolService가 Caffeine 캐시로 1시간 유지하므로 매 요청마다 DB 전체 스캔하지 않는다.
         Set<String> globalCertPool = globalCertPoolService.getGlobalCertPool();
 
+        // 자격증 가중치를 유도할 목표 직무 합격자 전원의 자격증(직무별로 캐시됨).
+        // 직무가 없으면 빈 목록을 받아 MatchScoreCalculator가 기존 큐레이션 표로 폴백하게 한다.
+        List<String[]> jobPasserCertRows = globalCertPoolService.getJobPasserCertRows(jobType);
+
         RecommendationResponse response = callGeminiWithRetry(
                 userSpecJson, targetJobStr, similarCasesStr, availableActivitiesJson,
                 userSpec, similarPassers, comparisonMessage, activeActivities,
                 targetJob != null ? targetJob.getJobType() : "미설정", similarPassers.size(),
-                globalCertPool
+                globalCertPool, jobPasserCertRows
         );
 
         // 6. 결과 캐싱 (일일 제한 카운트 증가) — 별도 Bean에서 호출
@@ -178,7 +182,7 @@ public class RecommendationService {
             String userSpecJson, String targetJobStr, String similarCasesStr, String availableActivitiesJson,
             UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage,
             List<Activity> activeActivities, String targetJobName, int similarPasserCount,
-            Set<String> globalCertPool) {
+            Set<String> globalCertPool, List<String[]> jobPasserCertRows) {
 
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
@@ -187,7 +191,7 @@ public class RecommendationService {
                 if (rawJson != null && !rawJson.isBlank()) {
                     RecommendationResponse res = parseGeminiResponse(
                             rawJson, userSpec, similarPassers, comparisonMessage, activeActivities,
-                            targetJobName, similarPasserCount, globalCertPool);
+                            targetJobName, similarPasserCount, globalCertPool, jobPasserCertRows);
                     if (res != null) return res;
                 }
             } catch (Exception e) {
@@ -200,7 +204,7 @@ public class RecommendationService {
 
         // 최종 실패 시 Fallback 반환
         log.error("Gemini 추천 생성 모두 실패. DB 활동 기반 기본 추천 반환.");
-        return buildFallbackResponse(activeActivities, userSpec, similarPassers, comparisonMessage, targetJobName, similarPasserCount, globalCertPool);
+        return buildFallbackResponse(activeActivities, userSpec, similarPassers, comparisonMessage, targetJobName, similarPasserCount, globalCertPool, jobPasserCertRows);
     }
 
     /**
@@ -213,10 +217,10 @@ public class RecommendationService {
      * 점수·비교표·미인식 자격증 고지는 활동 유무와 무관하게 계산되므로 그대로 내려보낸다
      * (화면은 활동 0건을 "아직 추천할 활동이 없어요"로 이미 처리한다).
      */
-    private RecommendationResponse buildFallbackResponse(List<Activity> activeActivities, UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage, String targetJobName, int similarPasserCount, Set<String> globalCertPool) {
+    private RecommendationResponse buildFallbackResponse(List<Activity> activeActivities, UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage, String targetJobName, int similarPasserCount, Set<String> globalCertPool, List<String[]> jobPasserCertRows) {
         List<Activity> safeActivities = (activeActivities != null) ? activeActivities : List.of();
 
-        MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers, globalCertPool);
+        MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers, globalCertPool, jobPasserCertRows);
         boolean sampleComparisonData = containsSampleOrUnclassifiedData(similarPassers);
 
         List<ActivityRecommendation> recs = new ArrayList<>();
@@ -256,7 +260,7 @@ public class RecommendationService {
     private RecommendationResponse parseGeminiResponse(
             String rawJson, UserSpec userSpec, List<PasserData> similarPassers,
             String comparisonMessage, List<Activity> activeActivities,
-            String targetJobName, int similarPasserCount, Set<String> globalCertPool) throws Exception {
+            String targetJobName, int similarPasserCount, Set<String> globalCertPool, List<String[]> jobPasserCertRows) throws Exception {
 
         // DB 활동을 UUID → Activity Map으로 변환 (빠른 검증용)
         Map<UUID, Activity> activityMap = new HashMap<>();
@@ -269,7 +273,7 @@ public class RecommendationService {
 
         if (geminiResult.getActivities() == null || geminiResult.getActivities().isEmpty()) return null;
 
-        MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers, globalCertPool);
+        MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers, globalCertPool, jobPasserCertRows);
         boolean sampleComparisonData = containsSampleOrUnclassifiedData(similarPassers);
 
         List<ActivityRecommendation> result = new ArrayList<>();

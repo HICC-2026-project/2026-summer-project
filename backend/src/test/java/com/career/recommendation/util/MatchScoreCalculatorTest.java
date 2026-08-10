@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -19,9 +20,18 @@ class MatchScoreCalculatorTest {
 
     private final MatchScoreCalculator calculator = new MatchScoreCalculator();
 
-    /** 대부분의 테스트는 2층(합격자 DB 실관측) 인식이 필요 없어 빈 풀로 충분하다. */
+    /**
+     * 대부분의 테스트는 2층(합격자 DB 실관측) 인식이 필요 없어 빈 풀로 충분하다.
+     * 직무 자격증 행도 비워 두면 기존 큐레이션 표(CERT_WEIGHTS)로 폴백하므로,
+     * v6 이전에 작성된 테스트의 기대값이 그대로 유지된다.
+     */
     private MatchScoreResult calc(UserSpec user, List<PasserData> passers) {
-        return calculator.calculate(user, passers, Set.of());
+        return calculator.calculate(user, passers, Set.of(), List.of());
+    }
+
+    /** 직무별 가중치를 검증할 때 쓰는 오버로드. jobRows는 해당 직무 합격자 1인 1행. */
+    private MatchScoreResult calc(UserSpec user, List<PasserData> passers, List<String[]> jobRows) {
+        return calculator.calculate(user, passers, Set.of(), jobRows);
     }
 
     @Test
@@ -316,9 +326,9 @@ class MatchScoreCalculatorTest {
         UserSpec userWithRareCert = userSpec("3.80", "4.50", "IH", 900, new String[]{"레어자격증"});
 
         MatchScoreResult withPoolContainingIt = calculator.calculate(
-                userWithRareCert, List.of(passerWithoutRareCert), Set.of("레어자격증"));
+                userWithRareCert, List.of(passerWithoutRareCert), Set.of("레어자격증"), List.of());
         MatchScoreResult withPoolNotContainingIt = calculator.calculate(
-                userWithRareCert, List.of(passerWithoutRareCert), Set.of());
+                userWithRareCert, List.of(passerWithoutRareCert), Set.of(), List.of());
 
         assertThat(withPoolContainingIt.getTotalScore()).isGreaterThan(withPoolNotContainingIt.getTotalScore());
         assertThat(withPoolContainingIt.getUnrecognizedCertifications()).isEmpty();
@@ -335,13 +345,13 @@ class MatchScoreCalculatorTest {
         PasserData poolA = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
         PasserData poolB = passer("3.80", "4.50", "IH", 900, new String[]{"SQLD"}, 1);
 
-        int scoreA = calculator.calculate(user, List.of(poolA), pool).getTotalScore();
-        int scoreB = calculator.calculate(user, List.of(poolB), pool).getTotalScore();
+        int scoreA = calculator.calculate(user, List.of(poolA), pool, List.of()).getTotalScore();
+        int scoreB = calculator.calculate(user, List.of(poolB), pool, List.of()).getTotalScore();
 
         // 비교 대상 자체가 다르므로(정보처리기사 2.0 vs SQLD 1.5) 총점은 다를 수 있지만,
         // '레어자격증'이 미인식으로 떨어지는 일은 없어야 한다.
-        assertThat(calculator.calculate(user, List.of(poolA), pool).getUnrecognizedCertifications()).isEmpty();
-        assertThat(calculator.calculate(user, List.of(poolB), pool).getUnrecognizedCertifications()).isEmpty();
+        assertThat(calculator.calculate(user, List.of(poolA), pool, List.of()).getUnrecognizedCertifications()).isEmpty();
+        assertThat(calculator.calculate(user, List.of(poolB), pool, List.of()).getUnrecognizedCertifications()).isEmpty();
     }
 
     // --- 2번: myVal·avgVal은 "입력 개수"가 아니라 "인식된 개수" ---
@@ -410,7 +420,7 @@ class MatchScoreCalculatorTest {
         // 우리가 못 알아봤다"는 사실만큼은 알려줄 수 있어야 한다.
         UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"완전정크자격증"});
 
-        MatchScoreResult result = calculator.calculate(user, List.of(), Set.of());
+        MatchScoreResult result = calculator.calculate(user, List.of(), Set.of(), List.of());
 
         assertThat(result.getTotalScore()).isZero();
         assertThat(result.getUnrecognizedCertifications()).containsExactly("완전정크자격증");
@@ -420,10 +430,116 @@ class MatchScoreCalculatorTest {
     void 유사_합격자가_0명이면_인식된_자격증에_대해선_미인식_목록이_비어있다() {
         UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"});
 
-        MatchScoreResult result = calculator.calculate(user, List.of(), Set.of());
+        MatchScoreResult result = calculator.calculate(user, List.of(), Set.of(), List.of());
 
         assertThat(result.getTotalScore()).isZero(); // 비교 대상이 없어 총점은 0
         assertThat(result.getUnrecognizedCertifications()).isEmpty(); // 하지만 인식은 됨
+    }
+
+    // --- 직무별 자격증 가중치 (v6) ---
+
+    /** 보유율 r인 자격증의 기대 가중치. 계산식과 같은 상수를 쓴다(0.5 + 2.0 × r). */
+    private double expectedJobWeight(double holderRate) {
+        return 0.5 + 2.0 * holderRate;
+    }
+
+    @Test
+    void 자격증_가중치는_직무_합격자_보유율에서_유도된다() {
+        // 합격자 4명 중 웹디자인기능사 3명(75%), SQLD 1명(25%).
+        // 큐레이션 표에서는 웹디자인기능사(0.5) < SQLD(1.5)지만,
+        // 이 직무에서는 보유율이 뒤집혀 있으므로 가중치도 뒤집혀야 한다.
+        List<String[]> jobRows = List.of(
+                new String[]{"웹디자인기능사"},
+                new String[]{"웹디자인기능사"},
+                new String[]{"웹디자인기능사", "SQLD"},
+                new String[]{});
+
+        UserSpec webUser = userSpec("3.80", "4.50", "IH", 900, new String[]{"웹디자인기능사"});
+        UserSpec sqldUser = userSpec("3.80", "4.50", "IH", 900, new String[]{"SQLD"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"웹디자인기능사"}, 1);
+
+        int webScore = calc(webUser, List.of(passer), jobRows).getTotalScore();
+        int sqldScore = calc(sqldUser, List.of(passer), jobRows).getTotalScore();
+
+        assertThat(webScore).isGreaterThan(sqldScore);
+        assertThat(expectedJobWeight(0.75)).isEqualTo(2.0);   // 웹디자인기능사
+        assertThat(expectedJobWeight(0.25)).isEqualTo(1.0);   // SQLD
+    }
+
+    @Test
+    void 자격증이_없는_합격자도_보유율_분모에_포함된다() {
+        // 자격증을 가진 사람만 분모로 쓰면 보유율이 부풀려진다.
+        // 4명 중 1명 보유 = 25%여야 하고, "자격증 보유자 1명 중 1명 = 100%"가 되면 안 된다.
+        // List.of()는 null 원소를 거부하므로(자격증 없는 합격자 행을 null로 표현하려면)
+        // Arrays.asList를 쓴다.
+        List<String[]> jobRows = Arrays.asList(
+                new String[]{"SQLD"}, null, new String[]{}, null);
+
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"SQLD"});
+        // 합격자도 같은 자격증 하나만 갖게 해 사용자/합격자 가중치가 동일해지도록 한다.
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"SQLD"}, 1);
+
+        CompareRowDto certRow = calc(user, List.of(passer), jobRows).getCompareRows().get(2);
+
+        // 보유율 25% → 가중치 1.0 → 막대는 1.0 / CERT_SCALE_MAX(4.5) = 22%
+        // 보유율을 100%로 잘못 계산하면 가중치 2.5 → 56%가 되어 이 단언이 깨진다.
+        assertThat(certRow.getMyPct()).isEqualTo(22);
+    }
+
+    @Test
+    void 직무_데이터가_없으면_기존_큐레이션_표로_폴백한다() {
+        // 정보처리기사는 표에서 2.0. 막대는 2.0 / 4.5 = 44%.
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+
+        CompareRowDto certRow = calc(user, List.of(passer), List.of()).getCompareRows().get(2);
+
+        assertThat(certRow.getMyPct()).isEqualTo(44);
+    }
+
+    @Test
+    void 그_직무_합격자가_아무도_안_가진_자격증도_인식되면_하한_가중치를_받는다() {
+        // SQLD는 이 직무 합격자 보유율 0%지만 실재하는 자격증이므로 0점이 아니라 하한(0.5)이다.
+        // 0점은 "우리가 알아보지 못한 입력"에만 주는 값이라는 v3 불변식을 지켜야 한다.
+        List<String[]> jobRows = List.of(new String[]{"정보처리기사"}, new String[]{"정보처리기사"});
+
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"SQLD"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+
+        MatchScoreResult result = calc(user, List.of(passer), jobRows);
+
+        // 0.5 / 4.5 = 11%. 미인식으로 처리됐다면 0%가 된다.
+        assertThat(result.getCompareRows().get(2).getMyPct()).isEqualTo(11);
+        assertThat(result.getUnrecognizedCertifications()).isEmpty();
+    }
+
+    @Test
+    void 직무_가중치가_있어도_미인식_자격증은_여전히_0점이다() {
+        // v3부터 지켜온 핵심 불변식. 직무 가중치 도입으로 깨지면 안 된다.
+        List<String[]> jobRows = List.of(new String[]{"정보처리기사"}, new String[]{"SQLD"});
+
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"완전정크자격증123"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+
+        MatchScoreResult result = calc(user, List.of(passer), jobRows);
+
+        assertThat(result.getCompareRows().get(2).getMyPct()).isZero();
+        assertThat(result.getUnrecognizedCertifications()).containsExactly("완전정크자격증123");
+    }
+
+    @Test
+    void 같은_자격증도_직무가_다르면_다른_가중치를_받는다() {
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"SQLD"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+
+        List<String[]> sqldHeavyJob = List.of(new String[]{"SQLD"}, new String[]{"SQLD"});      // 100%
+        List<String[]> sqldLightJob = List.of(new String[]{"SQLD"}, new String[]{"정보처리기사"}); // 50%
+
+        int heavy = calc(user, List.of(passer), sqldHeavyJob).getCompareRows().get(2).getMyPct();
+        int light = calc(user, List.of(passer), sqldLightJob).getCompareRows().get(2).getMyPct();
+
+        assertThat(heavy).isEqualTo(56); // 2.5 / 4.5
+        assertThat(light).isEqualTo(33); // 1.5 / 4.5
     }
 
     // --- 학점 바닥값 (v5) ---

@@ -45,8 +45,22 @@ public class MatchScoreCalculator {
      *    버전을 올리지 않으면 기존 유저는 계속 옛 막대(합격자 항상 67%)를 보게 된다.
      * 5: 학점 점수에 바닥값(GPA_FLOOR_RATIO)을 도입. 학점 축만 하위 구간을 쓰지 않아
      *    명목 가중치(40%)보다 실제 영향력이 작았던 문제를 바로잡는다.
+     * 6: 자격증 가중치를 목표 직무 합격자의 보유율에서 유도(JOB_WEIGHT_MIN~MAX 보간).
+     *    난이도에 대한 임의 판단 대신 "그 직무 합격자가 실제로 갖고 있는 비율"을 쓴다.
+     *    직무 데이터가 없으면 기존 큐레이션 표(CERT_WEIGHTS)로 폴백한다.
      */
-    public static final int CURRENT_SCORE_FORMULA_VERSION = 5;
+    public static final int CURRENT_SCORE_FORMULA_VERSION = 6;
+
+    /**
+     * 직무별 자격증 가중치의 하한·상한. 해당 직무 합격자의 보유율 0~100%를 이 구간으로 편다.
+     *   가중치 = JOB_WEIGHT_MIN + (JOB_WEIGHT_MAX - JOB_WEIGHT_MIN) × 보유율
+     *
+     * 하한을 0이 아니라 0.5로 두는 이유: 보유율 0%라도 "인식된 자격증"이면 0점이 되어선 안 된다.
+     * 0점은 v3부터 "우리가 알아보지 못한 입력"에만 주는 값이고, 그 구분이 무너지면
+     * 정크 입력과 실재하는 자격증이 같은 취급을 받는다.
+     */
+    private static final double JOB_WEIGHT_MIN = 0.5;
+    private static final double JOB_WEIGHT_MAX = 2.5;
 
     /**
      * 학점 점수의 바닥값(정규화 학점 비율). 이 값 이하는 학점 항목에서 0점으로 본다.
@@ -162,6 +176,12 @@ public class MatchScoreCalculator {
     );
 
     /**
+     * 자격증 가중치 판정에 필요한 문맥. "인식되는가"(observedCerts)와 "이 직무에서 얼마나
+     * 중요한가"(jobWeights)는 서로 다른 질문이라 분리해서 들고 다닌다.
+     */
+    private record CertContext(Set<String> observedCerts, Map<String, Double> jobWeights) {}
+
+    /**
      * 유저 스펙과 합격자 케이스 목록을 비교하여 총점과 상세 내역(CompareRow)을 포함한 결과를 반환한다.
      *
      * @param globalCertPool 2층 인식에 쓸 자격증 원본 문자열 전체(직무·유사도 무관, DB 전체 스캔 결과).
@@ -169,9 +189,16 @@ public class MatchScoreCalculator {
      *                       Top N은 스펙을 살짝만 고쳐도, 합격자 데이터가 추가되기만 해도 바뀌는 값이라
      *                       그걸 인식 기준으로 쓰면 같은 자격증이 요청마다 인식됐다 안 됐다 흔들린다.
      *                       "이 자격증이 실재하는가"는 유사도와 무관한 질문이라 항상 같은 값이어야 한다.
+     * @param jobPasserCertRows 목표 직무 합격자 <b>전원</b>의 자격증 배열(1인 1행, 자격증이 없으면 null 행).
+     *                          가중치를 여기서 유도한다. globalCertPool과 같은 이유로 비교 대상 Top N이
+     *                          아니라 해당 직무 전체를 넣어야 한다 — Top N에서 뽑으면 스펙을 조금만
+     *                          고쳐도 가중치가 흔들려 점수가 요동친다. 비어 있으면 CERT_WEIGHTS로 폴백.
      */
-    public MatchScoreResult calculate(UserSpec userSpec, List<PasserData> passerList, Set<String> globalCertPool) {
-        Set<String> observedCerts = collectObservedCerts(globalCertPool);
+    public MatchScoreResult calculate(UserSpec userSpec, List<PasserData> passerList,
+                                      Set<String> globalCertPool, List<String[]> jobPasserCertRows) {
+        CertContext certContext = new CertContext(
+                collectObservedCerts(globalCertPool),
+                buildJobCertWeights(jobPasserCertRows));
 
         if (userSpec == null) {
             return MatchScoreResult.builder()
@@ -183,7 +210,7 @@ public class MatchScoreCalculator {
 
         // 미인식 자격증 고지는 유사 합격자 유무와 무관한 정보다 — 합격자가 0명이라 총점을
         // 못 내는 상황에서도 "이 자격증은 우리가 못 알아봤다"는 사실 자체는 알려줄 수 있다.
-        List<String> unrecognized = unrecognizedCertifications(userSpec.getCertifications(), observedCerts);
+        List<String> unrecognized = unrecognizedCertifications(userSpec.getCertifications(), certContext);
 
         if (passerList == null || passerList.isEmpty()) {
             return MatchScoreResult.builder()
@@ -194,11 +221,11 @@ public class MatchScoreCalculator {
         }
 
         double totalScore = passerList.stream()
-                .mapToDouble(passer -> calculateSingle(userSpec, passer, observedCerts))
+                .mapToDouble(passer -> calculateSingle(userSpec, passer, certContext))
                 .average()
                 .orElse(0.0);
 
-        List<CompareRowDto> rows = calculateDetails(userSpec, passerList, observedCerts);
+        List<CompareRowDto> rows = calculateDetails(userSpec, passerList, certContext);
 
         return MatchScoreResult.builder()
                 .totalScore((int) Math.round(totalScore))
@@ -216,21 +243,21 @@ public class MatchScoreCalculator {
                 .collect(Collectors.toSet());
     }
 
-    private double calculateSingle(UserSpec userSpec, PasserData passer, Set<String> observedCerts) {
+    private double calculateSingle(UserSpec userSpec, PasserData passer, CertContext certContext) {
         if (passer == null) return 0.0;
 
         double gpaScore  = scoreGpa(
                 userSpec.getGpa(), userSpec.getGpaMax(),
                 passer.getGpa(), passer.getGpaMax());
         double langScore = scoreLang(userSpec.getLanguageScores(), passer.getLanguageScores());
-        double certScore = scoreCert(userSpec.getCertifications(), passer.getCertifications(), observedCerts);
+        double certScore = scoreCert(userSpec.getCertifications(), passer.getCertifications(), certContext);
 
         return gpaScore  * WEIGHT_GPA
              + langScore * WEIGHT_LANG
              + certScore * WEIGHT_CERT;
     }
 
-    private List<CompareRowDto> calculateDetails(UserSpec userSpec, List<PasserData> passerList, Set<String> observedCerts) {
+    private List<CompareRowDto> calculateDetails(UserSpec userSpec, List<PasserData> passerList, CertContext certContext) {
         // --- 1. 학점 (GPA) ---
         // 학점 데이터가 없는 합격자는 평균 계산에서 제외한다 — 포함시키면 0으로 잡혀 평균이
         // 실제보다 크게 낮아진다. scoreGpa()가 합격자 학점 결측을 "비교 불가(감점 없음)"로
@@ -276,15 +303,15 @@ public class MatchScoreCalculator {
         // 입력 개수를 그대로 보여주면, 정크 5개를 넣었을 때 "5개"라고 뜨면서 동시에
         // 막대·상태는 0에 가깝게 나와 화면 안에서 숫자끼리 모순돼 보인다.
         // (실제로 뭘 놓쳤는지는 unrecognizedCertifications 배너가 별도로 알려준다.)
-        int userCertCount = countRecognized(userSpec.getCertifications(), observedCerts);
+        int userCertCount = countRecognized(userSpec.getCertifications(), certContext);
         double avgPasserCertCount = passerList.stream()
-                .mapToDouble(p -> countRecognized(p.getCertifications(), observedCerts))
+                .mapToDouble(p -> countRecognized(p.getCertifications(), certContext))
                 .average()
                 .orElse(0.0);
 
-        double userCertValue = certValue(userSpec.getCertifications(), observedCerts);
+        double userCertValue = certValue(userSpec.getCertifications(), certContext);
         double avgPasserCertValue = passerList.stream()
-                .mapToDouble(p -> certValue(p.getCertifications(), observedCerts))
+                .mapToDouble(p -> certValue(p.getCertifications(), certContext))
                 .average()
                 .orElse(0.0);
 
@@ -430,13 +457,13 @@ public class MatchScoreCalculator {
      * 이 방향은 사용자가 합격자보다 훨씬 많은 자격증을 갖고 있어도
      * 합격자가 안 가진 자격증이면 전혀 반영되지 않는 문제가 있었다.
      */
-    private double scoreCert(String[] userCerts, String[] passerCerts, Set<String> observedCerts) {
-        double passerValue = certValue(passerCerts, observedCerts);
+    private double scoreCert(String[] userCerts, String[] passerCerts, CertContext certContext) {
+        double passerValue = certValue(passerCerts, certContext);
         // 합격자 쪽에 자격증이 없으면 이 항목은 변별력이 없다 → 감점하지 않는다
         // (scoreGpa·scoreLang에서 합격자 데이터가 없을 때 100점을 주는 것과 같은 원칙).
         if (passerValue <= 0) return 100.0;
 
-        double userValue = certValue(userCerts, observedCerts);
+        double userValue = certValue(userCerts, certContext);
         if (userValue <= 0) return 0.0;
 
         return Math.min(100.0, (userValue / passerValue) * 100.0);
@@ -450,44 +477,94 @@ public class MatchScoreCalculator {
      * (상한을 둬도 크기만 줄 뿐 방향은 못 바꾼다). v3는 원칙을 바꿨다 — 인식되지 않은 입력은
      * 기여가 정확히 0이다. weightOf()가 그 판정을 담당한다.
      */
-    private double certValue(String[] certs, Set<String> observedCerts) {
+    private double certValue(String[] certs, CertContext certContext) {
         if (certs == null) return 0.0;
 
         return Arrays.stream(certs)
                 .map(this::canonicalCert)
                 .filter(value -> !value.isBlank())
                 .distinct()
-                .mapToDouble(value -> weightOf(value, observedCerts))
+                .mapToDouble(value -> weightOf(value, certContext))
                 .sum();
     }
 
     /** 정규화 후 중복 제거된 자격증 중 실제로 인식된(가중치 > 0) 것의 개수. 화면 myVal·avgVal 표시용. */
-    private int countRecognized(String[] certs, Set<String> observedCerts) {
+    private int countRecognized(String[] certs, CertContext certContext) {
         if (certs == null) return 0;
 
         return (int) Arrays.stream(certs)
                 .map(this::canonicalCert)
                 .filter(value -> !value.isBlank())
                 .distinct()
-                .filter(value -> weightOf(value, observedCerts) > 0)
+                .filter(value -> weightOf(value, certContext) > 0)
                 .count();
     }
 
     /**
-     * 정규화된 자격증 표기 하나의 가중치를 3층으로 판정한다.
-     *   1층 CERT_WEIGHTS   — 큐레이션 표, 자격증별 차등 가중치
-     *   2층 observedCerts  — 합격자 DB에 실제로 등장(런타임 관측), RECOGNIZED_DEFAULT_WEIGHT
-     *   3층 NATIONAL_TECH_CERTIFICATIONS — 국가기술자격 공식 종목명, RECOGNIZED_DEFAULT_WEIGHT
-     * 세 층 어디에도 없으면 0 — 미인식 입력은 점수에 전혀 기여하지 않는다.
+     * 목표 직무 합격자의 보유율에서 자격증별 가중치를 유도한다.
+     *
+     * 난이도에 대한 임의 판단(예전 CERT_WEIGHTS의 2.0/1.5/1.0/0.5) 대신
+     * "그 직무 합격자 중 몇 %가 이 자격증을 갖고 있는가"를 쓴다. 점수의 정의가
+     * "합격자 대비 준비도"이므로, 자격증의 난이도보다 그 직무에서의 실제 출현율이
+     * 준비도 신호로 맞다. 실데이터가 쌓이면 코드 수정 없이 정확해지는 것도 장점이다.
+     *
+     * 분모는 "자격증을 가진 합격자 수"가 아니라 <b>해당 직무 합격자 전원</b>이다.
+     * 자격증이 하나도 없는 합격자도 "그 자격증이 필수는 아니다"라는 정보를 담고 있어
+     * 분모에서 빼면 보유율이 실제보다 부풀려진다.
+     *
+     * @param jobPasserCertRows 1인 1행. 자격증이 없는 합격자는 null 또는 빈 배열 행으로 들어온다.
      */
-    private double weightOf(String canonicalCert, Set<String> observedCerts) {
-        if (CERT_WEIGHTS.containsKey(canonicalCert)) {
-            return CERT_WEIGHTS.get(canonicalCert);
+    private Map<String, Double> buildJobCertWeights(List<String[]> jobPasserCertRows) {
+        if (jobPasserCertRows == null || jobPasserCertRows.isEmpty()) {
+            return Map.of();
         }
-        if (NATIONAL_TECH_CERTIFICATIONS.contains(canonicalCert) || observedCerts.contains(canonicalCert)) {
-            return RECOGNIZED_DEFAULT_WEIGHT;
+
+        int totalPassers = jobPasserCertRows.size();
+        Map<String, Integer> holderCounts = new LinkedHashMap<>();
+        for (String[] row : jobPasserCertRows) {
+            if (row == null) continue;
+            // 한 사람이 같은 자격증을 중복 표기해도 1명으로 센다.
+            Arrays.stream(row)
+                    .map(this::canonicalCert)
+                    .filter(value -> !value.isBlank())
+                    .distinct()
+                    .forEach(value -> holderCounts.merge(value, 1, Integer::sum));
         }
-        return 0.0;
+
+        Map<String, Double> weights = new LinkedHashMap<>();
+        holderCounts.forEach((cert, holders) -> {
+            double holderRate = (double) holders / totalPassers;
+            weights.put(cert, JOB_WEIGHT_MIN + (JOB_WEIGHT_MAX - JOB_WEIGHT_MIN) * holderRate);
+        });
+        return weights;
+    }
+
+    /**
+     * 정규화된 자격증 표기 하나의 가중치를 판정한다.
+     *
+     * 인식 여부(3층)와 가중치는 분리된 질문이다.
+     *   인식 — 1층 CERT_WEIGHTS / 2층 observedCerts(합격자 DB 실관측) / 3층 국가기술자격 종목명.
+     *          세 층 어디에도 없으면 0이다. v3부터 지켜온 "미인식 입력은 정확히 0" 원칙이라,
+     *          정크 입력이 실재하는 자격증과 같은 취급을 받지 않게 하는 핵심 불변식이다.
+     *   가중치 — 목표 직무 합격자의 보유율에서 유도(jobWeights). 직무 데이터가 없으면
+     *          기존 큐레이션 표로 폴백한다.
+     */
+    private double weightOf(String canonicalCert, CertContext certContext) {
+        boolean recognized = CERT_WEIGHTS.containsKey(canonicalCert)
+                || NATIONAL_TECH_CERTIFICATIONS.contains(canonicalCert)
+                || certContext.observedCerts().contains(canonicalCert);
+        if (!recognized) {
+            return 0.0;
+        }
+
+        Map<String, Double> jobWeights = certContext.jobWeights();
+        if (!jobWeights.isEmpty()) {
+            // 그 직무 합격자 중 아무도 갖고 있지 않은 자격증도 "인식은 되므로" 하한을 받는다.
+            return jobWeights.getOrDefault(canonicalCert, JOB_WEIGHT_MIN);
+        }
+
+        // 직무 미설정이거나 해당 직무에 합격자 데이터가 없을 때의 폴백.
+        return CERT_WEIGHTS.getOrDefault(canonicalCert, RECOGNIZED_DEFAULT_WEIGHT);
     }
 
     /**
@@ -495,7 +572,7 @@ public class MatchScoreCalculator {
      * 화면에 고지해 사용자가 오타·특이 표기를 스스로 고칠 수 있게 하기 위함이다 — 조용히
      * 버리기만 하면 "왜 이건 반영 안 됐지?"에 코드를 보지 않고는 답할 수 없다.
      */
-    private List<String> unrecognizedCertifications(String[] userCerts, Set<String> observedCerts) {
+    private List<String> unrecognizedCertifications(String[] userCerts, CertContext certContext) {
         if (userCerts == null) return List.of();
 
         // 정규화하면 같아지는 표기(공백·괄호 차이 등)를 원본 문자열 기준으로만 distinct하면
@@ -505,7 +582,7 @@ public class MatchScoreCalculator {
         for (String raw : userCerts) {
             if (raw == null || raw.isBlank()) continue;
             String canonical = canonicalCert(raw);
-            if (canonical.isBlank() || weightOf(canonical, observedCerts) > 0) continue;
+            if (canonical.isBlank() || weightOf(canonical, certContext) > 0) continue;
             firstRawByCanonical.putIfAbsent(canonical, raw);
         }
         return List.copyOf(firstRawByCanonical.values());

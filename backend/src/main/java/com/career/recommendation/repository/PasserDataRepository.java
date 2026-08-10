@@ -93,4 +93,23 @@ public interface PasserDataRepository extends JpaRepository<PasserData, UUID> {
               AND p.certifications IS NOT NULL
             """)
     List<String[]> findAllVerifiedCertificationArrays();
+
+    /**
+     * 특정 직무 합격자 <b>전원</b>의 자격증 배열을 1인 1행으로 조회한다.
+     * MatchScoreCalculator가 자격증 가중치를 이 직무의 보유율에서 유도하는 데 쓴다.
+     *
+     * 위 findAllVerifiedCertificationArrays와 달리 certifications IS NOT NULL 조건을 걸지 않는다 —
+     * 자격증이 하나도 없는 합격자도 보유율의 분모에 들어가야 한다. 빼버리면 "자격증을 가진
+     * 사람들 중에서의 비율"이 되어 보유율이 실제보다 부풀려진다.
+     *
+     * 비교 대상 Top N이 아니라 해당 직무 전체를 보는 이유는 globalCertPool과 같다 —
+     * Top N에서 뽑으면 유저가 스펙을 조금만 고쳐도 가중치가 흔들려 점수가 요동친다.
+     */
+    @Query("""
+            SELECT p.certifications
+            FROM PasserData p
+            WHERE (p.isVerified = true OR p.dataOrigin = 'DEMO')
+              AND p.jobType = :jobType
+            """)
+    List<String[]> findCertificationArraysByJobType(@Param("jobType") String jobType);
 }

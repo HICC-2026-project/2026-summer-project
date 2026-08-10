@@ -4,7 +4,6 @@ import com.career.recommendation.dto.recommendation.MatchScoreResult;
 import com.career.recommendation.dto.recommendation.RecommendationResponse;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.repository.ActivityRepository;
-import com.career.recommendation.repository.PasserDataRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
@@ -21,6 +20,7 @@ import org.springframework.security.core.Authentication;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,7 +47,7 @@ class RecommendationServiceFallbackTest {
     @Mock private RecommendationRepository recommendationRepository;
     @Mock private RecommendationCacheService recommendationCacheService;
     @Mock private ActivityRepository activityRepository;
-    @Mock private PasserDataRepository passerDataRepository;
+    @Mock private GlobalCertPoolService globalCertPoolService;
     @Mock private SimilarSpecFinder similarSpecFinder;
     @Mock private MatchScoreCalculator matchScoreCalculator;
     @Mock private GeminiService geminiService;
@@ -79,12 +79,13 @@ class RecommendationServiceFallbackTest {
         when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
         when(promptDataBuilder.buildSimilarCasesText(any())).thenReturn("");
 
-        when(passerDataRepository.findAllVerifiedCertificationArrays()).thenReturn(List.of());
+        when(globalCertPoolService.getGlobalCertPool()).thenReturn(Set.of());
+        when(globalCertPoolService.getJobPasserCertRows(any())).thenReturn(List.of());
 
         when(geminiService.generateRecommendation(any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("Gemini 장애 시뮬레이션"));
 
-        when(matchScoreCalculator.calculate(any(), any(), any())).thenReturn(matchResult);
+        when(matchScoreCalculator.calculate(any(), any(), any(), any())).thenReturn(matchResult);
     }
 
     @Test
