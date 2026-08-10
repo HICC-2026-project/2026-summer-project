@@ -284,7 +284,7 @@ public class RoadmapService {
                                 .matchedActivities(step3Matched)
                                 .build()
                 ))
-                .isAiRoadmap(false)
+                .aiRoadmap(false)
                 .build();
     }
 
