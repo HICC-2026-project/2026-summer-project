@@ -436,10 +436,6 @@ export function SpecRoadApp() {
             recommendations={isDemo ? RECOMMENDATIONS : recommendations}
             recMeta={isDemo ? null : recMeta}
             onClose={() => setDetailId(null)}
-            onCompare={() => {
-              setDetailId(null);
-              setTab("compare");
-            }}
           />
         )}
       </div>

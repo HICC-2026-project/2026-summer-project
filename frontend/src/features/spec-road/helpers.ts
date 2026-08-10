@@ -116,6 +116,7 @@ export function toRecommendationMeta(res: RecommendationsResponse): Recommendati
     similarPasserCount: res.similarPasserCount,
     compareRows: res.compareRows,
     sampleComparisonData: res.sampleComparisonData ?? false,
+    unrecognizedCertifications: res.unrecognizedCertifications,
   };
 }
 

@@ -15,6 +15,7 @@ export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
   const passerCount = isDemo ? PASSER_COUNT : (recMeta?.similarPasserCount ?? 0);
   const matchScore = isDemo ? COMPARE_SCORE : (recMeta?.matchScore ?? 0);
   const compareRows = isDemo ? COMPARE_ROWS : (recMeta?.compareRows ?? []);
+  const unrecognizedCerts = isDemo ? [] : (recMeta?.unrecognizedCertifications ?? []);
   
   // 데이터 로딩 중 (비로그인 아님 & API 아직 안 옴)
   if (!isDemo && !recMeta) {
@@ -209,6 +210,26 @@ export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
           );
         })}
       </div>
+
+      {unrecognizedCerts.length > 0 && (
+        <div
+          style={{
+            marginTop: 14,
+            padding: "12px 15px",
+            border: "1px solid #EAE6F5",
+            borderRadius: 14,
+            background: "#F8F6FE",
+            color: "#5B5566",
+            fontSize: 12.5,
+            lineHeight: 1.6,
+          }}
+        >
+          <b style={{ color: "#15141B" }}>인식하지 못한 자격증이 있어요: </b>
+          {unrecognizedCerts.join(", ")}
+          <br />
+          정확한 명칭으로 다시 입력하면 점수에 반영돼요.
+        </div>
+      )}
     </div>
   );
 }

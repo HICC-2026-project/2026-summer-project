@@ -119,6 +119,7 @@ export interface RecommendationsResponse {
   comparisonMessage: string;
   aiRecommendation?: boolean;
   isAiRecommendation?: boolean;
+  unrecognizedCertifications?: string[];
 }
 
 // 추천 목록과 함께 화면 상단에 표시할 요약 정보(응답 최상단 필드에서 추출).
@@ -130,6 +131,7 @@ export interface RecommendationMeta {
   similarPasserCount?: number;
   compareRows?: CompareRow[];
   sampleComparisonData: boolean;
+  unrecognizedCertifications?: string[];
 }
 
 // 화면에서 쓰는 로드맵 단계 모델.

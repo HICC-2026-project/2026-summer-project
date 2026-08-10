@@ -11,10 +11,9 @@ interface DetailSheetProps {
   recommendations: Recommendation[];
   recMeta: RecommendationMeta | null;
   onClose: () => void;
-  onCompare: () => void;
 }
 
-export function DetailSheet({ recommendationId, recommendations, recMeta, onClose, onCompare }: DetailSheetProps) {
+export function DetailSheet({ recommendationId, recommendations, recMeta, onClose }: DetailSheetProps) {
   const rec = recommendations.find((r) => r.id === recommendationId);
 
   // 추천 응답에는 지원 링크·주최·태그가 없어, 활동 상세를 따로 불러와 채운다.
@@ -190,13 +189,6 @@ export function DetailSheet({ recommendationId, recommendations, recMeta, onClos
           )}
         </div>
         <div style={{ padding: "12px 24px calc(20px + env(safe-area-inset-bottom))", borderTop: "1px solid #F1F0F6", display: "flex", gap: 10, flexShrink: 0 }}>
-          <button
-            type="button"
-            onClick={onCompare}
-            style={{ flex: 1, height: 54, border: "1px solid #E1E0EA", borderRadius: 16, background: "#fff", color: "#15141B", fontSize: 15, fontWeight: 700, cursor: "pointer" }}
-          >
-            합격자 비교
-          </button>
           {/* 지원 링크는 활동 상세에 있을 때만 노출한다. */}
           {applyUrl && (
             <a
