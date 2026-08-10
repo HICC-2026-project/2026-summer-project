@@ -85,7 +85,9 @@ public class RecommendationService {
             boolean isSpecChanged = isSpecModifiedSince(userSpec, targetJob, cached.getCreatedAt());
             boolean hasUsableActivities = hasUsableCachedActivities(cachedResponse, today);
             boolean isLegacyCache = cachedResponse == null
-                    || cachedResponse.getSampleComparisonData() == null;
+                    || cachedResponse.getSampleComparisonData() == null
+                    || cachedResponse.getScoreFormulaVersion() == null
+                    || cachedResponse.getScoreFormulaVersion() < MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION;
 
             if (isLegacyCache) {
                 needsNewAiCall = true; // 출처 표시 필드가 없는 구버전 캐시는 한 번 재생성
@@ -224,6 +226,7 @@ public class RecommendationService {
                 .comparisonMessage(comparisonMessage)
                 .isAiRecommendation(false)
                 .sampleComparisonData(sampleComparisonData)
+                .scoreFormulaVersion(MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION)
                 .build();
     }
 
@@ -285,6 +288,7 @@ public class RecommendationService {
                 .comparisonMessage(comparisonMessage)
                 .isAiRecommendation(true)
                 .sampleComparisonData(sampleComparisonData)
+                .scoreFormulaVersion(MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION)
                 .build();
     }
 

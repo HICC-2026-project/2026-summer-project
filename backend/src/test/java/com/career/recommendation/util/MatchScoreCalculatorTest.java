@@ -4,6 +4,8 @@ import com.career.recommendation.entity.PasserData;
 import com.career.recommendation.entity.UserSpec;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -93,6 +95,88 @@ class MatchScoreCalculatorTest {
     @Test
     void 사용자_스펙이_없으면_0점을_반환한다() {
         assertThat(calculator.calculate(null, List.of(PasserData.builder().build())).getTotalScore()).isZero();
+    }
+
+    // --- 자격증 가중치 매칭 (v2) ---
+
+    @Test
+    void 자격증_표기가_달라도_정규화되면_만점을_받는다() {
+        // "정보처리기사 필기"는 canonicalCert를 거치면 "정보처리기사"와 같아져야 한다.
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"정보처리기사 필기"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+
+        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(100);
+    }
+
+    @Test
+    void 자격증_별칭도_표준_표기와_동일하게_매칭된다() {
+        // "SQL개발자"는 CERT_ALIASES를 통해 "SQLD"로 모여야 한다.
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"SQL개발자"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"SQLD"}, 1);
+
+        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(100);
+    }
+
+    @Test
+    void 등록되지_않은_자격증도_기본_가중치로_일부_인정된다() {
+        // 예전엔 완전 일치가 아니면 0점이었다. 표에 없는 자격증도 기본 가중치(0.5)로
+        // 일부는 인정되어야 한다 — 단, 합격자(2.0)보다는 낮은 점수여야 한다.
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"이상한자격증"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+
+        int totalScore = calculator.calculate(user, List.of(passer)).getTotalScore();
+        assertThat(totalScore).isGreaterThan(0);
+        // Cert = 0.5/2.0*100 = 25 → Total = 40 + 33.3 + 25*4/15 ≈ 80
+        assertThat(totalScore).isLessThan(100);
+    }
+
+    @Test
+    void 미등록_자격증을_여러개_적어도_상한_이상은_점수가_오르지_않는다() {
+        // 게이밍 방지: MAX_DEFAULT_WEIGHT_CERTS(2)개를 넘는 미등록 자격증은 더 이상 반영되지 않는다.
+        UserSpec twoJunk = userSpec("3.80", "4.50", "IH", 900, new String[]{"가나다", "라마바"});
+        UserSpec sixJunk = userSpec("3.80", "4.50", "IH", 900,
+                new String[]{"가나다", "라마바", "사아자", "차카타", "파하가", "나다라"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+
+        int scoreWithTwo = calculator.calculate(twoJunk, List.of(passer)).getTotalScore();
+        int scoreWithSix = calculator.calculate(sixJunk, List.of(passer)).getTotalScore();
+
+        assertThat(scoreWithSix).isEqualTo(scoreWithTwo);
+        assertThat(scoreWithSix).isLessThan(100);
+    }
+
+    @Test
+    void 합격자가_자격증이_없으면_사용자_자격증과_무관하게_만점을_받는다() {
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{}, 1);
+
+        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(100);
+    }
+
+    @Test
+    void 운영_DB_자격증_9종은_전부_기본_가중치로_떨어지지_않는다() throws Exception {
+        // CERT_WEIGHTS의 key가 canonicalCert()의 출력과 어긋나면 예외 없이 조용히
+        // DEFAULT_CERT_WEIGHT(0.5)로 떨어진다. 운영 DB 실제 표기 9종이 전부 등록된
+        // 가중치를 받는지 여기서 확인한다 — 이 값이 어긋나면 이 테스트가 먼저 깨져야 한다.
+        String[] productionCerts = {
+                "SQLD", "정보처리기사", "ADsP", "빅데이터분석기사", "AWS SAA",
+                "리눅스마스터 2급", "정보보안기사", "네트워크관리사 2급", "웹디자인기능사"
+        };
+
+        Method canonicalCert = MatchScoreCalculator.class.getDeclaredMethod("canonicalCert", String.class);
+        canonicalCert.setAccessible(true);
+
+        Field weightsField = MatchScoreCalculator.class.getDeclaredField("CERT_WEIGHTS");
+        weightsField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        Map<String, Double> weights = (Map<String, Double>) weightsField.get(null);
+
+        for (String raw : productionCerts) {
+            String canonical = (String) canonicalCert.invoke(calculator, raw);
+            assertThat(weights)
+                    .as("'%s' → '%s' 가 CERT_WEIGHTS에 등록되어 있어야 한다", raw, canonical)
+                    .containsKey(canonical);
+        }
     }
 
     private UserSpec userSpec(String gpa, String gpaMax, String opicGrade,
