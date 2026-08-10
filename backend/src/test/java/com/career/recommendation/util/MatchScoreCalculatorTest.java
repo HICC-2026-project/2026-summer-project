@@ -97,7 +97,7 @@ class MatchScoreCalculatorTest {
         assertThat(calculator.calculate(null, List.of(PasserData.builder().build())).getTotalScore()).isZero();
     }
 
-    // --- 자격증 가중치 매칭 (v2) ---
+    // --- 자격증 가중치 매칭 (v3 — 인식된 자격증만 점수가 된다) ---
 
     @Test
     void 자격증_표기가_달라도_정규화되면_만점을_받는다() {
@@ -129,31 +129,59 @@ class MatchScoreCalculatorTest {
     }
 
     @Test
-    void 등록되지_않은_자격증도_기본_가중치로_일부_인정된다() {
-        // 예전엔 완전 일치가 아니면 0점이었다. 표에 없는 자격증도 기본 가중치(0.5)로
-        // 일부는 인정되어야 한다 — 단, 합격자(2.0)보다는 낮은 점수여야 한다.
-        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"이상한자격증"});
+    void 완전히_미인식된_자격증은_미입력과_점수가_같다() {
+        // v3의 핵심 목표: 세 층(CERT_WEIGHTS·합격자DB·국가기술자격) 어디에도 없는 정크 문자열은
+        // "인정 안 됨"이 아니라 정확히 0으로 처리되어, 미입력과 동률이어야 한다.
+        // (v2까지는 기본 가중치가 0보다 커서, 정크를 아무리 상한 안에서 적어도 미입력보다는
+        // 항상 유리했다 — "정크가 미입력보다 낫다"는 유인을 구조적으로 없애는 게 이번 재설계의 목적.)
+        UserSpec junkCerts = userSpec("3.80", "4.50", "IH", 900,
+                new String[]{"가나다", "라마바", "사아자", "차카타", "파하가"});
+        UserSpec noCerts = userSpec("3.80", "4.50", "IH", 900, new String[]{});
         PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
 
-        int totalScore = calculator.calculate(user, List.of(passer)).getTotalScore();
-        assertThat(totalScore).isGreaterThan(0);
-        // Cert = 0.5/2.0*100 = 25 → Total = 40 + 33.3 + 25*4/15 ≈ 80
-        assertThat(totalScore).isLessThan(100);
+        int scoreWithJunk = calculator.calculate(junkCerts, List.of(passer)).getTotalScore();
+        int scoreWithNone = calculator.calculate(noCerts, List.of(passer)).getTotalScore();
+
+        assertThat(scoreWithJunk).isEqualTo(scoreWithNone);
     }
 
     @Test
-    void 미등록_자격증을_여러개_적어도_상한_이상은_점수가_오르지_않는다() {
-        // 게이밍 방지: MAX_DEFAULT_WEIGHT_CERTS(2)개를 넘는 미등록 자격증은 더 이상 반영되지 않는다.
-        UserSpec twoJunk = userSpec("3.80", "4.50", "IH", 900, new String[]{"가나다", "라마바"});
-        UserSpec sixJunk = userSpec("3.80", "4.50", "IH", 900,
-                new String[]{"가나다", "라마바", "사아자", "차카타", "파하가", "나다라"});
+    void 합격자_DB에_실제_등장한_자격증은_표에_없어도_인식된다() {
+        // 2층: CERT_WEIGHTS에 없는 자격증이라도, 같은 후보 풀의 다른 합격자가 실제로
+        // 보유하고 있으면 "실재가 검증됐다"고 보고 인정한다.
+        PasserData rareCertHolder = passer("3.80", "4.50", "IH", 900, new String[]{"레어자격증"}, 1);
+        PasserData standardHolder = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+        List<PasserData> pool = List.of(rareCertHolder, standardHolder);
+
+        UserSpec withRareCert = userSpec("3.80", "4.50", "IH", 900, new String[]{"레어자격증"});
+        UserSpec withNoCert = userSpec("3.80", "4.50", "IH", 900, new String[]{});
+
+        assertThat(calculator.calculate(withRareCert, pool).getTotalScore())
+                .isGreaterThan(calculator.calculate(withNoCert, pool).getTotalScore());
+    }
+
+    @Test
+    void 국가기술자격_종목은_합격자_DB에_없어도_인식된다() {
+        // 3층: NATIONAL_TECH_CERTIFICATIONS에 있는 공식 종목명은 이번 비교의 합격자 풀에
+        // 그 자격증을 가진 사람이 전혀 없어도 인정되어야 한다.
         PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
 
-        int scoreWithTwo = calculator.calculate(twoJunk, List.of(passer)).getTotalScore();
-        int scoreWithSix = calculator.calculate(sixJunk, List.of(passer)).getTotalScore();
+        UserSpec withNationalCert = userSpec("3.80", "4.50", "IH", 900, new String[]{"정보통신기사"});
+        UserSpec withJunk = userSpec("3.80", "4.50", "IH", 900, new String[]{"아무말이나적음"});
 
-        assertThat(scoreWithSix).isEqualTo(scoreWithTwo);
-        assertThat(scoreWithSix).isLessThan(100);
+        assertThat(calculator.calculate(withNationalCert, List.of(passer)).getTotalScore())
+                .isGreaterThan(calculator.calculate(withJunk, List.of(passer)).getTotalScore());
+    }
+
+    @Test
+    void 미인식_자격증은_원본_표기_그대로_결과에_보고된다() {
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900,
+                new String[]{"정보처리기사", "출처불명자격증"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+
+        List<String> unrecognized = calculator.calculate(user, List.of(passer)).getUnrecognizedCertifications();
+
+        assertThat(unrecognized).containsExactly("출처불명자격증");
     }
 
     @Test
@@ -165,10 +193,11 @@ class MatchScoreCalculatorTest {
     }
 
     @Test
-    void 운영_DB_자격증_9종은_전부_기본_가중치로_떨어지지_않는다() throws Exception {
+    void 운영_DB_자격증_9종은_전부_CERT_WEIGHTS에_정확히_매핑된다() throws Exception {
         // CERT_WEIGHTS의 key가 canonicalCert()의 출력과 어긋나면 예외 없이 조용히
-        // DEFAULT_CERT_WEIGHT(0.5)로 떨어진다. 운영 DB 실제 표기 9종이 전부 등록된
-        // 가중치를 받는지 여기서 확인한다 — 이 값이 어긋나면 이 테스트가 먼저 깨져야 한다.
+        // 미인식(0점) 처리된다(2층·3층에서 우연히 구제되지 않는 한). 운영 DB 실제 표기 9종이
+        // 전부 CERT_WEIGHTS에 정확히 등록되어 있는지 여기서 확인한다 —
+        // 이 값이 어긋나면 이 테스트가 먼저 깨져야 한다.
         String[] productionCerts = {
                 "SQLD", "정보처리기사", "ADsP", "빅데이터분석기사", "AWS SAA",
                 "리눅스마스터 2급", "정보보안기사", "네트워크관리사 2급", "웹디자인기능사"

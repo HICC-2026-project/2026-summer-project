@@ -11,7 +11,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * BE-1 담당 — 유저 스펙과 합격자 데이터를 비교하여 MatchScoreResult를 계산한다.
@@ -31,27 +34,35 @@ public class MatchScoreCalculator {
      * (버전을 안 올리면 배포 후에도 유저마다 옛 공식/새 공식 점수가 뒤섞여 보인다.)
      *
      * 1: 자격증 완전 일치 매칭 (배포 초기 — 자유 텍스트와 궁합이 나빠 대부분 0점)
-     * 2: 자격증 이름 정규화 + 가중치 합산 매칭
+     * 2: 자격증 이름 정규화 + 가중치 합산 매칭, 미등록 자격증은 기본 가중치로 일부 인정(상한 있음)
+     * 3: "인식된 자격증만 점수가 된다"로 재설계. 미등록 자격증의 기본 가중치·상한을 없애고,
+     *    대신 인식 범위를 3단으로 넓혔다(아래 CERT_WEIGHTS·NATIONAL_TECH_CERTIFICATIONS·
+     *    합격자 DB 실관측 자격증). v2는 "정크 자격증 여러 개가 미입력보다 유리해지는" 문제가
+     *    구조적으로 남아 있었다(기본 가중치 > 0인 한 상한으로 크기만 줄일 뿐 방향은 못 바꿈).
      */
-    public static final int CURRENT_SCORE_FORMULA_VERSION = 2;
+    public static final int CURRENT_SCORE_FORMULA_VERSION = 3;
 
-    /** 표에 없는 자격증에 부여하는 기본 가중치. */
-    private static final double DEFAULT_CERT_WEIGHT = 0.5;
-
-    /** 기본 가중치가 붙는 자격증(=CERT_WEIGHTS에 없는 표기)은 최대 이 개수까지만 인정한다(게이밍 방지). */
-    private static final int MAX_DEFAULT_WEIGHT_CERTS = 2;
+    /**
+     * 표(CERT_WEIGHTS)에 없어도 NATIONAL_TECH_CERTIFICATIONS나 합격자 DB에서 실제로 관측된
+     * 자격증에 부여하는 가중치. "존재가 검증된" 자격증에만 적용되므로 CERT_WEIGHTS처럼
+     * 자격증별로 차등을 두지 않고 중간값 하나로 통일한다.
+     */
+    private static final double RECOGNIZED_DEFAULT_WEIGHT = 1.0;
 
     /**
      * 공백·구분기호·필기/실기 등 부가어를 지우기 위한 패턴. canonicalCert에서 이 순서대로 적용한다.
      * \s는 ASCII 공백만 매칭해 전각공백(U+3000 — 노션·한글 문서·일부 모바일 키보드에서 흔히 섞임)을
      * 놓친다. 놓치면 "SQLD　필기"가 "SQLD　"로 남아 CERT_WEIGHTS의 "SQLD"와 안 맞고
-     * 예외 없이 조용히 DEFAULT_CERT_WEIGHT로 떨어지므로 명시적으로 추가한다.
+     * 예외 없이 조용히 미인식 처리되므로 명시적으로 추가한다.
      */
     private static final Pattern CERT_SEPARATOR_PATTERN = Pattern.compile("[\\s\\u3000\\-_·/()\\[\\].,]");
     private static final Pattern CERT_NOISE_PATTERN =
             Pattern.compile("(필기|실기|합격|취득|자격증|예정|준비중|보유)");
 
-    /** 표준 표기와 다른 자주 쓰이는 별칭을 표준 표기로 모은다. canonicalCert()를 거친 뒤(공백 제거·대문자) 매칭된다. */
+    /**
+     * 표준 표기와 다른 자주 쓰이는 별칭·구 명칭을 표준 표기로 모은다.
+     * canonicalCert()를 거친 뒤(공백 제거·대문자) 매칭된다.
+     */
     private static final Map<String, String> CERT_ALIASES = Map.ofEntries(
             Map.entry("SQL개발자", "SQLD"),
             Map.entry("SQL전문가", "SQLP"),
@@ -60,11 +71,15 @@ public class MatchScoreCalculator {
             Map.entry("AWSSOLUTIONSARCHITECTASSOCIATE", "AWSSAA"),
             Map.entry("AWS솔루션스아키텍트어소시에이트", "AWSSAA"),
             Map.entry("AWS솔루션즈아키텍트어소시에이트", "AWSSAA"),
-            Map.entry("AWS솔루션스아키텍트", "AWSSAA")
+            Map.entry("AWS솔루션스아키텍트", "AWSSAA"),
+            // 2026년 국가기술자격 종목 개편 반영 (Q-net 확인) — 구 명칭도 표준 표기로 모은다.
+            Map.entry("정보처리기능사", "프로그래밍기능사"),   // 2026.1.1 명칭 변경
+            Map.entry("전자계산기조직응용기사", "컴퓨터시스템기사"), // 2026년 전자계산기기사와 통합
+            Map.entry("전자계산기기사", "컴퓨터시스템기사")
     );
 
     /**
-     * 자격증별 가중치. key는 canonicalCert()의 출력과 정확히 같은 형태여야 한다
+     * 자격증별 가중치(1층 — 큐레이션 표). key는 canonicalCert()의 출력과 정확히 같은 형태여야 한다
      * (대문자, 공백·괄호 등 구분기호 없음). 운영 DB의 합격자 자격증 9종 전부를 포함한다.
      * 새 자격증을 추가할 땐 canonicalCert("원본 표기")를 직접 호출해본 결과를 key로 써야 한다.
      */
@@ -83,6 +98,31 @@ public class MatchScoreCalculator {
     );
 
     /**
+     * 3층 — 국가기술자격 종목명(정보기술 분야). Q-net(q-net.or.kr)·cq.or.kr 검색으로 확인한
+     * 2026년 8월 기준 실재 종목만 넣었다(기억으로 채우지 않음 — 틀린 종목명을 넣으면 애초에
+     * 고치려던 "조용히 미인식되는" 문제를 그대로 재생산한다).
+     *
+     * CERT_WEIGHTS와 달리 종목별 가중치를 차등하지 않고 RECOGNIZED_DEFAULT_WEIGHT로 통일한다 —
+     * 이 표의 목적은 "존재를 검증하는 것"이지 난이도를 매기는 것이 아니다.
+     *
+     * ⚠️ 이 목록은 완전하지 않을 수 있다. 데모 전, 실제 사용자가 자주 입력할 만한 자격증이
+     * 빠져 있지 않은지 Q-net 공식 목록과 대조해 팀에서 한 번 더 검증해야 한다.
+     */
+    private static final Set<String> NATIONAL_TECH_CERTIFICATIONS = Set.of(
+            // 기술사
+            "정보관리기술사", "컴퓨터시스템응용기술사", "정보통신기술사",
+            // 기사
+            "정보처리기사", "정보보안기사", "빅데이터분석기사",
+            "정보통신기사", "컴퓨터시스템기사", "무선설비기사", "방송통신기사", "전파전자통신기사",
+            // 산업기사
+            "정보처리산업기사", "정보보안산업기사", "사무자동화산업기사",
+            "정보통신산업기사", "무선설비산업기사", "방송통신산업기사", "전파전자통신산업기사",
+            // 기능장 · 기능사
+            "통신설비기능장", "프로그래밍기능사", "정보기기운용기능사",
+            "정보통신기능사", "무선설비기능사", "방송통신기능사", "전파전자통신기능사"
+    );
+
+    /**
      * 유저 스펙과 합격자 케이스 목록을 비교하여 총점과 상세 내역(CompareRow)을 포함한 결과를 반환한다.
      */
     public MatchScoreResult calculate(UserSpec userSpec, List<PasserData> passerList) {
@@ -90,39 +130,62 @@ public class MatchScoreCalculator {
             return MatchScoreResult.builder()
                     .totalScore(0)
                     .compareRows(List.of())
+                    .unrecognizedCertifications(List.of())
                     .build();
         }
 
+        // 2층 — 합격자 DB에 실제로 등장한 자격증은 그 자체로 실재가 검증된다.
+        // CERT_WEIGHTS·NATIONAL_TECH_CERTIFICATIONS에 없어도 이 집합에 있으면 인정한다.
+        // 비교 대상 합격자 개인이 아니라 전체 후보 풀(passerList) 기준으로 모아,
+        // "이 직무군 어딘가에서 실제로 관측된 적 있는 자격증"을 폭넓게 인정한다.
+        Set<String> observedCerts = collectObservedCerts(passerList);
+
         // 1. 총점 계산 (기존 방식 유지)
         double totalScore = passerList.stream()
-                .mapToDouble(passer -> calculateSingle(userSpec, passer))
+                .mapToDouble(passer -> calculateSingle(userSpec, passer, observedCerts))
                 .average()
                 .orElse(0.0);
 
         // 2. 항목별 세부 내역(CompareRow) 계산
-        List<CompareRowDto> rows = calculateDetails(userSpec, passerList);
+        List<CompareRowDto> rows = calculateDetails(userSpec, passerList, observedCerts);
+
+        // 3. 사용자가 입력했지만 어느 층에서도 인식하지 못한 자격증 — 화면에 고지해
+        //    "왜 이 자격증은 반영 안 됐지?"를 사용자가 스스로 확인·수정할 수 있게 한다.
+        List<String> unrecognized = unrecognizedCertifications(userSpec.getCertifications(), observedCerts);
 
         return MatchScoreResult.builder()
                 .totalScore((int) Math.round(totalScore))
                 .compareRows(rows)
+                .unrecognizedCertifications(unrecognized)
                 .build();
     }
 
-    private double calculateSingle(UserSpec userSpec, PasserData passer) {
+    private Set<String> collectObservedCerts(List<PasserData> passerList) {
+        return passerList.stream()
+                .filter(Objects::nonNull)
+                .map(PasserData::getCertifications)
+                .filter(Objects::nonNull)
+                .flatMap(Arrays::stream)
+                .map(this::canonicalCert)
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.toSet());
+    }
+
+    private double calculateSingle(UserSpec userSpec, PasserData passer, Set<String> observedCerts) {
         if (passer == null) return 0.0;
 
         double gpaScore  = scoreGpa(
                 userSpec.getGpa(), userSpec.getGpaMax(),
                 passer.getGpa(), passer.getGpaMax());
         double langScore = scoreLang(userSpec.getLanguageScores(), passer.getLanguageScores());
-        double certScore = scoreCert(userSpec.getCertifications(), passer.getCertifications());
+        double certScore = scoreCert(userSpec.getCertifications(), passer.getCertifications(), observedCerts);
 
         return gpaScore  * WEIGHT_GPA
              + langScore * WEIGHT_LANG
              + certScore * WEIGHT_CERT;
     }
 
-    private List<CompareRowDto> calculateDetails(UserSpec userSpec, List<PasserData> passerList) {
+    private List<CompareRowDto> calculateDetails(UserSpec userSpec, List<PasserData> passerList, Set<String> observedCerts) {
         // --- 1. 학점 (GPA) ---
         double userGpaNorm = normalizeGpaTo45(userSpec.getGpa(), userSpec.getGpaMax());
         double avgPasserGpaNorm = passerList.stream()
@@ -167,9 +230,9 @@ public class MatchScoreCalculator {
                 .average()
                 .orElse(0.0);
 
-        double userCertValue = certValue(userSpec.getCertifications());
+        double userCertValue = certValue(userSpec.getCertifications(), observedCerts);
         double avgPasserCertValue = passerList.stream()
-                .mapToDouble(p -> certValue(p.getCertifications()))
+                .mapToDouble(p -> certValue(p.getCertifications(), observedCerts))
                 .average()
                 .orElse(0.0);
 
@@ -296,47 +359,66 @@ public class MatchScoreCalculator {
      * 이 방향은 사용자가 합격자보다 훨씬 많은 자격증을 갖고 있어도
      * 합격자가 안 가진 자격증이면 전혀 반영되지 않는 문제가 있었다.
      */
-    private double scoreCert(String[] userCerts, String[] passerCerts) {
-        double passerValue = certValue(passerCerts);
+    private double scoreCert(String[] userCerts, String[] passerCerts, Set<String> observedCerts) {
+        double passerValue = certValue(passerCerts, observedCerts);
         // 합격자 쪽에 자격증이 없으면 이 항목은 변별력이 없다 → 감점하지 않는다
         // (scoreGpa·scoreLang에서 합격자 데이터가 없을 때 100점을 주는 것과 같은 원칙).
         if (passerValue <= 0) return 100.0;
 
-        double userValue = certValue(userCerts);
+        double userValue = certValue(userCerts, observedCerts);
         if (userValue <= 0) return 0.0;
 
         return Math.min(100.0, (userValue / passerValue) * 100.0);
     }
 
     /**
-     * 자격증 문자열 배열의 가중 합계.
-     * 같은 자격증을 중복 표기해도(정규화 후 같아지면) 한 번만 센다.
+     * 자격증 문자열 배열의 가중 합계. 같은 자격증을 중복 표기해도(정규화 후 같아지면) 한 번만 센다.
      *
-     * ⚠️ 게이밍 방지: CERT_WEIGHTS에 없는(=기본 가중치 DEFAULT_CERT_WEIGHT를 받는) 자격증은
-     * 최대 MAX_DEFAULT_WEIGHT_CERTS개까지만 인정한다. 상한이 없으면 의미 없는 문자열을
-     * 여러 개 적어 넣는 것만으로 점수를 채울 수 있다(기본 가중치 0.5 × 6개 = 3.0으로
-     * 합격자 평균과 같아져 100점이 되는 식).
+     * v2까지는 "인식 못 한 자격증도 기본 가중치로 일부 인정"했는데, 이 기본 가중치가 0보다 큰 한
+     * 정크 문자열을 적는 게 아예 안 적는 것보다 항상 유리해지는 문제가 수학적으로 있었다
+     * (상한을 둬도 크기만 줄 뿐 방향은 못 바꾼다). v3는 원칙을 바꿨다 — 인식되지 않은 입력은
+     * 기여가 정확히 0이다. weightOf()가 그 판정을 담당한다.
      */
-    private double certValue(String[] certs) {
+    private double certValue(String[] certs, Set<String> observedCerts) {
         if (certs == null) return 0.0;
 
-        List<String> canonical = Arrays.stream(certs)
+        return Arrays.stream(certs)
                 .map(this::canonicalCert)
                 .filter(value -> !value.isBlank())
                 .distinct()
-                .toList();
-
-        double knownSum = canonical.stream()
-                .filter(CERT_WEIGHTS::containsKey)
-                .mapToDouble(CERT_WEIGHTS::get)
+                .mapToDouble(value -> weightOf(value, observedCerts))
                 .sum();
+    }
 
-        long unknownCount = canonical.stream()
-                .filter(value -> !CERT_WEIGHTS.containsKey(value))
-                .count();
-        double unknownSum = Math.min(unknownCount, MAX_DEFAULT_WEIGHT_CERTS) * DEFAULT_CERT_WEIGHT;
+    /**
+     * 정규화된 자격증 표기 하나의 가중치를 3층으로 판정한다.
+     *   1층 CERT_WEIGHTS   — 큐레이션 표, 자격증별 차등 가중치
+     *   2층 observedCerts  — 합격자 DB에 실제로 등장(런타임 관측), RECOGNIZED_DEFAULT_WEIGHT
+     *   3층 NATIONAL_TECH_CERTIFICATIONS — 국가기술자격 공식 종목명, RECOGNIZED_DEFAULT_WEIGHT
+     * 세 층 어디에도 없으면 0 — 미인식 입력은 점수에 전혀 기여하지 않는다.
+     */
+    private double weightOf(String canonicalCert, Set<String> observedCerts) {
+        if (CERT_WEIGHTS.containsKey(canonicalCert)) {
+            return CERT_WEIGHTS.get(canonicalCert);
+        }
+        if (NATIONAL_TECH_CERTIFICATIONS.contains(canonicalCert) || observedCerts.contains(canonicalCert)) {
+            return RECOGNIZED_DEFAULT_WEIGHT;
+        }
+        return 0.0;
+    }
 
-        return knownSum + unknownSum;
+    /**
+     * 사용자가 입력한 자격증 중 세 층 어디에서도 인식하지 못한 항목을 원본 표기 그대로 반환한다.
+     * 화면에 고지해 사용자가 오타·특이 표기를 스스로 고칠 수 있게 하기 위함이다 — 조용히
+     * 버리기만 하면 "왜 이건 반영 안 됐지?"에 코드를 보지 않고는 답할 수 없다.
+     */
+    private List<String> unrecognizedCertifications(String[] userCerts, Set<String> observedCerts) {
+        if (userCerts == null) return List.of();
+        return Arrays.stream(userCerts)
+                .filter(raw -> raw != null && !raw.isBlank())
+                .filter(raw -> weightOf(canonicalCert(raw), observedCerts) <= 0)
+                .distinct()
+                .toList();
     }
 
     /**
