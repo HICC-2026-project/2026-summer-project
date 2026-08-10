@@ -271,14 +271,14 @@ public class RoadmapService {
                                 .build(),
                         TimelineStep.builder()
                                 .period(semester2)
-                                .priority("HIGH")
+                                .priority("MEDIUM")
                                 .activity("[AI 응답 지연] 부트캠프 및 프로젝트 몰입")
                                 .reason("[서버 지연 임시 로드맵] 방학 기간을 활용하여 포트폴리오를 대폭 강화합니다.")
                                 .matchedActivities(step2Matched)
                                 .build(),
                         TimelineStep.builder()
                                 .period(semester3)
-                                .priority("MEDIUM")
+                                .priority("LOW")
                                 .activity("[AI 응답 지연] 오픈소스 기여 및 해커톤 공모전 참가")
                                 .reason("[서버 지연 임시 로드맵] 실무 협업 역량을 입증하고 채용 우대 혜택을 획득합니다.")
                                 .matchedActivities(step3Matched)
