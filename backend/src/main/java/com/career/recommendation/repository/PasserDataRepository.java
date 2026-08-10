@@ -77,4 +77,20 @@ public interface PasserDataRepository extends JpaRepository<PasserData, UUID> {
     List<PasserData> findClosestByGpaRatio(
             @Param("userRatio") BigDecimal userRatio,
             Pageable pageable);
+
+    /**
+     * 검증된(또는 DEMO) 합격자 전원의 자격증 배열을 직무 구분 없이 전부 조회한다.
+     * MatchScoreCalculator가 "표에 없어도 합격자 DB에 실제 등장하면 인정" 판정에 쓴다.
+     * 비교 대상 Top N(유사 합격자)이 아니라 테이블 전체를 봐야, 유사 합격자 구성이
+     * 바뀔 때마다(스펙 미세 수정·데이터 추가 등) 같은 자격증의 인식 여부가 흔들리지 않는다.
+     * isVerified=false인 자가 제보 데이터는 제외한다 — 검증 안 된 자격증으로
+     * "실재 인정"을 만들 수 있으면 자가 제보를 통한 우회 게이밍이 가능해진다.
+     */
+    @Query("""
+            SELECT p.certifications
+            FROM PasserData p
+            WHERE (p.isVerified = true OR p.dataOrigin = 'DEMO')
+              AND p.certifications IS NOT NULL
+            """)
+    List<String[]> findAllVerifiedCertificationArrays();
 }

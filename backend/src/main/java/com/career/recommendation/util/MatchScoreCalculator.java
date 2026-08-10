@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -124,9 +125,17 @@ public class MatchScoreCalculator {
 
     /**
      * 유저 스펙과 합격자 케이스 목록을 비교하여 총점과 상세 내역(CompareRow)을 포함한 결과를 반환한다.
+     *
+     * @param globalCertPool 2층 인식에 쓸 자격증 원본 문자열 전체(직무·유사도 무관, DB 전체 스캔 결과).
+     *                       비교 대상 passerList(Top N 유사 합격자)에서 뽑지 않는 이유:
+     *                       Top N은 스펙을 살짝만 고쳐도, 합격자 데이터가 추가되기만 해도 바뀌는 값이라
+     *                       그걸 인식 기준으로 쓰면 같은 자격증이 요청마다 인식됐다 안 됐다 흔들린다.
+     *                       "이 자격증이 실재하는가"는 유사도와 무관한 질문이라 항상 같은 값이어야 한다.
      */
-    public MatchScoreResult calculate(UserSpec userSpec, List<PasserData> passerList) {
-        if (passerList == null || passerList.isEmpty() || userSpec == null) {
+    public MatchScoreResult calculate(UserSpec userSpec, List<PasserData> passerList, Set<String> globalCertPool) {
+        Set<String> observedCerts = collectObservedCerts(globalCertPool);
+
+        if (userSpec == null) {
             return MatchScoreResult.builder()
                     .totalScore(0)
                     .compareRows(List.of())
@@ -134,24 +143,24 @@ public class MatchScoreCalculator {
                     .build();
         }
 
-        // 2층 — 합격자 DB에 실제로 등장한 자격증은 그 자체로 실재가 검증된다.
-        // CERT_WEIGHTS·NATIONAL_TECH_CERTIFICATIONS에 없어도 이 집합에 있으면 인정한다.
-        // 비교 대상 합격자 개인이 아니라 전체 후보 풀(passerList) 기준으로 모아,
-        // "이 직무군 어딘가에서 실제로 관측된 적 있는 자격증"을 폭넓게 인정한다.
-        Set<String> observedCerts = collectObservedCerts(passerList);
+        // 미인식 자격증 고지는 유사 합격자 유무와 무관한 정보다 — 합격자가 0명이라 총점을
+        // 못 내는 상황에서도 "이 자격증은 우리가 못 알아봤다"는 사실 자체는 알려줄 수 있다.
+        List<String> unrecognized = unrecognizedCertifications(userSpec.getCertifications(), observedCerts);
 
-        // 1. 총점 계산 (기존 방식 유지)
+        if (passerList == null || passerList.isEmpty()) {
+            return MatchScoreResult.builder()
+                    .totalScore(0)
+                    .compareRows(List.of())
+                    .unrecognizedCertifications(unrecognized)
+                    .build();
+        }
+
         double totalScore = passerList.stream()
                 .mapToDouble(passer -> calculateSingle(userSpec, passer, observedCerts))
                 .average()
                 .orElse(0.0);
 
-        // 2. 항목별 세부 내역(CompareRow) 계산
         List<CompareRowDto> rows = calculateDetails(userSpec, passerList, observedCerts);
-
-        // 3. 사용자가 입력했지만 어느 층에서도 인식하지 못한 자격증 — 화면에 고지해
-        //    "왜 이 자격증은 반영 안 됐지?"를 사용자가 스스로 확인·수정할 수 있게 한다.
-        List<String> unrecognized = unrecognizedCertifications(userSpec.getCertifications(), observedCerts);
 
         return MatchScoreResult.builder()
                 .totalScore((int) Math.round(totalScore))
@@ -160,12 +169,10 @@ public class MatchScoreCalculator {
                 .build();
     }
 
-    private Set<String> collectObservedCerts(List<PasserData> passerList) {
-        return passerList.stream()
+    private Set<String> collectObservedCerts(Set<String> globalCertPool) {
+        if (globalCertPool == null) return Set.of();
+        return globalCertPool.stream()
                 .filter(Objects::nonNull)
-                .map(PasserData::getCertifications)
-                .filter(Objects::nonNull)
-                .flatMap(Arrays::stream)
                 .map(this::canonicalCert)
                 .filter(value -> !value.isBlank())
                 .collect(Collectors.toSet());
@@ -227,15 +234,13 @@ public class MatchScoreCalculator {
                 .build();
 
         // --- 3. 자격증 (Certifications) ---
-        // 화면 표시는 여전히 "개수"를 쓴다 (사용자에게 익숙한 단위). 단, 충족/부족 판정과 막대 길이는
-        // scoreCert와 같은 certValue(가중 합계) 기준으로 통일한다. 예전엔 이 둘이 서로 다른 공식이라
-        // "비교탭엔 충족인데 종합 점수엔 0점"처럼 같은 화면 안에서 모순되는 경우가 있었다.
-        //
-        // GPA·어학과 달리 여기엔 ">0 필터"를 일부러 안 넣는다 — 자격증 0개는 "데이터 결측"이 아니라
-        // "실제로 안 가짐"이라는 유효한 값이라, 평균에서 빼면 오히려 왜곡된다.
-        int userCertCount = (userSpec.getCertifications() != null) ? (int) Arrays.stream(userSpec.getCertifications()).filter(s -> s != null && !s.isBlank()).count() : 0;
+        // myVal·avgVal은 "입력한 개수"가 아니라 "인식된(점수에 기여한) 개수"를 보여준다.
+        // 입력 개수를 그대로 보여주면, 정크 5개를 넣었을 때 "5개"라고 뜨면서 동시에
+        // 막대·상태는 0에 가깝게 나와 화면 안에서 숫자끼리 모순돼 보인다.
+        // (실제로 뭘 놓쳤는지는 unrecognizedCertifications 배너가 별도로 알려준다.)
+        int userCertCount = countRecognized(userSpec.getCertifications(), observedCerts);
         double avgPasserCertCount = passerList.stream()
-                .mapToDouble(p -> (p.getCertifications() != null) ? Arrays.stream(p.getCertifications()).filter(s -> s != null && !s.isBlank()).count() : 0.0)
+                .mapToDouble(p -> countRecognized(p.getCertifications(), observedCerts))
                 .average()
                 .orElse(0.0);
 
@@ -245,17 +250,28 @@ public class MatchScoreCalculator {
                 .average()
                 .orElse(0.0);
 
-        // 막대 기준: 합격자 평균 가중치의 1.5배를 100%로 둔다 (평균이 약 66% 지점에 오도록).
-        // 합격자 평균이 0이면(전원 자격증 없음) 분모를 1로 고정해 0으로 나누는 것을 막는다.
-        double certScale = Math.max(avgPasserCertValue * 1.5, 1.0);
+        int certMyPct;
+        int certAvgPct;
+        if (avgPasserCertValue <= 0) {
+            // 합격자 전원이 자격증 0개 → 비교 기준 자체가 없다. scoreCert가 이 경우 100점을
+            // 주는 것과 같은 이유로, 막대도 0%가 아니라 100%로 맞춘다. 0%로 두면 종합 점수는
+            // 만점인데 막대만 텅 비어 보여 화면 안에서 모순된다.
+            certMyPct = 100;
+            certAvgPct = 100;
+        } else {
+            // 막대 기준: 합격자 평균 가중치의 1.5배를 100%로 둔다 (평균이 약 66% 지점에 오도록).
+            double certScale = avgPasserCertValue * 1.5;
+            certMyPct = (int) Math.min(100, Math.round(userCertValue / certScale * 100));
+            certAvgPct = (int) Math.min(100, Math.round(avgPasserCertValue / certScale * 100));
+        }
 
         CompareRowDto certRow = CompareRowDto.builder()
                 .label("자격증/수상")
                 .weight("26.7%")
                 .myVal(String.format("%d개", userCertCount))
                 .avgVal(String.format("%.1f개", avgPasserCertCount))
-                .myPct((int) Math.min(100, Math.round(userCertValue / certScale * 100)))
-                .avgPct((int) Math.min(100, Math.round(avgPasserCertValue / certScale * 100)))
+                .myPct(certMyPct)
+                .avgPct(certAvgPct)
                 .status(userCertValue >= avgPasserCertValue ? "충족" : "부족")
                 .build();
 
@@ -399,6 +415,18 @@ public class MatchScoreCalculator {
                 .sum();
     }
 
+    /** 정규화 후 중복 제거된 자격증 중 실제로 인식된(가중치 > 0) 것의 개수. 화면 myVal·avgVal 표시용. */
+    private int countRecognized(String[] certs, Set<String> observedCerts) {
+        if (certs == null) return 0;
+
+        return (int) Arrays.stream(certs)
+                .map(this::canonicalCert)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .filter(value -> weightOf(value, observedCerts) > 0)
+                .count();
+    }
+
     /**
      * 정규화된 자격증 표기 하나의 가중치를 3층으로 판정한다.
      *   1층 CERT_WEIGHTS   — 큐레이션 표, 자격증별 차등 가중치
@@ -423,11 +451,18 @@ public class MatchScoreCalculator {
      */
     private List<String> unrecognizedCertifications(String[] userCerts, Set<String> observedCerts) {
         if (userCerts == null) return List.of();
-        return Arrays.stream(userCerts)
-                .filter(raw -> raw != null && !raw.isBlank())
-                .filter(raw -> weightOf(canonicalCert(raw), observedCerts) <= 0)
-                .distinct()
-                .toList();
+
+        // 정규화하면 같아지는 표기(공백·괄호 차이 등)를 원본 문자열 기준으로만 distinct하면
+        // "정크자격", "정크자격 ", "정크자격()"처럼 사람 눈엔 같은 값이 여러 번 나열된다.
+        // canonical 기준으로 중복을 제거하되, 화면엔 처음 등장한 원본 표기를 그대로 보여준다.
+        Map<String, String> firstRawByCanonical = new LinkedHashMap<>();
+        for (String raw : userCerts) {
+            if (raw == null || raw.isBlank()) continue;
+            String canonical = canonicalCert(raw);
+            if (canonical.isBlank() || weightOf(canonical, observedCerts) > 0) continue;
+            firstRawByCanonical.putIfAbsent(canonical, raw);
+        }
+        return List.copyOf(firstRawByCanonical.values());
     }
 
     /**

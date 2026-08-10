@@ -1,6 +1,7 @@
 package com.career.recommendation.util;
 
 import com.career.recommendation.dto.recommendation.CompareRowDto;
+import com.career.recommendation.dto.recommendation.MatchScoreResult;
 import com.career.recommendation.entity.PasserData;
 import com.career.recommendation.entity.UserSpec;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,7 @@ import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,12 +19,17 @@ class MatchScoreCalculatorTest {
 
     private final MatchScoreCalculator calculator = new MatchScoreCalculator();
 
+    /** 대부분의 테스트는 2층(합격자 DB 실관측) 인식이 필요 없어 빈 풀로 충분하다. */
+    private MatchScoreResult calc(UserSpec user, List<PasserData> passers) {
+        return calculator.calculate(user, passers, Set.of());
+    }
+
     @Test
     void 동일한_스펙이면_100점을_반환한다() {
         UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"SQLD"});
         PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"SQLD"}, 1);
 
-        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(100);
+        assertThat(calc(user, List.of(passer)).getTotalScore()).isEqualTo(100);
     }
 
     @Test
@@ -30,7 +37,7 @@ class MatchScoreCalculatorTest {
         UserSpec user = userSpec("4.00", "4.50", "IH", 900, new String[]{"SQLD"});
         PasserData passer = passer("3.55", "4.00", "IH", 900, new String[]{"SQLD"}, 1);
 
-        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(100);
+        assertThat(calc(user, List.of(passer)).getTotalScore()).isEqualTo(100);
     }
 
     @Test
@@ -42,7 +49,7 @@ class MatchScoreCalculatorTest {
         UserSpec user = userSpec("3.80", "4.50", "IH", 800, new String[]{"SQLD"});
         PasserData passer = passer("3.80", "4.50", "AL", 900, new String[]{"SQLD"}, 1);
 
-        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(98);
+        assertThat(calc(user, List.of(passer)).getTotalScore()).isEqualTo(98);
     }
 
     @Test
@@ -55,13 +62,13 @@ class MatchScoreCalculatorTest {
                 .gpa(new BigDecimal("3.80")).gpaMax(new BigDecimal("4.50"))
                 .languageScores(List.of(Map.of("type", "OPIC", "grade", "IM2")))
                 .certifications(new String[]{"SQLD"}).build();
-        
+
         PasserData passer = PasserData.builder()
                 .gpa(new BigDecimal("3.80")).gpaMax(new BigDecimal("4.50"))
                 .languageScores(List.of(Map.of("type", "TOEIC", "score", 800)))
                 .certifications(new String[]{"SQLD"}).build();
 
-        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(98);
+        assertThat(calc(user, List.of(passer)).getTotalScore()).isEqualTo(98);
     }
 
     @Test
@@ -80,7 +87,7 @@ class MatchScoreCalculatorTest {
                 .languageScores(List.of(Map.of("type", "TOEIC", "score", 800)))
                 .certifications(new String[]{"SQLD"}).build();
 
-        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(99);
+        assertThat(calc(user, List.of(passer)).getTotalScore()).isEqualTo(99);
     }
 
     @Test
@@ -89,13 +96,13 @@ class MatchScoreCalculatorTest {
         PasserData noExperience = passer("3.80", "4.50", "IH", 900, new String[]{"SQLD"}, 0);
         PasserData manyExperiences = passer("3.80", "4.50", "IH", 900, new String[]{"SQLD"}, 100);
 
-        assertThat(calculator.calculate(user, List.of(noExperience)).getTotalScore())
-                .isEqualTo(calculator.calculate(user, List.of(manyExperiences)).getTotalScore());
+        assertThat(calc(user, List.of(noExperience)).getTotalScore())
+                .isEqualTo(calc(user, List.of(manyExperiences)).getTotalScore());
     }
 
     @Test
     void 사용자_스펙이_없으면_0점을_반환한다() {
-        assertThat(calculator.calculate(null, List.of(PasserData.builder().build())).getTotalScore()).isZero();
+        assertThat(calc(null, List.of(PasserData.builder().build())).getTotalScore()).isZero();
     }
 
     // --- 비교탭(CompareRow) 평균 계산 ---
@@ -114,7 +121,7 @@ class MatchScoreCalculatorTest {
                 .certifications(new String[]{"정보처리기사"})
                 .build();
 
-        List<CompareRowDto> rows = calculator.calculate(user, List.of(normal1, normal2, missingGpa)).getCompareRows();
+        List<CompareRowDto> rows = calc(user, List.of(normal1, normal2, missingGpa)).getCompareRows();
         CompareRowDto gpaRow = rows.get(0);
 
         assertThat(gpaRow.getAvgVal()).isEqualTo("4.00/4.5");
@@ -132,7 +139,7 @@ class MatchScoreCalculatorTest {
                 .certifications(new String[]{"정보처리기사"})
                 .build();
 
-        List<CompareRowDto> rows = calculator.calculate(user, List.of(normal1, normal2, missingLang)).getCompareRows();
+        List<CompareRowDto> rows = calc(user, List.of(normal1, normal2, missingLang)).getCompareRows();
         CompareRowDto langRow = rows.get(1);
 
         assertThat(langRow.getAvgVal()).isEqualTo("환산 900");
@@ -146,11 +153,27 @@ class MatchScoreCalculatorTest {
         PasserData withCert = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
         PasserData withoutCert = passer("3.80", "4.50", "IH", 900, new String[]{}, 1);
 
-        List<CompareRowDto> rows = calculator.calculate(user, List.of(withCert, withoutCert)).getCompareRows();
+        List<CompareRowDto> rows = calc(user, List.of(withCert, withoutCert)).getCompareRows();
         CompareRowDto certRow = rows.get(2);
 
-        // 정보처리기사(2.0) + 0 을 2명으로 나눈 평균 개수는 0.5개여야 한다(제외되면 1.0개가 됨).
+        // 정보처리기사(2.0) + 0 을 2명으로 나눈 평균 값은 0.5여야 한다(제외되면 1.0이 됨).
+        // 표시는 "인식된 개수" 기준(둘 다 인식되므로 1명은 1개, 1명은 0개 → 평균 0.5개).
         assertThat(certRow.getAvgVal()).isEqualTo("0.5개");
+    }
+
+    @Test
+    void 합격자_전원이_자격증_0개면_점수와_막대가_모두_만점으로_일치한다() {
+        // 수정 전엔 score=100(자격증 항목)인데 막대는 myPct=0·avgPct=0으로 나와
+        // "만점인데 막대는 텅 빔"이라는 모순이 있었다. 합격자 평균이 0이면(비교 불능)
+        // scoreCert가 100을 주는 것과 같은 이유로 막대도 100%로 맞춘다.
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{}, 1);
+
+        CompareRowDto certRow = calc(user, List.of(passer)).getCompareRows().get(2);
+
+        assertThat(certRow.getMyPct()).isEqualTo(100);
+        assertThat(certRow.getAvgPct()).isEqualTo(100);
+        assertThat(certRow.getStatus()).isEqualTo("충족");
     }
 
     // --- 자격증 가중치 매칭 (v3 — 인식된 자격증만 점수가 된다) ---
@@ -161,18 +184,18 @@ class MatchScoreCalculatorTest {
         UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"정보처리기사 필기"});
         PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
 
-        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(100);
+        assertThat(calc(user, List.of(passer)).getTotalScore()).isEqualTo(100);
     }
 
     @Test
     void 전각공백이_섞여도_정규화된다() {
         // 노션·한글 문서·일부 모바일 키보드에서 흔한 전각공백(U+3000, "　")은
         // 정규식 \s가 ASCII 공백만 매칭해 놓치기 쉽다. 놓치면 "SQLD　필기"가
-        // "SQLD　"로 남아 CERT_WEIGHTS의 "SQLD"와 안 맞고 조용히 기본 가중치로 떨어진다.
+        // "SQLD　"로 남아 CERT_WEIGHTS의 "SQLD"와 안 맞고 조용히 미인식 처리된다.
         UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"SQLD　필기"});
         PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"SQLD"}, 1);
 
-        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(100);
+        assertThat(calc(user, List.of(passer)).getTotalScore()).isEqualTo(100);
     }
 
     @Test
@@ -181,39 +204,22 @@ class MatchScoreCalculatorTest {
         UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"SQL개발자"});
         PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"SQLD"}, 1);
 
-        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(100);
+        assertThat(calc(user, List.of(passer)).getTotalScore()).isEqualTo(100);
     }
 
     @Test
     void 완전히_미인식된_자격증은_미입력과_점수가_같다() {
         // v3의 핵심 목표: 세 층(CERT_WEIGHTS·합격자DB·국가기술자격) 어디에도 없는 정크 문자열은
         // "인정 안 됨"이 아니라 정확히 0으로 처리되어, 미입력과 동률이어야 한다.
-        // (v2까지는 기본 가중치가 0보다 커서, 정크를 아무리 상한 안에서 적어도 미입력보다는
-        // 항상 유리했다 — "정크가 미입력보다 낫다"는 유인을 구조적으로 없애는 게 이번 재설계의 목적.)
         UserSpec junkCerts = userSpec("3.80", "4.50", "IH", 900,
                 new String[]{"가나다", "라마바", "사아자", "차카타", "파하가"});
         UserSpec noCerts = userSpec("3.80", "4.50", "IH", 900, new String[]{});
         PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
 
-        int scoreWithJunk = calculator.calculate(junkCerts, List.of(passer)).getTotalScore();
-        int scoreWithNone = calculator.calculate(noCerts, List.of(passer)).getTotalScore();
+        int scoreWithJunk = calc(junkCerts, List.of(passer)).getTotalScore();
+        int scoreWithNone = calc(noCerts, List.of(passer)).getTotalScore();
 
         assertThat(scoreWithJunk).isEqualTo(scoreWithNone);
-    }
-
-    @Test
-    void 합격자_DB에_실제_등장한_자격증은_표에_없어도_인식된다() {
-        // 2층: CERT_WEIGHTS에 없는 자격증이라도, 같은 후보 풀의 다른 합격자가 실제로
-        // 보유하고 있으면 "실재가 검증됐다"고 보고 인정한다.
-        PasserData rareCertHolder = passer("3.80", "4.50", "IH", 900, new String[]{"레어자격증"}, 1);
-        PasserData standardHolder = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
-        List<PasserData> pool = List.of(rareCertHolder, standardHolder);
-
-        UserSpec withRareCert = userSpec("3.80", "4.50", "IH", 900, new String[]{"레어자격증"});
-        UserSpec withNoCert = userSpec("3.80", "4.50", "IH", 900, new String[]{});
-
-        assertThat(calculator.calculate(withRareCert, pool).getTotalScore())
-                .isGreaterThan(calculator.calculate(withNoCert, pool).getTotalScore());
     }
 
     @Test
@@ -225,19 +231,8 @@ class MatchScoreCalculatorTest {
         UserSpec withNationalCert = userSpec("3.80", "4.50", "IH", 900, new String[]{"정보통신기사"});
         UserSpec withJunk = userSpec("3.80", "4.50", "IH", 900, new String[]{"아무말이나적음"});
 
-        assertThat(calculator.calculate(withNationalCert, List.of(passer)).getTotalScore())
-                .isGreaterThan(calculator.calculate(withJunk, List.of(passer)).getTotalScore());
-    }
-
-    @Test
-    void 미인식_자격증은_원본_표기_그대로_결과에_보고된다() {
-        UserSpec user = userSpec("3.80", "4.50", "IH", 900,
-                new String[]{"정보처리기사", "출처불명자격증"});
-        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
-
-        List<String> unrecognized = calculator.calculate(user, List.of(passer)).getUnrecognizedCertifications();
-
-        assertThat(unrecognized).containsExactly("출처불명자격증");
+        assertThat(calc(withNationalCert, List.of(passer)).getTotalScore())
+                .isGreaterThan(calc(withJunk, List.of(passer)).getTotalScore());
     }
 
     @Test
@@ -245,7 +240,7 @@ class MatchScoreCalculatorTest {
         UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{});
         PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{}, 1);
 
-        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(100);
+        assertThat(calc(user, List.of(passer)).getTotalScore()).isEqualTo(100);
     }
 
     @Test
@@ -273,6 +268,129 @@ class MatchScoreCalculatorTest {
                     .as("'%s' → '%s' 가 CERT_WEIGHTS에 등록되어 있어야 한다", raw, canonical)
                     .containsKey(canonical);
         }
+    }
+
+    // --- 1번: 2층 인식은 전역 자격증 풀(globalCertPool) 기준이어야 한다 ---
+
+    @Test
+    void 레이어2_인식은_비교대상_합격자가_아니라_전역_풀_기준이다() {
+        // 예전엔 2층(observedCerts)을 "이번에 비교하는 합격자 목록(passerList)"에서만
+        // 뽑았다. 그러면 유사 합격자 Top N 구성이 바뀔 때마다(스펙 미세 수정, 데이터 추가 등)
+        // 같은 자격증의 인식 여부가 흔들렸다. 지금은 globalCertPool을 별도로 주입받아,
+        // 비교 대상 passerList에 그 자격증을 가진 사람이 "아무도 없어도" 전역 풀에만
+        // 있으면 인식돼야 한다.
+        PasserData passerWithoutRareCert = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+        UserSpec userWithRareCert = userSpec("3.80", "4.50", "IH", 900, new String[]{"레어자격증"});
+
+        MatchScoreResult withPoolContainingIt = calculator.calculate(
+                userWithRareCert, List.of(passerWithoutRareCert), Set.of("레어자격증"));
+        MatchScoreResult withPoolNotContainingIt = calculator.calculate(
+                userWithRareCert, List.of(passerWithoutRareCert), Set.of());
+
+        assertThat(withPoolContainingIt.getTotalScore()).isGreaterThan(withPoolNotContainingIt.getTotalScore());
+        assertThat(withPoolContainingIt.getUnrecognizedCertifications()).isEmpty();
+        assertThat(withPoolNotContainingIt.getUnrecognizedCertifications()).containsExactly("레어자격증");
+    }
+
+    @Test
+    void 레이어2_인식은_비교대상_합격자_구성이_바뀌어도_동일하다() {
+        // 위 테스트의 재확인: 같은 globalCertPool을 유지하는 한, passerList(비교 대상)의
+        // 구성이 달라져도(누가 Top N에 뽑히든) 자격증 인식 여부와 점수는 흔들리지 않아야 한다.
+        Set<String> pool = Set.of("레어자격증");
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"레어자격증"});
+
+        PasserData poolA = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+        PasserData poolB = passer("3.80", "4.50", "IH", 900, new String[]{"SQLD"}, 1);
+
+        int scoreA = calculator.calculate(user, List.of(poolA), pool).getTotalScore();
+        int scoreB = calculator.calculate(user, List.of(poolB), pool).getTotalScore();
+
+        // 비교 대상 자체가 다르므로(정보처리기사 2.0 vs SQLD 1.5) 총점은 다를 수 있지만,
+        // '레어자격증'이 미인식으로 떨어지는 일은 없어야 한다.
+        assertThat(calculator.calculate(user, List.of(poolA), pool).getUnrecognizedCertifications()).isEmpty();
+        assertThat(calculator.calculate(user, List.of(poolB), pool).getUnrecognizedCertifications()).isEmpty();
+    }
+
+    // --- 2번: myVal·avgVal은 "입력 개수"가 아니라 "인식된 개수" ---
+
+    @Test
+    void myVal은_입력개수가_아니라_인식된_개수를_보여준다() {
+        // 정크 5개를 입력하면 화면엔 "5개"가 아니라 "0개"가 떠야 한다.
+        // 원본 5개는 unrecognizedCertifications로 별도 보고된다.
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900,
+                new String[]{"정크1", "정크2", "정크3", "정크4", "정크5"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+
+        MatchScoreResult result = calc(user, List.of(passer));
+        CompareRowDto certRow = result.getCompareRows().get(2);
+
+        assertThat(certRow.getMyVal()).isEqualTo("0개");
+        assertThat(result.getUnrecognizedCertifications()).hasSize(5);
+    }
+
+    @Test
+    void myVal은_인식된_것과_미인식된_것이_섞이면_인식된_것만_센다() {
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900,
+                new String[]{"정보처리기사", "SQLD", "정크"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+
+        CompareRowDto certRow = calc(user, List.of(passer)).getCompareRows().get(2);
+
+        assertThat(certRow.getMyVal()).isEqualTo("2개");
+    }
+
+    // --- 3번: 미인식 목록은 정규화 기준으로 중복 제거된다 ---
+
+    @Test
+    void 미인식_목록은_정규화하면_같아지는_표기를_한_번만_보여준다() {
+        // "정크자격", "정크자격 "(공백), "정크자격()"(괄호)는 canonicalCert를 거치면 전부
+        // 같은 값이다. 원본 문자열 기준으로만 distinct하면 눈에는 같아 보이는 값이
+        // 배너에 세 번 나열되는 문제가 있었다.
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900,
+                new String[]{"정크자격", "정크자격 ", "정크자격()"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+
+        List<String> unrecognized = calc(user, List.of(passer)).getUnrecognizedCertifications();
+
+        assertThat(unrecognized).hasSize(1);
+        assertThat(unrecognized.get(0)).isEqualTo("정크자격"); // 맨 처음 등장한 원본 표기를 보여준다
+    }
+
+    @Test
+    void 미인식_목록은_서로_다른_자격증이면_전부_보여준다() {
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900,
+                new String[]{"정크A", "정크B", "정크A"}); // 정크A는 원본까지 완전히 동일 중복
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+
+        List<String> unrecognized = calc(user, List.of(passer)).getUnrecognizedCertifications();
+
+        assertThat(unrecognized).containsExactly("정크A", "정크B");
+    }
+
+    // --- 4번: 유사 합격자가 0명이어도 미인식 고지는 살아있어야 한다 ---
+
+    @Test
+    void 유사_합격자가_0명이어도_미인식_자격증은_보고된다() {
+        // 예전엔 passerList가 비어있으면 total/compareRows뿐 아니라
+        // unrecognizedCertifications까지 통째로 빈 리스트를 반환했다. 자격증 인식 여부는
+        // 유사 합격자 유무와 무관한 질문이라, 총점을 못 내는 상황에서도 "이 자격증은
+        // 우리가 못 알아봤다"는 사실만큼은 알려줄 수 있어야 한다.
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"완전정크자격증"});
+
+        MatchScoreResult result = calculator.calculate(user, List.of(), Set.of());
+
+        assertThat(result.getTotalScore()).isZero();
+        assertThat(result.getUnrecognizedCertifications()).containsExactly("완전정크자격증");
+    }
+
+    @Test
+    void 유사_합격자가_0명이면_인식된_자격증에_대해선_미인식_목록이_비어있다() {
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"});
+
+        MatchScoreResult result = calculator.calculate(user, List.of(), Set.of());
+
+        assertThat(result.getTotalScore()).isZero(); // 비교 대상이 없어 총점은 0
+        assertThat(result.getUnrecognizedCertifications()).isEmpty(); // 하지만 인식은 됨
     }
 
     private UserSpec userSpec(String gpa, String gpaMax, String opicGrade,
