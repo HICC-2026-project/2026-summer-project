@@ -23,6 +23,7 @@ interface AppScreenProps {
   isDemo: boolean;
   onOpenDetail: (id: string | number) => void;
   onEditSpec: () => void;
+  onOpenPasserReport: () => void;
   onLogout: () => void;
 }
 
@@ -42,6 +43,7 @@ export function AppScreen({
   isDemo,
   onOpenDetail,
   onEditSpec,
+  onOpenPasserReport,
   onLogout,
 }: AppScreenProps) {
   return (
@@ -71,6 +73,7 @@ export function AppScreen({
             nickname={nickname}
             isDemo={isDemo}
             onEditSpec={onEditSpec}
+            onOpenPasserReport={onOpenPasserReport}
             onLogout={onLogout}
           />
         )}

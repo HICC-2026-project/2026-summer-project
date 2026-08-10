@@ -12,6 +12,7 @@ interface ProfileTabProps {
   /** 비로그인 예시 화면 여부. 저장할 계정이 없어 수정 대신 로그인을 유도한다. */
   isDemo: boolean;
   onEditSpec: () => void;
+  onOpenPasserReport: () => void;
   onLogout: () => void;
 }
 
@@ -25,7 +26,15 @@ function rowStyle(hasBorder: boolean): CSSProperties {
   };
 }
 
-export function ProfileTab({ spec, target, nickname, isDemo, onEditSpec, onLogout }: ProfileTabProps) {
+export function ProfileTab({
+  spec,
+  target,
+  nickname,
+  isDemo,
+  onEditSpec,
+  onOpenPasserReport,
+  onLogout,
+}: ProfileTabProps) {
   const displayName = nickname ?? DEMO_USER_NAME;
   const targetSummary = `${target.size} ${jobLabel(target.job)}`;
   const certLabel = spec.certs.length ? spec.certs.join(", ") : "없음";
@@ -111,6 +120,31 @@ export function ProfileTab({ spec, target, nickname, isDemo, onEditSpec, onLogou
       >
         {isDemo ? "카카오로 시작하고 내 스펙 입력하기" : "스펙 · 목표 수정하기"}
       </button>
+
+      {!isDemo && (
+        <>
+          <button
+            type="button"
+            onClick={onOpenPasserReport}
+            style={{
+              width: "100%",
+              height: 52,
+              border: `1px solid color-mix(in srgb, ${PRIMARY} 24%, #E1E0EA)`,
+              borderRadius: 16,
+              background: `color-mix(in srgb, ${PRIMARY} 6%, #fff)`,
+              color: PRIMARY,
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            합격자 스펙 제보하기
+          </button>
+          <p style={{ margin: "9px 8px 0", fontSize: 11.5, color: "#9797A1", lineHeight: 1.5, textAlign: "center" }}>
+            제보 내용은 익명으로 저장되며, 검수 완료 후 비교 데이터에 반영됩니다.
+          </p>
+        </>
+      )}
 
       <p style={{ textAlign: "center", fontSize: 12, color: "#B0B0BA", margin: "22px 0 0" }}>
         <a

@@ -1,4 +1,4 @@
-export type Screen = "login" | "intro" | "onboard" | "analyzing" | "app";
+export type Screen = "login" | "intro" | "onboard" | "analyzing" | "app" | "passer-report";
 export type OnboardStep = 0 | 1;
 export type Tab = "home" | "roadmap" | "compare" | "profile";
 export type Priority = "HIGH" | "MEDIUM" | "LOW";
@@ -22,6 +22,25 @@ export interface LanguageScorePayload {
   score?: number;
   maxScore?: number;
   grade?: string;
+}
+
+// POST /api/v1/passers/reports 요청·응답.
+// 제보는 검수 전 USER_REPORT / isVerified=false로 저장되며 PENDING 상태를 돌려준다.
+export interface PasserReportRequest {
+  jobType: JobCode;
+  year: number;
+  gpa: number;
+  gpaMax: number;
+  languageScores: LanguageScorePayload[];
+  certifications: string[];
+  experienceCount: number;
+  consent: boolean;
+}
+
+export interface PasserReportResponse {
+  reportId: string;
+  status: "PENDING";
+  message: string;
 }
 
 // GET /users/me response shape.
