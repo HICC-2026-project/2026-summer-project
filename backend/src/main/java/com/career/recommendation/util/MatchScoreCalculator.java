@@ -41,8 +41,13 @@ public class MatchScoreCalculator {
     /** 기본 가중치가 붙는 자격증(=CERT_WEIGHTS에 없는 표기)은 최대 이 개수까지만 인정한다(게이밍 방지). */
     private static final int MAX_DEFAULT_WEIGHT_CERTS = 2;
 
-    /** 공백·구분기호·필기/실기 등 부가어를 지우기 위한 패턴. canonicalCert에서 이 순서대로 적용한다. */
-    private static final Pattern CERT_SEPARATOR_PATTERN = Pattern.compile("[\\s\\-_·/()\\[\\].,]");
+    /**
+     * 공백·구분기호·필기/실기 등 부가어를 지우기 위한 패턴. canonicalCert에서 이 순서대로 적용한다.
+     * \s는 ASCII 공백만 매칭해 전각공백(U+3000 — 노션·한글 문서·일부 모바일 키보드에서 흔히 섞임)을
+     * 놓친다. 놓치면 "SQLD　필기"가 "SQLD　"로 남아 CERT_WEIGHTS의 "SQLD"와 안 맞고
+     * 예외 없이 조용히 DEFAULT_CERT_WEIGHT로 떨어지므로 명시적으로 추가한다.
+     */
+    private static final Pattern CERT_SEPARATOR_PATTERN = Pattern.compile("[\\s\\u3000\\-_·/()\\[\\].,]");
     private static final Pattern CERT_NOISE_PATTERN =
             Pattern.compile("(필기|실기|합격|취득|자격증|예정|준비중|보유)");
 

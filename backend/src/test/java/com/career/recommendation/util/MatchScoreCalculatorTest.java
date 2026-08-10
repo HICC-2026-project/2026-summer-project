@@ -109,6 +109,17 @@ class MatchScoreCalculatorTest {
     }
 
     @Test
+    void 전각공백이_섞여도_정규화된다() {
+        // 노션·한글 문서·일부 모바일 키보드에서 흔한 전각공백(U+3000, "　")은
+        // 정규식 \s가 ASCII 공백만 매칭해 놓치기 쉽다. 놓치면 "SQLD　필기"가
+        // "SQLD　"로 남아 CERT_WEIGHTS의 "SQLD"와 안 맞고 조용히 기본 가중치로 떨어진다.
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"SQLD　필기"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"SQLD"}, 1);
+
+        assertThat(calculator.calculate(user, List.of(passer)).getTotalScore()).isEqualTo(100);
+    }
+
+    @Test
     void 자격증_별칭도_표준_표기와_동일하게_매칭된다() {
         // "SQL개발자"는 CERT_ALIASES를 통해 "SQLD"로 모여야 한다.
         UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"SQL개발자"});
