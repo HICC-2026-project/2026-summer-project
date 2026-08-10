@@ -43,8 +43,27 @@ public class MatchScoreCalculator {
      * 4: 자격증 막대(myPct·avgPct)의 기준을 상대값에서 고정값(CERT_SCALE_MAX)으로 교체.
      *    총점 계산식 자체는 3과 동일하지만, compareRows가 캐시 JSON에 함께 저장되므로
      *    버전을 올리지 않으면 기존 유저는 계속 옛 막대(합격자 항상 67%)를 보게 된다.
+     * 5: 학점 점수에 바닥값(GPA_FLOOR_RATIO)을 도입. 학점 축만 하위 구간을 쓰지 않아
+     *    명목 가중치(40%)보다 실제 영향력이 작았던 문제를 바로잡는다.
      */
-    public static final int CURRENT_SCORE_FORMULA_VERSION = 4;
+    public static final int CURRENT_SCORE_FORMULA_VERSION = 5;
+
+    /**
+     * 학점 점수의 바닥값(정규화 학점 비율). 이 값 이하는 학점 항목에서 0점으로 본다.
+     *
+     * 도입 이유: 점수를 단순 비율(내 비율 / 합격자 비율)로 내면 학점 축만 하위 구간을
+     * 쓰지 않는다. 현실적으로 학점 비율이 0에 가까운 사람은 없기 때문이다(운영 합격자
+     * 60명의 실측 범위는 0.689~0.938). 그 결과 학점 2.5/4.5(=0.556)인 사람도 68점을 받아,
+     * 어학·자격증이 0~100 전 구간을 쓰는 것과 영향력이 맞지 않았다. 실제로 이 때문에
+     * "학점 3.7·어학 미입력(40점)"이 "학점 2.5·토익 500(47점)"보다 낮게 나오는
+     * 역전이 발생했다.
+     *
+     * 값 근거: 만점의 50%(4.5 기준 2.25). 관측된 합격자 최저치(0.689)보다 충분히 낮게 잡아
+     * 합격자 구간 전체가 0~100 안에 들어오도록 했다. 어학·자격증에는 같은 처리를 하지
+     * 않는다 — 그 두 축은 "시험을 안 봤다/자격증이 없다"로 실제 0이 가능해서 이미
+     * 전 구간을 쓰고 있고, 학점만 못 쓰고 있던 것이 문제였기 때문이다.
+     */
+    private static final double GPA_FLOOR_RATIO = 0.5;
 
     /**
      * 자격증 막대의 100% 기준이 되는 가중치 합. 학점이 4.5, 어학이 990이라는 고정 만점으로
@@ -326,7 +345,17 @@ public class MatchScoreCalculator {
         double passerVal = passerGpa.doubleValue() / passerGpaMax.doubleValue();
         if (passerVal <= 0) return 100.0;
         if (userVal >= passerVal) return 100.0;
-        return Math.max(0.0, (userVal / passerVal) * 100.0);
+
+        // 바닥값(GPA_FLOOR_RATIO)부터 합격자 기준선까지를 0~100으로 편다.
+        // 단순 비율(userVal / passerVal)을 쓰면 학점 축만 하위 구간을 못 써서,
+        // 명목 가중치 40%에 비해 실제 영향력이 훨씬 작아진다(GPA_FLOOR_RATIO 주석 참고).
+        double span = passerVal - GPA_FLOOR_RATIO;
+        if (span <= 0) {
+            // 합격자 학점이 바닥값 이하라 구간을 만들 수 없다. 이 경우엔 바닥값을 적용하지 않고
+            // 예전처럼 단순 비율로 비교한다(분모가 0 이하가 되는 것을 막는다).
+            return Math.max(0.0, (userVal / passerVal) * 100.0);
+        }
+        return Math.max(0.0, (userVal - GPA_FLOOR_RATIO) / span * 100.0);
     }
 
     private double scoreLang(List<Map<String, Object>> userLangScores,

@@ -426,6 +426,66 @@ class MatchScoreCalculatorTest {
         assertThat(result.getUnrecognizedCertifications()).isEmpty(); // 하지만 인식은 됨
     }
 
+    // --- 학점 바닥값 (v5) ---
+
+    @Test
+    void 학점이_바닥값_이하면_학점_항목은_0점이다() {
+        // 바닥값 0.5 = 만점의 절반. 2.25/4.50이 정확히 경계다.
+        // 어학·자격증을 합격자와 동일하게 맞춰 학점 기여분만 남긴다(어학 33.3 + 자격증 26.7 = 60).
+        UserSpec user = userSpec("2.20", "4.50", "IH", 900, new String[]{"SQLD"});
+        PasserData passer = passer("3.70", "4.50", "IH", 900, new String[]{"SQLD"}, 1);
+
+        assertThat(calc(user, List.of(passer)).getTotalScore()).isEqualTo(60);
+    }
+
+    @Test
+    void 학점_점수는_바닥값부터_합격자까지를_0에서_100으로_편다() {
+        // 합격자 0.8222(3.70/4.50), 바닥 0.5 → 구간 0.3222
+        // 유저 0.6667(3.00/4.50) → (0.6667-0.5)/0.3222 = 51.7 → 학점 기여 20.7
+        // 어학·자격증은 동일하므로 60 + 20.7 = 80.7 → 81
+        UserSpec user = userSpec("3.00", "4.50", "IH", 900, new String[]{"SQLD"});
+        PasserData passer = passer("3.70", "4.50", "IH", 900, new String[]{"SQLD"}, 1);
+
+        assertThat(calc(user, List.of(passer)).getTotalScore()).isEqualTo(81);
+    }
+
+    @Test
+    void 합격자_학점이_바닥값_이하면_단순_비율로_비교한다() {
+        // 합격자 0.4444(2.00/4.50)는 바닥값보다 낮아 구간을 만들 수 없다.
+        // 이때는 바닥값을 적용하지 않고 예전처럼 단순 비율로 비교한다(분모 0 이하 방지).
+        // 유저 0.2222(1.00/4.50) / 합격자 0.4444 = 50 → 학점 기여 20 → 60 + 20 = 80
+        UserSpec user = userSpec("1.00", "4.50", "IH", 900, new String[]{"SQLD"});
+        PasserData passer = passer("2.00", "4.50", "IH", 900, new String[]{"SQLD"}, 1);
+
+        assertThat(calc(user, List.of(passer)).getTotalScore()).isEqualTo(80);
+    }
+
+    @Test
+    void 학점이_높고_어학이_없는_쪽이_학점이_낮고_어학이_있는_쪽보다_높다() {
+        // v5 이전의 역전 케이스를 고정한다. 학점 축만 하위 구간을 쓰지 않아
+        // "3.7·어학 미입력(40점)"이 "2.5·토익 500(47점)"보다 낮게 나왔다.
+        List<PasserData> passers = List.of(
+                passer("3.70", "4.50", "IH", 850, new String[]{"정보처리기사", "SQLD"}, 1),
+                passer("3.60", "4.50", "IH", 820, new String[]{"SQLD"}, 1),
+                passer("3.80", "4.50", "IH", 840, new String[]{"정보처리기사", "AWS SAA"}, 1));
+
+        UserSpec highGpaOnly = UserSpec.builder()
+                .gpa(new BigDecimal("3.70")).gpaMax(new BigDecimal("4.50"))
+                .languageScores(List.of())
+                .certifications(new String[]{})
+                .build();
+        UserSpec lowGpaWithLang = UserSpec.builder()
+                .gpa(new BigDecimal("2.50")).gpaMax(new BigDecimal("4.50"))
+                .languageScores(List.of(Map.of("type", "TOEIC", "score", 500, "maxScore", 990)))
+                .certifications(new String[]{})
+                .build();
+
+        int highGpaScore = calc(highGpaOnly, passers).getTotalScore();
+        int lowGpaScore = calc(lowGpaWithLang, passers).getTotalScore();
+
+        assertThat(highGpaScore).isGreaterThan(lowGpaScore);
+    }
+
     private UserSpec userSpec(String gpa, String gpaMax, String opicGrade,
                               int toeicScore, String[] certifications) {
         return UserSpec.builder()
