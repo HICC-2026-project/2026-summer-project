@@ -209,19 +209,26 @@ public class RecommendationService {
         return buildFallbackResponse(activeActivities, userSpec, similarPassers, comparisonMessage, targetJobName, similarPasserCount, globalCertPool);
     }
 
-    /** Gemini 미사용/실패 시 DB 등록 활동 기반 기본 추천 반환 (방어 로직) */
+    /**
+     * Gemini 미사용/실패 시 DB 등록 활동 기반 기본 추천 반환 (방어 로직).
+     *
+     * ⚠️ 이 메서드는 절대 null을 반환하지 않는다. 호출부(getRecommendations)가 반환값에
+     * 곧바로 isAiRecommendation()을 호출하므로, null을 주면 추천 API 전체가 NPE로 500이 된다.
+     * 추천 가능한 활동이 0건인 상황(전 활동 마감·비활성화, 크롤링 중단 등)은 장애가 아니라
+     * 정상적으로 발생할 수 있는 상태이므로, 활동 목록만 비운 응답을 만든다.
+     * 점수·비교표·미인식 자격증 고지는 활동 유무와 무관하게 계산되므로 그대로 내려보낸다
+     * (화면은 활동 0건을 "아직 추천할 활동이 없어요"로 이미 처리한다).
+     */
     private RecommendationResponse buildFallbackResponse(List<Activity> activeActivities, UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage, String targetJobName, int similarPasserCount, Set<String> globalCertPool) {
-        if (activeActivities == null || activeActivities.isEmpty()) {
-            return null;
-        }
+        List<Activity> safeActivities = (activeActivities != null) ? activeActivities : List.of();
 
         MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers, globalCertPool);
         boolean sampleComparisonData = containsSampleOrUnclassifiedData(similarPassers);
 
         List<ActivityRecommendation> recs = new ArrayList<>();
-        int count = Math.min(3, activeActivities.size());
+        int count = Math.min(3, safeActivities.size());
         for (int i = 0; i < count; i++) {
-            Activity a = activeActivities.get(i);
+            Activity a = safeActivities.get(i);
             recs.add(ActivityRecommendation.builder()
                     .id(a.getId())
                     .type(a.getType())

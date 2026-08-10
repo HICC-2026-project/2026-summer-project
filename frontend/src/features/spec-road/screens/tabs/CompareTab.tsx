@@ -16,7 +16,30 @@ export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
   const matchScore = isDemo ? COMPARE_SCORE : (recMeta?.matchScore ?? 0);
   const compareRows = isDemo ? COMPARE_ROWS : (recMeta?.compareRows ?? []);
   const unrecognizedCerts = isDemo ? [] : (recMeta?.unrecognizedCertifications ?? []);
-  
+
+  // 미인식 자격증 고지는 합격자 비교 결과와 무관한 정보다. 비교할 합격자가 없어
+  // 아래에서 조기 반환하는 경우에도 이 안내만은 보여준다 — 백엔드도 같은 이유로
+  // 합격자 0명일 때 unrecognizedCertifications만 채워서 내려준다.
+  const unrecognizedBanner = unrecognizedCerts.length > 0 && (
+    <div
+      style={{
+        marginTop: 14,
+        padding: "12px 15px",
+        border: "1px solid #EAE6F5",
+        borderRadius: 14,
+        background: "#F8F6FE",
+        color: "#5B5566",
+        fontSize: 12.5,
+        lineHeight: 1.6,
+      }}
+    >
+      <b style={{ color: "#15141B" }}>인식하지 못한 자격증이 있어요: </b>
+      {unrecognizedCerts.join(", ")}
+      <br />
+      정확한 명칭으로 다시 입력하면 점수에 반영돼요.
+    </div>
+  );
+
   // 데이터 로딩 중 (비로그인 아님 & API 아직 안 옴)
   if (!isDemo && !recMeta) {
     return (
@@ -45,6 +68,7 @@ export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
           title="비교 가능한 데이터가 부족해요"
           description="입력해주신 직무와 학점에 딱 맞는 유사 합격자 데이터가 아직 부족하여 분석 결과를 제공해 드릴 수 없어요. 더 많은 데이터가 모일 때까지 기다려 주세요!"
         />
+        {unrecognizedBanner}
       </div>
     );
   }
@@ -211,25 +235,7 @@ export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
         })}
       </div>
 
-      {unrecognizedCerts.length > 0 && (
-        <div
-          style={{
-            marginTop: 14,
-            padding: "12px 15px",
-            border: "1px solid #EAE6F5",
-            borderRadius: 14,
-            background: "#F8F6FE",
-            color: "#5B5566",
-            fontSize: 12.5,
-            lineHeight: 1.6,
-          }}
-        >
-          <b style={{ color: "#15141B" }}>인식하지 못한 자격증이 있어요: </b>
-          {unrecognizedCerts.join(", ")}
-          <br />
-          정확한 명칭으로 다시 입력하면 점수에 반영돼요.
-        </div>
-      )}
+      {unrecognizedBanner}
     </div>
   );
 }
