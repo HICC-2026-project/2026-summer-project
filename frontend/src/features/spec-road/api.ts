@@ -3,6 +3,8 @@ import { getRefreshToken } from "@/lib/auth";
 import { toLanguageScoresPayload } from "./helpers";
 import type {
   ActivityDetailResponse,
+  PasserReportRequest,
+  PasserReportResponse,
   RecommendationsResponse,
   RoadmapResponse,
   Spec,
@@ -69,5 +71,14 @@ export function putTarget(target: Target): Promise<TargetJobResponse> {
       companySize: target.size,
       industry: target.industry,
     }),
+  });
+}
+
+// 로그인 사용자의 익명 합격 스펙 제보.
+// 접수된 데이터는 팀 검수 전까지 추천·비교에 사용되지 않는다.
+export function postPasserReport(request: PasserReportRequest): Promise<PasserReportResponse> {
+  return apiFetch<PasserReportResponse>("/api/v1/passers/reports", {
+    method: "POST",
+    body: JSON.stringify(request),
   });
 }

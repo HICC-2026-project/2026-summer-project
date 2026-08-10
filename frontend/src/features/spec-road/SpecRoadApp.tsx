@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, KAKAO_LOGIN_URL } from "@/lib/api";
 import { clearTokens, getAccessToken, onSessionExpired } from "@/lib/auth";
-import { getMe, getRecommendations, getRoadmap, postLogout, putSpec, putTarget } from "./api";
+import { getMe, getRecommendations, getRoadmap, postLogout, postPasserReport, putSpec, putTarget } from "./api";
 import { RECOMMENDATIONS, ROADMAP } from "./data";
 import {
   fromLanguageScoresPayload,
@@ -19,6 +19,7 @@ import { DetailSheet } from "./screens/DetailSheet";
 import { IntroScreen } from "./screens/IntroScreen";
 import { LoginScreen } from "./screens/LoginScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
+import { PasserReportScreen } from "./screens/PasserReportScreen";
 import type {
   OnboardStep,
   Recommendation,
@@ -382,6 +383,18 @@ export function SpecRoadApp() {
 
         {screen === "analyzing" && <AnalyzingScreen />}
 
+        {screen === "passer-report" && (
+          <PasserReportScreen
+            initialSpec={spec}
+            initialJob={target.job}
+            onBack={() => {
+              setScreen("app");
+              setTab("profile");
+            }}
+            onSubmit={postPasserReport}
+          />
+        )}
+
         {screen === "app" && (
           <AppScreen
             tab={tab}
@@ -398,6 +411,7 @@ export function SpecRoadApp() {
             roadmapError={isDemo ? false : roadmapError}
             isDemo={isDemo}
             onOpenDetail={setDetailId}
+            onOpenPasserReport={() => setScreen("passer-report")}
             onEditSpec={() => {
               // 예시 화면에는 저장할 계정이 없어, 수정 대신 로그인으로 보낸다.
               if (isDemo) {
