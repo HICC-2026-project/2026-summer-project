@@ -42,9 +42,11 @@ export function DetailSheet({ recommendationId, recommendations, recMeta, onClos
 
   if (!rec) return null;
 
-  // 개별 점수(score)는 목업에만 있고, 실 API는 응답 최상단 matchScore 하나만 준다.
-  const score = rec.score ?? recMeta?.matchScore ?? 0;
-  const scoreDeg = score * 3.6;
+  // 개별 활동 점수(score)는 목업(둘러보기)에만 있다.
+  // 실 API는 응답 최상단 matchScore(종합 준비도) 하나만 주는데, 그 값을 이 자리에 넣으면
+  // 어떤 활동을 열어도 같은 숫자가 떠서 "이 활동과의 매치도"로 오해하게 된다. 그래서 숨긴다.
+  const activityScore = rec.score ?? null;
+  const scoreDeg = (activityScore ?? 0) * 3.6;
   // 상세 근거: 목업은 bullets 배열, 실 API는 단일 reason 문자열을 준다.
   const bullets = rec.bullets && rec.bullets.length > 0 ? rec.bullets : [rec.reason];
   // 비교 안내 문구: 목업은 유사 합격자 수, 실 API는 comparisonMessage.
@@ -113,32 +115,34 @@ export function DetailSheet({ recommendationId, recommendations, recMeta, onClos
               marginBottom: 20,
             }}
           >
-            <div
-              style={{
-                position: "relative",
-                width: 84,
-                height: 84,
-                flexShrink: 0,
-                borderRadius: "50%",
-                background: `conic-gradient(${PRIMARY} ${scoreDeg}deg, #DCE7FE 0)`,
-              }}
-            >
+            {activityScore != null && (
               <div
                 style={{
-                  position: "absolute",
-                  inset: 8,
+                  position: "relative",
+                  width: 84,
+                  height: 84,
+                  flexShrink: 0,
                   borderRadius: "50%",
-                  background: "#fff",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
+                  background: `conic-gradient(${PRIMARY} ${scoreDeg}deg, #DCE7FE 0)`,
                 }}
               >
-                <span style={{ fontSize: 26, fontWeight: 800, color: PRIMARY, lineHeight: 1 }}>{score}</span>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#B0B0BA" }}>매치</span>
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 8,
+                    borderRadius: "50%",
+                    background: "#fff",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <span style={{ fontSize: 26, fontWeight: 800, color: PRIMARY, lineHeight: 1 }}>{activityScore}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "#B0B0BA" }}>매치</span>
+                </div>
               </div>
-            </div>
+            )}
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14.5, fontWeight: 800, color: "#15141B", marginBottom: 4 }}>나와 잘 맞는 활동이에요</div>
               <div style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5 }}>{matchSubtitle}</div>
