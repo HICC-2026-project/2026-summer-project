@@ -12,6 +12,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -21,6 +23,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.same;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,8 +40,21 @@ class UserSpecServiceTest {
     @Mock
     private Authentication authentication;
 
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
     @InjectMocks
     private UserSpecService userSpecService;
+
+    /**
+     * UserSpecService.upsert()는 TransactionTemplate으로 REQUIRES_NEW 트랜잭션을 직접
+     * 관리한다(동시 저장 경합 방지 — 클래스 상단 주석 참고). 순수 Mockito 단위 테스트에서는
+     * 실제 트랜잭션이 필요 없고, TransactionTemplate이 getTransaction()으로 얻은
+     * TransactionStatus를 콜백에 넘기기만 하면 되므로 빈 mock으로 충분하다.
+     */
+    private void stubTransactionManager() {
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+    }
 
     @Test
     void 최초_저장시_DTO를_Entity_형식으로_변환한다() {
@@ -46,15 +62,16 @@ class UserSpecServiceTest {
         User user = createUser(userId);
         UserSpecRequest request = createRequest();
 
+        stubTransactionManager();
         when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
         when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
-        when(userSpecRepository.save(any(UserSpec.class)))
+        when(userSpecRepository.saveAndFlush(any(UserSpec.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         userSpecService.saveOrUpdateMySpec(authentication, request);
 
         ArgumentCaptor<UserSpec> captor = ArgumentCaptor.forClass(UserSpec.class);
-        verify(userSpecRepository).save(captor.capture());
+        verify(userSpecRepository).saveAndFlush(captor.capture());
 
         UserSpec savedUserSpec = captor.getValue();
         assertThat(savedUserSpec.getUser()).isSameAs(user);
@@ -76,15 +93,16 @@ class UserSpecServiceTest {
         UserSpecRequest request = createRequest();
         request.setCertifications(List.of(" SQLD ", "SQLD", " 정보처리기사 "));
 
+        stubTransactionManager();
         when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
         when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
-        when(userSpecRepository.save(any(UserSpec.class)))
+        when(userSpecRepository.saveAndFlush(any(UserSpec.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         userSpecService.saveOrUpdateMySpec(authentication, request);
 
         ArgumentCaptor<UserSpec> captor = ArgumentCaptor.forClass(UserSpec.class);
-        verify(userSpecRepository).save(captor.capture());
+        verify(userSpecRepository).saveAndFlush(captor.capture());
 
         assertThat(captor.getValue().getCertifications())
                 .containsExactly("SQLD", "정보처리기사");
@@ -104,14 +122,15 @@ class UserSpecServiceTest {
                 .build();
         UserSpecRequest request = createRequest();
 
+        stubTransactionManager();
         when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
         when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.of(existingUserSpec));
-        when(userSpecRepository.save(any(UserSpec.class)))
+        when(userSpecRepository.saveAndFlush(any(UserSpec.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         userSpecService.saveOrUpdateMySpec(authentication, request);
 
-        verify(userSpecRepository).save(same(existingUserSpec));
+        verify(userSpecRepository).saveAndFlush(same(existingUserSpec));
         assertThat(existingUserSpec.getId()).isEqualTo(userSpecId);
         assertThat(existingUserSpec.getGpa()).isEqualByComparingTo("3.8");
         assertThat(existingUserSpec.getGrade()).isEqualTo(3);
@@ -125,15 +144,16 @@ class UserSpecServiceTest {
         request.setLanguageScores(List.of());
         request.setCertifications(List.of());
 
+        stubTransactionManager();
         when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
         when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
-        when(userSpecRepository.save(any(UserSpec.class)))
+        when(userSpecRepository.saveAndFlush(any(UserSpec.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         userSpecService.saveOrUpdateMySpec(authentication, request);
 
         ArgumentCaptor<UserSpec> captor = ArgumentCaptor.forClass(UserSpec.class);
-        verify(userSpecRepository).save(captor.capture());
+        verify(userSpecRepository).saveAndFlush(captor.capture());
 
         UserSpec savedUserSpec = captor.getValue();
         assertThat(savedUserSpec.getLanguageScores()).isEmpty();
