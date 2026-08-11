@@ -44,7 +44,7 @@ export function RoadmapTab({ target, roadmap, roadmapLoading, roadmapError, road
             lineHeight: 1.5,
           }}
         >
-          오늘 로드맵 갱신 횟수(3회)를 모두 사용해서 이전 로드맵을 보여드리고 있어요. 내일 첫 방문 때 새로
+          오늘 로드맵 호출 횟수(3회)를 모두 사용해서 이전 로드맵을 보여드리고 있어요. 내일 첫 방문 때 새로
           만들어져요.
         </div>
       )}

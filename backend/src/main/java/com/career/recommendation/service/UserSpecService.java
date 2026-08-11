@@ -103,6 +103,11 @@ public class UserSpecService {
             return retry.execute(status -> {
                 UserSpec existing = userSpecRepository.findByUser_Id(user.getId())
                         .orElseThrow(() -> e);
+                // 경합에서 진 요청이 이긴 요청과 같은 내용이면(더블클릭·네트워크 재시도)
+                // UPDATE를 생략한다 — insertAttempt 쪽 무변경 가드와 같은 이유.
+                if (!hasChanges(existing, request)) {
+                    return existing;
+                }
                 updateUserSpecFields(existing, request);
                 return userSpecRepository.saveAndFlush(existing);
             });
@@ -127,8 +132,13 @@ public class UserSpecService {
      * 스펙 변경으로 판정해 추천 갱신 횟수를 헛되이 차감하는 문제가 있었다.
      */
     private boolean hasChanges(UserSpec existing, UserSpecRequest request) {
-        if (!Objects.equals(existing.getGpa(), request.getGpa())) return true;
-        if (!Objects.equals(existing.getGpaMax(), request.getGpaMax())) return true;
+        // ⚠️ BigDecimal은 Objects.equals로 비교하면 안 된다 — equals가 scale까지 본다.
+        // gpa 컬럼은 NUMERIC(4,2)라 DB에서 읽은 값은 3.80(scale 2)인데 FE는 3.8(scale 1)을
+        // 보내므로, equals 비교면 무변경 저장이 전부 "변경"으로 판정돼 이 메서드의 목적
+        // (updatedAt 보존 → 호출 횟수 미차감)이 실제 요청 경로에서 전혀 동작하지 않는다.
+        // 값 기준 비교(compareTo)를 써야 한다.
+        if (!bigDecimalValueEquals(existing.getGpa(), request.getGpa())) return true;
+        if (!bigDecimalValueEquals(existing.getGpaMax(), request.getGpaMax())) return true;
         if (!Objects.equals(existing.getGrade(), request.getGrade())) return true;
         if (!Arrays.equals(existing.getCertifications(), convertCertifications(request))) return true;
 
@@ -137,6 +147,11 @@ public class UserSpecService {
         if (!Objects.equals(oldLang, newLang)) return true;
 
         return false;
+    }
+
+    private boolean bigDecimalValueEquals(java.math.BigDecimal a, java.math.BigDecimal b) {
+        if (a == null || b == null) return a == b;
+        return a.compareTo(b) == 0;
     }
 
     private List<Map<String, Object>> convertLanguageScores(

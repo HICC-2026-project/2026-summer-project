@@ -77,6 +77,11 @@ public class TargetJobService {
             return retry.execute(status -> {
                 TargetJob existing = targetJobRepository.findByUser_Id(user.getId())
                         .orElseThrow(() -> e);
+                // 경합에서 진 요청이 이긴 요청과 같은 내용이면(더블클릭·네트워크 재시도)
+                // UPDATE를 생략한다 — insertAttempt 쪽 무변경 가드와 같은 이유.
+                if (!hasChanges(existing, request)) {
+                    return existing;
+                }
                 existing.setJobType(request.getJobType());
                 existing.setCompanySize(request.getCompanySize());
                 existing.setIndustry(request.getIndustry());
