@@ -52,8 +52,14 @@ public class MatchScoreCalculator {
      *    가중합 + 결측 축 제외·가중치 재정규화"로 재구성. 합격자 결측 필드가 자동 100점으로
      *    잡혀 총점을 부풀리던 문제(비교 탭 막대는 결측을 "제외"로 처리해 화면 안에서 총점과
      *    막대가 모순돼 보이던 문제)를 바로잡는다 — calculateTotalScore 주석 참고.
+     * 8: (a) 비교 행 표시 규칙을 총점과 통일 — 합격자 데이터가 없어 총점에서 제외된 축은
+     *    행도 표시하지 않는다(예전엔 사용자만 값이 있으면 "충족"+명목 가중치로 그려져
+     *    점수-막대 모순이 남았다). (b) 직무 유도 자격증 가중치에 최소 표본
+     *    (MIN_JOB_WEIGHT_SAMPLE) 도입 — 합격자 1~2명짜리 직무에서 보유율 100%가 나와
+     *    큐레이션 가중치를 뒤집던 문제. (c) OPIc "IM"(세부등급 미기재) 환산 추가 —
+     *    검증은 통과하는데 환산표에 없어 조용히 0점 처리되던 값.
      */
-    public static final int CURRENT_SCORE_FORMULA_VERSION = 7;
+    public static final int CURRENT_SCORE_FORMULA_VERSION = 8;
 
     /**
      * 직무별 자격증 가중치의 하한·상한. 해당 직무 합격자의 보유율 0~100%를 이 구간으로 편다.
@@ -65,6 +71,13 @@ public class MatchScoreCalculator {
      */
     private static final double JOB_WEIGHT_MIN = 0.5;
     private static final double JOB_WEIGHT_MAX = 2.5;
+
+    /**
+     * 직무 유도 가중치를 신뢰하기 위한 최소 합격자 수. 이 값 미만이면 보유율이 개인의
+     * 우연(1명이 갖고 있으면 100%)에 좌우되므로 큐레이션 표(CERT_WEIGHTS)로 폴백한다 —
+     * SimilarSpecFinder.MIN_SAMPLE(비교 표본 3명)과 같은 원칙(calculate() 주석 참고).
+     */
+    private static final int MIN_JOB_WEIGHT_SAMPLE = 3;
 
     /**
      * 학점 점수의 바닥값(정규화 학점 비율). 이 값 이하는 학점 항목에서 0점으로 본다.
@@ -207,10 +220,17 @@ public class MatchScoreCalculator {
      */
     public MatchScoreResult calculate(UserSpec userSpec, List<PasserData> passerList,
                                       Set<String> globalCertPool, List<String[]> jobPasserCertRows) {
+        // ⚠️ 직무 유도 가중치도 최소 표본을 요구한다(SimilarSpecFinder.MIN_SAMPLE과 같은 원칙).
+        // 합격자가 1~2명뿐인 직무에선 그 한두 사람이 우연히 가진 자격증의 보유율이 100%가
+        // 되어 가중치 상한(2.5)까지 치솟는다 — 예: 합격자 1명이 웹디자인기능사(큐레이션 0.5)를
+        // 갖고 있으면 그 직무에선 웹디자인기능사(2.5)가 정보처리기사(2.0)보다 높게 평가되는
+        // "이상한 결론"이 나왔다. 표본 미달이면 직무 데이터가 없는 것과 동일하게 큐레이션
+        // 표(CERT_WEIGHTS)로 폴백한다.
+        boolean hasJobData = jobPasserCertRows != null && jobPasserCertRows.size() >= MIN_JOB_WEIGHT_SAMPLE;
         CertContext certContext = new CertContext(
                 collectObservedCerts(globalCertPool),
-                buildJobCertWeights(jobPasserCertRows),
-                jobPasserCertRows != null && !jobPasserCertRows.isEmpty());
+                hasJobData ? buildJobCertWeights(jobPasserCertRows) : Map.of(),
+                hasJobData);
 
         if (userSpec == null) {
             return MatchScoreResult.builder()
@@ -382,16 +402,21 @@ public class MatchScoreCalculator {
                 .status(userCertValue >= avgPasserCertValue ? "충족" : "부족")
                 .build();
 
-        // ⚠️ 사용자도 미입력이고 합격자 쪽도 데이터가 없는 항목은 행 자체를 뺀다.
-        // 두 값이 모두 0이면 status 판정(user >= avg)이 0 >= 0 = true로 떨어져,
-        // "미입력" 옆에 초록 "충족" 배지가 붙고 비교 탭 요약("항목별로 고르게 준비되어
-        // 있어요")까지 아무것도 입력 안 한 항목 덕에 좋게 나오는 "이상한 결론"이 됐다.
-        // 비교할 근거가 양쪽 다 없는 항목은 충족도 부족도 아니므로 표시하지 않는 게 정직하다
-        // (사용자만 미입력이고 합격자 데이터는 있는 경우는 "부족"이 맞으므로 그대로 남긴다).
+        // ⚠️ 합격자 쪽 데이터가 없는 항목은 행 자체를 뺀다 — 총점(calculateTotalScore)이 그
+        // 축을 제외·가중치 재정규화하는 것과 같은 규칙을 화면에도 적용한다. 예전엔 "양쪽 다
+        // 0일 때만" 뺐는데, 그러면 사용자만 값이 있는 축(합격자 전원 결측)이 user >= avg(0)로
+        // 무조건 "충족" + 명목 가중치("40%") 라벨을 달고 그려졌다 — 정작 총점 계산엔 그 축이
+        // 아예 안 들어갔는데 화면은 "이 항목이 40%를 차지하고 충족"이라고 말하는, v7이 고친
+        // 것과 같은 부류의 점수-막대 모순이다. 비교의 근거는 합격자 데이터이므로, 합격자
+        // 데이터가 없으면 사용자 입력 여부와 무관하게 "비교 불가"로 행을 감춘다.
+        // (사용자만 미입력이고 합격자 데이터는 있는 경우는 "부족"이 맞으므로 그대로 남는다.)
+        //
+        // 남은 행의 weight 라벨("40%" 등)은 명목값 그대로 둔다 — 재정규화는 비율을 보존하므로
+        // (예: 어학 33.3% : 자격증 26.7% = 재정규화 후에도 5:4) 라벨 간 상대 비중은 계속 참이다.
         java.util.List<CompareRowDto> rows = new java.util.ArrayList<>(3);
-        if (!(userGpaNorm <= 0 && avgPasserGpaNorm <= 0)) rows.add(gpaRow);
-        if (!(userMaxToeic <= 0 && avgPasserToeic <= 0)) rows.add(langRow);
-        if (!(userCertValue <= 0 && avgPasserCertValue <= 0)) rows.add(certRow);
+        if (avgPasserGpaNorm > 0) rows.add(gpaRow);
+        if (avgPasserToeic > 0) rows.add(langRow);
+        if (avgPasserCertValue > 0) rows.add(certRow);
         return rows;
     }
 
@@ -476,7 +501,9 @@ public class MatchScoreCalculator {
                 case "AL" -> 950.0;
                 case "IH" -> 900.0;
                 case "IM3" -> 800.0;
-                case "IM2" -> 750.0;
+                // "IM"은 세부등급(IM1~3) 미기재 표기 — 검증(@Pattern)은 통과하는데 이 환산표에
+                // 없어서 조용히 0점(어학 미보유 취급)이 되던 값이다. 중간치인 IM2와 같게 본다.
+                case "IM2", "IM" -> 750.0;
                 case "IM1" -> 700.0;
                 case "IL" -> 600.0;
                 case "NH", "NM", "NL" -> 500.0;

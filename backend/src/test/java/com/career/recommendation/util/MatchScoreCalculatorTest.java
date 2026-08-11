@@ -533,7 +533,12 @@ class MatchScoreCalculatorTest {
         List<String[]> jobRowsAllEmpty = Arrays.asList(null, null, new String[]{}, null);
 
         UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"});
-        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{}, 1);
+        // 비교 대상 합격자에게 자격증을 준다 — v8부터 합격자 쪽 자격증 데이터가 전무하면
+        // 자격증 행 자체가 표시되지 않으므로(총점 축 제외와 동일 규칙), 행을 관찰하려면
+        // 비교 대상은 자격증이 있어야 한다. "직무 전체 보유율 0%"(jobRowsAllEmpty)와
+        // "비교 대상 5명은 자격증 보유"는 비교 대상이 학점 폴백으로 타 직무일 때 실제로
+        // 공존 가능한 조합이다.
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
 
         CompareRowDto certRow = calc(user, List.of(passer), jobRowsAllEmpty).getCompareRows().get(2);
 
@@ -545,7 +550,9 @@ class MatchScoreCalculatorTest {
     void 그_직무_합격자가_아무도_안_가진_자격증도_인식되면_하한_가중치를_받는다() {
         // SQLD는 이 직무 합격자 보유율 0%지만 실재하는 자격증이므로 0점이 아니라 하한(0.5)이다.
         // 0점은 "우리가 알아보지 못한 입력"에만 주는 값이라는 v3 불변식을 지켜야 한다.
-        List<String[]> jobRows = List.of(new String[]{"정보처리기사"}, new String[]{"정보처리기사"});
+        // (v8: 직무 표본이 3명 이상이어야 직무 가중치가 적용된다 — MIN_JOB_WEIGHT_SAMPLE)
+        List<String[]> jobRows = List.of(
+                new String[]{"정보처리기사"}, new String[]{"정보처리기사"}, new String[]{"정보처리기사"});
 
         UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"SQLD"});
         PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
@@ -576,14 +583,79 @@ class MatchScoreCalculatorTest {
         UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"SQLD"});
         PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
 
-        List<String[]> sqldHeavyJob = List.of(new String[]{"SQLD"}, new String[]{"SQLD"});      // 100%
-        List<String[]> sqldLightJob = List.of(new String[]{"SQLD"}, new String[]{"정보처리기사"}); // 50%
+        // (v8: 직무 표본 3명 이상이어야 직무 가중치가 적용된다 — 4명으로 구성해 보유율을 유지)
+        List<String[]> sqldHeavyJob = List.of(
+                new String[]{"SQLD"}, new String[]{"SQLD"}, new String[]{"SQLD"}, new String[]{"SQLD"}); // 100%
+        List<String[]> sqldLightJob = List.of(
+                new String[]{"SQLD"}, new String[]{"SQLD"},
+                new String[]{"정보처리기사"}, new String[]{"정보처리기사"}); // 50%
 
         int heavy = calc(user, List.of(passer), sqldHeavyJob).getCompareRows().get(2).getMyPct();
         int light = calc(user, List.of(passer), sqldLightJob).getCompareRows().get(2).getMyPct();
 
         assertThat(heavy).isEqualTo(56); // 2.5 / 4.5
         assertThat(light).isEqualTo(33); // 1.5 / 4.5
+    }
+
+    /**
+     * v8 회귀: 직무 합격자가 3명 미만이면 직무 유도 가중치를 쓰지 않고 큐레이션 표로
+     * 폴백해야 한다. 1~2명짜리 표본에선 그 한두 명이 우연히 가진 자격증의 보유율이
+     * 100%가 되어 가중치 상한(2.5)까지 치솟는다 — 웹디자인기능사(큐레이션 0.5)가
+     * 정보처리기사(2.0)를 뒤집는 "이상한 결론"의 원인.
+     */
+    @Test
+    void 직무_표본이_3명_미만이면_직무_가중치를_쓰지_않고_큐레이션_표로_폴백한다() {
+        // 합격자 1명이 웹디자인기능사 보유 → 표본을 믿으면 보유율 100% → 2.5.
+        // (배열 하나를 List.of에 주면 varargs로 풀려버려 명시적 타입 인자가 필요하다)
+        List<String[]> tinyJob = List.<String[]>of(new String[]{"웹디자인기능사"});
+
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"웹디자인기능사"});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{"웹디자인기능사"}, 1);
+
+        CompareRowDto certRow = calc(user, List.of(passer), tinyJob).getCompareRows().get(2);
+
+        // 큐레이션 가중치 0.5 / 4.5 = 11%. 표본 1명을 믿었다면 2.5/4.5 = 56%가 나온다.
+        assertThat(certRow.getMyPct()).isEqualTo(11);
+    }
+
+    /**
+     * v8 회귀: 합격자 쪽 데이터가 전무해 총점에서 제외된 축은 비교 행도 표시하지 않는다.
+     * 예전엔 사용자만 값이 있으면 user >= avg(0)로 무조건 "충족" + 명목 가중치("40%")
+     * 라벨을 달고 그려져, 총점 계산에 안 들어간 축이 화면에선 40%를 차지한다고 말하는
+     * 점수-막대 모순이 남았다.
+     */
+    @Test
+    void 합격자_전원이_학점_결측이면_학점_행을_표시하지_않는다() {
+        UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{"SQLD"});
+        // 학점만 결측이고 어학·자격증은 있는 합격자.
+        PasserData noGpa = PasserData.builder()
+                .languageScores(List.of(Map.of("type", "OPIC", "grade", "IH")))
+                .certifications(new String[]{"SQLD"})
+                .build();
+
+        List<CompareRowDto> rows = calc(user, List.of(noGpa)).getCompareRows();
+
+        assertThat(rows).extracting(CompareRowDto::getLabel)
+                .containsExactly("어학 성적", "자격증/수상"); // 학점 행 없음
+    }
+
+    /**
+     * v8 회귀: OPIc "IM"(세부등급 미기재 표기)은 검증(@Pattern)을 통과하는데 환산표에
+     * 없어서 조용히 0점(어학 미보유 취급)이 되던 값이다. 중간치 IM2(750)와 같게 본다.
+     */
+    @Test
+    void OPIc_IM_세부등급_미기재도_환산된다() {
+        UserSpec userIm = userSpec("3.80", "4.50", "IM", 0, new String[]{});
+        UserSpec userIm2 = userSpec("3.80", "4.50", "IM2", 0, new String[]{});
+        PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{}, 1);
+
+        int scoreIm = calc(userIm, List.of(passer)).getTotalScore();
+        int scoreIm2 = calc(userIm2, List.of(passer)).getTotalScore();
+
+        assertThat(scoreIm)
+                .as("IM은 0점(미보유)이 아니라 IM2와 같은 환산이어야 한다")
+                .isEqualTo(scoreIm2)
+                .isGreaterThan(0);
     }
 
     // --- 학점 바닥값 (v5) ---

@@ -178,13 +178,9 @@ export const LANG_MAX: Record<string, number | null> = {
 
 export const OPIC_GRADES = ["NL", "NM", "NH", "IL", "IM1", "IM2", "IM3", "IH", "AL"];
 
-// D-day 계산 기준일. 날짜를 고정하면 시간이 지날수록 마감일 표시가 어긋나므로
-// 실행 시점의 오늘(자정 기준)을 쓴다.
-export const TODAY = (() => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today;
-})();
+// (D-day 기준일 상수 TODAY는 제거됐다 — 모듈 로드 시 한 번 고정되는 값이라, 탭을 자정
+// 넘겨 열어두면 "오늘"이 과거에 박제된 채 모든 D-day가 부풀었다. helpers.ts가 호출마다
+// 오늘 자정을 새로 계산한다.)
 export const COMPARE_TARGET = "삼성 청년 SW 아카데미";
 export const PASSER_COUNT = 24;
 export const READINESS = 78;
