@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -69,6 +70,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleMissingParameter(MissingServletRequestParameterException e) {
         return ResponseEntity.badRequest()
                 .body(errorBody("MISSING_PARAMETER", "'" + e.getParameterName() + "' 파라미터가 필요합니다."));
+    }
+
+    /**
+     * 요청 바디를 읽지 못한 경우 — 깨진 JSON, 빈 바디, 타입이 안 맞는 필드 값 등.
+     * HttpMessageNotReadableException은 RuntimeException 하위라 이 핸들러가 없으면
+     * 아래 RuntimeException 핸들러에 잡혀 500 INTERNAL_ERROR가 나갔다(클라이언트 잘못인데
+     * 서버 오류로 보고되고, 그때마다 log.error로 에러 로그까지 남았다). @RequestBody를
+     * 쓰는 모든 POST/PUT(인증 불필요한 /api/v1/auth/refresh·logout 포함)이 영향받는다.
+     * 파싱 실패 상세(필드명·기대 타입 등)는 노출하지 않고 고정 문구만 준다.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleNotReadable(HttpMessageNotReadableException e) {
+        return ResponseEntity.badRequest()
+                .body(errorBody("INVALID_REQUEST_BODY", "요청 본문을 읽을 수 없습니다."));
     }
 
     /** 존재하지 않는 정렬 필드(sortBy) 등 — 내부 엔티티 구조가 메시지에 실릴 수 있어 고정 문구로 대체한다. */

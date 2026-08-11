@@ -100,6 +100,31 @@ class OAuth2LoginSuccessHandlerTest {
     }
 
     @Test
+    void 닉네임_동의를_철회한_재로그인이_기존_닉네임을_지우지_않는다() throws Exception {
+        // 카카오 profile_nickname은 선택 동의 항목이라 재로그인 시 nickname이 null로 올 수 있다.
+        // 그대로 덮어쓰면 "로그인만 했는데 프로필 이름이 사라지는" 조용한 데이터 유실이 된다.
+        init();
+        User existing = User.builder()
+                .id(UUID.randomUUID())
+                .provider("KAKAO")
+                .providerId("kakao-no-consent")
+                .nickname("기존닉네임")
+                .build();
+        when(authentication.getPrincipal()).thenReturn(oAuth2User("kakao-no-consent", null));
+        when(userRepository.findByProviderAndProviderId("KAKAO", "kakao-no-consent"))
+                .thenReturn(Optional.of(existing));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(tokenService.issueTokens(any(User.class)))
+                .thenReturn(new TokenService.TokenPair("access-token", "refresh-token"));
+
+        handler.onAuthenticationSuccess(request, response, authentication);
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        assertThat(captor.getValue().getNickname()).isEqualTo("기존닉네임");
+    }
+
+    @Test
     void 토큰은_쿼리_파라미터가_아니라_URL_프래그먼트로_리다이렉트된다() throws Exception {
         // 쿼리 파라미터로 나가면 서버 액세스 로그·프록시 로그·Referer 헤더에 토큰이
         // 그대로 남는다. #fragment는 브라우저가 서버로 전송하지 않으므로 이 흐름의
