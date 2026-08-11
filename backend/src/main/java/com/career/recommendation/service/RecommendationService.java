@@ -113,6 +113,20 @@ public class RecommendationService {
             }
         }
 
+        // ⚠️ 알려진 한계(다음 세션에서 스키마 변경으로 완전히 고쳐야 함): 이 하루 3회 게이트
+        // 전체가 "성공 횟수"만 센다 — dailyUpdateCount는 오직 저장 성공(recommendationCacheService
+        // .save()가 실제로 실행됐을 때, 즉 response.isAiRecommendation()==true일 때)에만
+        // 증가한다. Gemini가 계속 실패하면 폴백만 반복되고 카운트는 0에 머무르므로, 위
+        // 게이트는 "하루 3회"를 절대 못 보고 매 요청마다 무조건 통과시킨다 — 주석이
+        // "안전장치"라고 부르는 게 실패 반복 상황에서는 실제로 발동하지 않는다는 뜻이다.
+        // 게다가 cachedResponse == null(캐시 JSON 자체가 파싱 불가)이면 아래 118행의 조기
+        // 반환 조건(cachedResponse != null)을 만족 못해, needsNewAiCall이 false로 막혀도
+        // 그대로 Gemini 재시도 경로로 흘러내려간다 — 이 경우엔 하루 제한이 완전히 우회된다.
+        // 실패 시도까지 세는 별도 카운터(예: lastAttemptDate + dailyAttemptCount 컬럼)를
+        // 추가해 성공 여부와 무관하게 증가시켜야 이 게이트가 이름값대로 동작한다.
+        // Opus 5(높음) 검토 11라운드가 실제 부하로 재현: legacy 캐시 + 하루 카운트 0(=장애
+        // 상황의 실제 상태)에서 5회 요청이 Gemini를 10회 호출하는 것을 확인함.
+
         if (!needsNewAiCall && cachedResponse != null) {
             return cachedResponse;
         }

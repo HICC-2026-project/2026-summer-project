@@ -32,6 +32,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -53,7 +54,6 @@ public class RoadmapService {
     private final TargetJobRepository targetJobRepository;
     private final ActivityRepository activityRepository;
     private final SimilarSpecFinder similarSpecFinder;
-    private final RecommendationService recommendationService;
     private final RecommendationRepository recommendationRepository;
     private final RoadmapCacheRepository roadmapCacheRepository;
     private final RoadmapCacheService roadmapCacheService;
@@ -96,6 +96,13 @@ public class RoadmapService {
                     // 갱신이 필요하더라도 하루 제한(3회)을 넘으면 캐시를 그대로 준다.
                     // 만료 활동이 계속 남아 있거나 Gemini가 실패를 반복할 때
                     // 매 요청마다 API를 호출하는 것을 막는 안전장치다.
+                    //
+                    // ⚠️ 알려진 한계(RecommendationService와 동일 — 그쪽 주석 참고): dailyUpdateCount는
+                    // roadmapCacheService.save()가 실제로 실행됐을 때만(즉 response.isAiRoadmap()
+                    // ==true, 성공했을 때만) 증가한다. Gemini가 계속 실패해 폴백만 반복되면 카운트가
+                    // 0에 머물러 이 게이트가 절대 발동하지 않는다 — "실패를 반복할 때 막는
+                    // 안전장치"라는 주석이 실패 반복 상황에서는 실제로 동작하지 않는다는 뜻이다.
+                    // 실패 시도까지 세는 별도 카운터가 추가돼야 이름값대로 동작한다.
                     if (cached.getLastUpdatedDate() != null && today.equals(cached.getLastUpdatedDate())
                             && cached.getDailyUpdateCount() != null && cached.getDailyUpdateCount() >= 3) {
                         return deserialized;
@@ -120,13 +127,25 @@ public class RoadmapService {
         String similarCasesStr = promptDataBuilder.buildSimilarCasesText(similarPassers);
 
         // 2. F-03 맞춤 추천 결과 조회 (DB 캐시만 참조하여 Gemini 중복 API 호출 방지)
+        //
+        // ⚠️ 이 캐시를 RecommendationService를 거치지 않고 여기서 직접 읽는다 — RecommendationService의
+        // legacy 판정·신선도 검사(hasUsableCachedActivities 등)를 전혀 통과하지 않은 값이라는
+        // 뜻이다. 마감 필터링 없이 그대로 프롬프트에 "우선 반영할 활동"으로 주입하면(로드맵
+        // 프롬프트 규칙 3), 이미 마감된 활동이 로드맵 스텝에 이름으로만 박힐 수 있다 — 그 활동
+        // ID는 findRecommendableActivities()의 마감일 필터에 안 걸려 matchedActivities에서는
+        // 빠지지만 activity 텍스트에는 남고, hasUsableCachedActivities()는 matchedActivities만
+        // 보므로 이 로드맵은 "사용 가능"으로 영구 캐시된다(빈 로드맵 영구 캐싱과 같은 형태의
+        // 자가회복 불가 상태). 마감 지난 활동은 여기서 미리 걸러낸다.
         String topRecommendedJson = "[]";
         try {
             Recommendation cachedRec = recommendationRepository.findByUser_Id(user.getId()).orElse(null);
             if (cachedRec != null && cachedRec.getResultJson() != null) {
                 RecommendationResponse recResponse = objectMapper.readValue(cachedRec.getResultJson(), RecommendationResponse.class);
                 if (recResponse != null && recResponse.getActivities() != null) {
-                    topRecommendedJson = objectMapper.writeValueAsString(recResponse.getActivities());
+                    List<RecommendationResponse.ActivityRecommendation> stillOpen = recResponse.getActivities().stream()
+                            .filter(a -> a.getDeadline() == null || !a.getDeadline().isBefore(today))
+                            .toList();
+                    topRecommendedJson = objectMapper.writeValueAsString(stillOpen);
                 }
             }
         } catch (Exception e) {
@@ -242,7 +261,7 @@ public class RoadmapService {
 
             steps.add(TimelineStep.builder()
                     .period(period)
-                    .priority(VALID_PRIORITIES.contains(t.getPriority()) ? t.getPriority() : "MEDIUM")
+                    .priority(normalizePriority(t.getPriority()))
                     .activity(activityText)
                     .reason(t.getReason() != null ? t.getReason() : "")
                     .matchedActivities(matched)
@@ -252,6 +271,24 @@ public class RoadmapService {
         if (steps.isEmpty()) return null;
 
         return RoadmapResponse.builder().timeline(steps).build();
+    }
+
+    /**
+     * ⚠️ Set.of(...).contains(null)은 false가 아니라 NullPointerException을 던진다
+     * (Objects.requireNonNull 기반 구현). VALID_PRIORITIES.contains(t.getPriority())로
+     * 직접 검사했을 때, Gemini가 priority 필드 하나만 빠뜨려도(스키마 자체는 정상,
+     * responseMimeType=application/json이 필드 "존재"까지 보장하진 않는다) 그 NPE가
+     * parseGeminiResponse 밖으로 튀어 callGeminiWithRetry의 catch(Exception)에 잡히고,
+     * 완전히 정상적인 나머지 스텝까지 전부 "파싱 실패"로 버려진 채 2회 재시도(+2초 백오프,
+     * 최대 122초)를 다 태우고 폴백으로 떨어졌다 — 예전(null 삼항 체크)엔 없던, 이번
+     * 화이트리스트 도입이 만든 회귀다. null을 먼저 걸러내고, 대소문자도 함께 정규화한다
+     * (ActivityController의 direction 파라미터와 같은 이유 — Gemini가 "high"처럼 소문자를
+     * 줘도 대문자 값만 허용하던 화이트리스트가 조용히 전부 MEDIUM으로 뭉갰다).
+     */
+    private String normalizePriority(String raw) {
+        if (raw == null) return "MEDIUM";
+        String normalized = raw.trim().toUpperCase(Locale.ROOT);
+        return VALID_PRIORITIES.contains(normalized) ? normalized : "MEDIUM";
     }
 
     private MatchedActivity toMatchedActivity(Activity activity) {

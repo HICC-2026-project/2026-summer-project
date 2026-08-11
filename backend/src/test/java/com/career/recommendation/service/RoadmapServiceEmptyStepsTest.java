@@ -46,7 +46,6 @@ class RoadmapServiceEmptyStepsTest {
     @Mock private TargetJobRepository targetJobRepository;
     @Mock private ActivityRepository activityRepository;
     @Mock private SimilarSpecFinder similarSpecFinder;
-    @Mock private RecommendationService recommendationService;
     @Mock private RecommendationRepository recommendationRepository;
     @Mock private RoadmapCacheRepository roadmapCacheRepository;
     @Mock private RoadmapCacheService roadmapCacheService;
@@ -92,5 +91,81 @@ class RoadmapServiceEmptyStepsTest {
         // AI 실패(폴백)로 판정됐으니 캐시에 저장되면 안 된다 — 저장되면 다음 요청부터
         // 영구히 이 빈 상태가 재현될 위험이 있다.
         verify(roadmapCacheService, never()).save(any(), any());
+    }
+
+    /**
+     * priority 필드 하나만 빠져도(다른 필드는 전부 정상) 로드맵 전체가 버려지던 신규 회귀를
+     * 고정한다. VALID_PRIORITIES.contains(t.getPriority())로 직접 검사했을 때,
+     * Set.of(...).contains(null)이 false가 아니라 NullPointerException을 던지는 걸 놓쳐서
+     * (Objects.requireNonNull 기반 구현) 이 NPE가 parseGeminiResponse 밖으로 튀어
+     * callGeminiWithRetry의 catch(Exception)에 잡혔다 — 완전히 정상적인 응답이 "파싱 실패"로
+     * 처리돼 2회 재시도(+2초 백오프, 최대 122초)를 다 태우고 폴백으로 떨어졌다. 옛 코드
+     * (t.getPriority() != null ? ... : "MEDIUM")는 null-safe해서 이 문제가 없었는데, 화이트
+     * 리스트 검증을 추가하면서 새로 생긴 회귀다.
+     */
+    @Test
+    void priority_필드가_없어도_로드맵_전체가_버려지지_않는다() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(user.getId()).thenReturn(userId);
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+
+        when(roadmapCacheRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(recommendationRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(similarSpecFinder.find(any(), any(), any())).thenReturn(List.of());
+        when(activityRepository.findRecommendableActivities(any(), any())).thenReturn(List.of());
+
+        when(promptDataBuilder.serializeSpecForRoadmap(any())).thenReturn("{}");
+        when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
+        when(promptDataBuilder.buildSimilarCasesText(any())).thenReturn("");
+        when(promptDataBuilder.buildAvailableActivitiesJson(any())).thenReturn("[]");
+
+        // priority만 빠지고 나머지(period·activity·reason)는 전부 정상인, 실제로 흔히
+        // 발생 가능한 스키마 이탈 케이스.
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any()))
+                .thenReturn("{\"timeline\":[{\"period\":\"3학년 2학기\",\"activity\":\"정보처리기사 취득\","
+                        + "\"reason\":\"서류 가점\",\"activityIds\":[]}]}");
+
+        ReflectionTestUtils.setField(roadmapService, "objectMapper", new ObjectMapper());
+
+        RoadmapResponse response = roadmapService.getRoadmap(authentication);
+
+        assertThat(response.isAiRoadmap())
+                .as("priority 필드 누락은 스텝 하나를 MEDIUM으로 보정할 사유일 뿐, 응답 전체를 버릴 사유가 아니다")
+                .isTrue();
+        assertThat(response.getTimeline()).hasSize(1);
+        assertThat(response.getTimeline().get(0).getActivity()).isEqualTo("정보처리기사 취득");
+        assertThat(response.getTimeline().get(0).getPriority()).isEqualTo("MEDIUM");
+    }
+
+    @Test
+    void priority_소문자도_정규화된다() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(user.getId()).thenReturn(userId);
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+
+        when(roadmapCacheRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(recommendationRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(similarSpecFinder.find(any(), any(), any())).thenReturn(List.of());
+        when(activityRepository.findRecommendableActivities(any(), any())).thenReturn(List.of());
+
+        when(promptDataBuilder.serializeSpecForRoadmap(any())).thenReturn("{}");
+        when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
+        when(promptDataBuilder.buildSimilarCasesText(any())).thenReturn("");
+        when(promptDataBuilder.buildAvailableActivitiesJson(any())).thenReturn("[]");
+
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any()))
+                .thenReturn("{\"timeline\":[{\"period\":\"3학년 2학기\",\"priority\":\"high\","
+                        + "\"activity\":\"정보처리기사 취득\",\"reason\":\"서류 가점\",\"activityIds\":[]}]}");
+
+        ReflectionTestUtils.setField(roadmapService, "objectMapper", new ObjectMapper());
+
+        RoadmapResponse response = roadmapService.getRoadmap(authentication);
+
+        // 화이트리스트가 대소문자를 가리면 "high"가 조용히 MEDIUM으로 뭉개진다.
+        assertThat(response.getTimeline().get(0).getPriority()).isEqualTo("HIGH");
     }
 }
