@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -82,6 +83,12 @@ public class UserSpecService {
             return insertAttempt.execute(status -> {
                 UserSpec userSpec = userSpecRepository.findByUser_Id(user.getId())
                         .orElseGet(() -> UserSpec.builder().user(user).build());
+                // 기존 엔티티가 있고 값이 동일하면 save를 건너뛴다.
+                // @UpdateTimestamp가 무변경 저장에도 updatedAt을 갱신하여
+                // 추천 갱신 횟수가 헛되이 차감되는 것을 방지한다.
+                if (userSpec.getId() != null && !hasChanges(userSpec, request)) {
+                    return userSpec;
+                }
                 updateUserSpecFields(userSpec, request);
                 return userSpecRepository.saveAndFlush(userSpec);
             });
@@ -111,6 +118,25 @@ public class UserSpecService {
         userSpec.setGrade(request.getGrade());
         userSpec.setLanguageScores(convertLanguageScores(request));
         userSpec.setCertifications(convertCertifications(request));
+    }
+
+    /**
+     * 요청 값이 기존 엔티티와 동일한지 비교한다.
+     * 동일하면 saveAndFlush()를 건너뛰어 @UpdateTimestamp가 updatedAt을 갱신하지 않게 한다.
+     * updatedAt이 무변경 저장에도 바뀌면 RecommendationService.isSpecModifiedSince()가
+     * 스펙 변경으로 판정해 추천 갱신 횟수를 헛되이 차감하는 문제가 있었다.
+     */
+    private boolean hasChanges(UserSpec existing, UserSpecRequest request) {
+        if (!Objects.equals(existing.getGpa(), request.getGpa())) return true;
+        if (!Objects.equals(existing.getGpaMax(), request.getGpaMax())) return true;
+        if (!Objects.equals(existing.getGrade(), request.getGrade())) return true;
+        if (!Arrays.equals(existing.getCertifications(), convertCertifications(request))) return true;
+
+        List<Map<String, Object>> oldLang = existing.getLanguageScores();
+        List<Map<String, Object>> newLang = convertLanguageScores(request);
+        if (!Objects.equals(oldLang, newLang)) return true;
+
+        return false;
     }
 
     private List<Map<String, Object>> convertLanguageScores(

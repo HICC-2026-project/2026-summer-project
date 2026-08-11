@@ -6,6 +6,7 @@ import com.career.recommendation.entity.TargetJob;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.repository.TargetJobRepository;
 import lombok.RequiredArgsConstructor;
+import java.util.Objects;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -59,6 +60,12 @@ public class TargetJobService {
             return insertAttempt.execute(status -> {
                 TargetJob targetJob = targetJobRepository.findByUser_Id(user.getId())
                         .orElseGet(() -> TargetJob.builder().user(user).build());
+                // 기존 엔티티가 있고 값이 동일하면 save를 건너뛴다.
+                // @UpdateTimestamp가 무변경 저장에도 updatedAt을 갱신하여
+                // 추천 갱신 횟수가 헛되이 차감되는 것을 방지한다.
+                if (targetJob.getId() != null && !hasChanges(targetJob, request)) {
+                    return targetJob;
+                }
                 targetJob.setJobType(request.getJobType());
                 targetJob.setCompanySize(request.getCompanySize());
                 targetJob.setIndustry(request.getIndustry());
@@ -76,5 +83,16 @@ public class TargetJobService {
                 return targetJobRepository.saveAndFlush(existing);
             });
         }
+    }
+
+    /**
+     * 요청 값이 기존 엔티티와 동일한지 비교한다.
+     * 동일하면 saveAndFlush()를 건너뛰어 @UpdateTimestamp가 updatedAt을 갱신하지 않게 한다.
+     */
+    private boolean hasChanges(TargetJob existing, TargetJobRequest request) {
+        if (!Objects.equals(existing.getJobType(), request.getJobType())) return true;
+        if (!Objects.equals(existing.getCompanySize(), request.getCompanySize())) return true;
+        if (!Objects.equals(existing.getIndustry(), request.getIndustry())) return true;
+        return false;
     }
 }
