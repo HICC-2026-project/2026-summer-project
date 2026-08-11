@@ -68,6 +68,14 @@ const ANALYZING_MAX_MS = 40000;
 export function SpecRoadApp() {
   const [screen, setScreen] = useState<Screen>("login");
   const [onboardStep, setOnboardStep] = useState<OnboardStep>(0);
+  // 온보딩에 어디서 들어왔는지 기억한다. 첫 로그인(스펙 없음)은 "login"에서, 프로필의
+  // "스펙·목표 수정하기"는 "profile"에서 진입하는데, 뒤로가기가 이걸 구분하지 않으면
+  // 로그인 상태로 프로필에서 들어온 사용자까지 카카오 로그인 화면으로 튕겨 나간다.
+  const [onboardFrom, setOnboardFrom] = useState<"login" | "profile">("login");
+  // 프로필→수정 진입 시점의 스펙·목표 스냅샷. 온보딩 화면은 spec/target 상태를 그 자리에서
+  // 직접 수정하므로, 저장 없이 뒤로가기로 나오면 수정 중이던 값이 화면에 저장된 것처럼
+  // 남는다(서버엔 옛 값) — 뒤로가기 때 이 스냅샷으로 되돌려 편집을 취소 처리한다.
+  const onboardBackup = useRef<{ spec: Spec; target: Target } | null>(null);
   const [tab, setTab] = useState<Tab>("home");
   const [detailId, setDetailId] = useState<string | number | null>(null);
   const [spec, setSpec] = useState<Spec>(INITIAL_SPEC);
@@ -94,6 +102,9 @@ export function SpecRoadApp() {
   const [roadmap, setRoadmap] = useState<RoadmapMilestone[]>([]);
   const [roadmapLoading, setRoadmapLoading] = useState(false);
   const [roadmapError, setRoadmapError] = useState(false);
+  // 하루 갱신 한도(3회)에 막혀 이전 로드맵을 보고 있는지. 안내가 없으면 사용자는
+  // 스펙을 바꿨는데 로드맵이 그대로인 것을 버그로 인지한다.
+  const [roadmapLimitReached, setRoadmapLimitReached] = useState(false);
 
   // 로그인 화면으로 되돌리며 유저별 상태를 모두 비운다(다음 로그인 유저에게 남지 않도록).
   function resetToLogin() {
@@ -104,6 +115,9 @@ export function SpecRoadApp() {
     setRecommendations([]);
     setRecMeta(null);
     setRoadmap([]);
+    // 별도 상태라 recMeta처럼 자동으로 비워지지 않는다 — 안 비우면 이전 유저의
+    // "한도 도달" 배너가 다음 로그인 유저의 첫 화면에 잠깐 남는다.
+    setRoadmapLimitReached(false);
     setIsDemo(false);
     setScreen("login");
   }
@@ -159,7 +173,12 @@ export function SpecRoadApp() {
     /* eslint-disable react-hooks/set-state-in-effect */
     if (cached) {
       setRecommendations(cached.recommendations);
-      setRecMeta(cached.recMeta);
+      // dailyLimitReached는 "오늘" 한도에 대한 순간 정보라 절대 캐시를 타면 안 된다 —
+      // 백엔드도 같은 이유로 DB 캐시에 저장하지 않는다(RecommendationResponse 주석 참고).
+      // 어제 한도에 걸린 채 저장된 값이 오늘 첫 화면에 "오늘 횟수를 모두 사용했어요"로
+      // 뜨면 거짓 안내가 된다. 저장 시점에도 지우지만(아래 saveLastResult), 이미 플래그가
+      // 박힌 채 저장된 기존 캐시를 위해 복원 시점에도 강제로 끈다.
+      setRecMeta(cached.recMeta ? { ...cached.recMeta, dailyLimitReached: false } : null);
       setRoadmap(cached.roadmap);
     }
 
@@ -168,6 +187,9 @@ export function SpecRoadApp() {
     setRecError(false);
     setRoadmapLoading(!hasCache);
     setRoadmapError(false);
+    // 매 사이클 시작 시 초기화 — 안 하면 이번 요청이 실패했을 때 이전 사이클의
+    // "한도 도달" 배너가 에러 문구와 동시에 떠 서로 모순된 설명이 된다.
+    setRoadmapLimitReached(false);
 
     const latest: { recommendations?: Recommendation[]; recMeta?: RecommendationMeta | null; roadmap?: RoadmapMilestone[] } = {};
 
@@ -199,6 +221,7 @@ export function SpecRoadApp() {
         const steps = fromRoadmapResponse(res);
         latest.roadmap = steps;
         setRoadmap(steps);
+        setRoadmapLimitReached(res.dailyLimitReached ?? false);
       })
       .catch(() => {
         if (cancelled) return;
@@ -213,7 +236,8 @@ export function SpecRoadApp() {
           saveLastResult({
             userId,
             recommendations: latest.recommendations,
-            recMeta: latest.recMeta ?? null,
+            // dailyLimitReached는 순간 정보라 저장하지 않는다(복원부 주석 참고).
+            recMeta: latest.recMeta ? { ...latest.recMeta, dailyLimitReached: false } : null,
             roadmap: latest.roadmap ?? [],
           });
         }
@@ -262,6 +286,7 @@ export function SpecRoadApp() {
           if (!me.spec) setSpec(EMPTY_SPEC);
           if (!me.target) setTarget(EMPTY_TARGET);
           setOnboardStep(0);
+          setOnboardFrom("login");
           setScreen("onboard");
         }
       })
@@ -301,6 +326,8 @@ export function SpecRoadApp() {
         return;
       }
     }
+    // 저장이 성공했으니 편집본이 곧 서버 상태다 — 취소용 스냅샷은 더 이상 유효하지 않다.
+    onboardBackup.current = null;
     // 스펙이 바뀌었으니 분석 화면에서 추천을 새로 요청한다.
     // 저장해 둔 직전 결과는 지운다. 남겨두면 예전 점수를 새 결과인 것처럼 보여주게 된다.
     clearLastResult();
@@ -311,6 +338,19 @@ export function SpecRoadApp() {
   function handleOnboardBack() {
     if (onboardStep === 1) {
       setOnboardStep(0);
+    } else if (onboardFrom === "profile") {
+      // 프로필의 "스펙·목표 수정하기"로 들어온 경우 — 로그인 상태이므로 프로필로 되돌린다.
+      // (예전엔 무조건 로그인 화면으로 보내, 로그인한 사용자가 수정을 취소만 해도
+      // 카카오 로그인 페이지로 튕겨 나갔다)
+      // 뒤로가기는 "편집 취소"다 — 온보딩에서 고치던 값을 진입 시점 스냅샷으로 되돌리지
+      // 않으면, 저장 안 된 수정본이 프로필·홈에 저장된 것처럼 계속 보인다(서버엔 옛 값).
+      if (onboardBackup.current) {
+        setSpec(onboardBackup.current.spec);
+        setTarget(onboardBackup.current.target);
+        onboardBackup.current = null;
+      }
+      setScreen("app");
+      setTab("profile");
     } else {
       setScreen("login");
     }
@@ -409,6 +449,7 @@ export function SpecRoadApp() {
             roadmap={isDemo ? ROADMAP : roadmap}
             roadmapLoading={isDemo ? false : roadmapLoading}
             roadmapError={isDemo ? false : roadmapError}
+            roadmapLimitReached={isDemo ? false : roadmapLimitReached}
             isDemo={isDemo}
             onOpenDetail={setDetailId}
             onOpenPasserReport={() => setScreen("passer-report")}
@@ -419,6 +460,9 @@ export function SpecRoadApp() {
                 return;
               }
               setOnboardStep(0);
+              setOnboardFrom("profile");
+              // 뒤로가기(편집 취소) 때 되돌릴 진입 시점 값을 스냅샷해 둔다.
+              onboardBackup.current = { spec, target };
               setScreen("onboard");
             }}
             onLogout={() => {

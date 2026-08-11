@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { DEMO_USER_NAME, PRIMARY } from "../../data";
-import { jobLabel } from "../../helpers";
+import { hasMeaningfulLangScore, jobLabel } from "../../helpers";
 import type { Spec, Target } from "../../types";
 
 interface ProfileTabProps {
@@ -38,7 +38,8 @@ export function ProfileTab({
   const displayName = nickname ?? DEMO_USER_NAME;
   const targetSummary = `${target.size} ${jobLabel(target.job)}`;
   const certLabel = spec.certs.length ? spec.certs.join(", ") : "없음";
-  const langEntries = Object.entries(spec.langScores).filter(([, score]) => score);
+  // 0점 입력은 미입력으로 취급한다 — "TOEIC 0"이 프로필에 보이면 없는 성적이 있는 것처럼 보인다.
+  const langEntries = Object.entries(spec.langScores).filter(([type, score]) => hasMeaningfulLangScore(type, score));
   const langLabel = langEntries.length ? langEntries.map(([type, score]) => `${type} ${score}`).join(", ") : "없음";
 
   return (

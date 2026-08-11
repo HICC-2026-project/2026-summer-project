@@ -80,6 +80,7 @@ public class RecommendationService {
         TargetJob targetJob = targetJobRepository.findByUser_Id(user.getId()).orElse(null);
 
         boolean needsNewAiCall = false;
+        boolean wantsRefresh = false;
         RecommendationResponse cachedResponse = null;
 
         if (cached == null) {
@@ -102,7 +103,8 @@ public class RecommendationService {
             // scoreFormulaVersion을 올려 배포하는 순간 전 유저 캐시가 동시에 legacy가 되는
             // 시나리오와 겹치면 실제로 밟을 수 있는 경로다. legacy도 같은 하루 3회 게이트를
             // 통과하게 해서, 하루 제한에 도달하면 legacy든 아니든 옛 캐시를 그대로 반환한다.
-            if (isLegacyCache || !hasUsableActivities || isSpecChanged) {
+            wantsRefresh = isLegacyCache || !hasUsableActivities || isSpecChanged;
+            if (wantsRefresh) {
                 // 이 체크가 없으면 Gemini가 장애로 폴백만 반환할 때(캐시 미저장) 매 요청마다
                 // API를 호출하게 된다(RoadmapService와 동일한 안전장치).
                 if (cached.getLastUpdatedDate() == null || !today.equals(cached.getLastUpdatedDate())) {
@@ -128,6 +130,17 @@ public class RecommendationService {
         // 상황의 실제 상태)에서 5회 요청이 Gemini를 10회 호출하는 것을 확인함.
 
         if (!needsNewAiCall && cachedResponse != null) {
+            // ⚠️ 재생성이 필요했는데(스펙 변경·legacy·만료 활동) 하루 한도에 막혀 캐시를 주는
+            // 경우, 예전엔 캐시를 "통째로" 반환해 matchScore·compareRows까지 옛 스펙 기준
+            // 값이 그대로 나갔다. 프로필에는 새 스펙이 보이는데(user_specs는 즉시 저장됨)
+            // 비교 탭 "나" 막대는 옛 학점을 보여줘, 사용자가 "수정이 안 된다"고 인지했다
+            // (2026-08-11 실제 제보). 점수·비교표·미인식 자격증은 Gemini와 무관한 로컬
+            // 계산(MatchScoreCalculator)이므로, 하루 한도는 Gemini 호출(활동 목록 재생성)에만
+            // 적용하고 이 부분은 현재 스펙으로 새로 계산해서 준다. dailyLimitReached
+            // 플래그로 FE가 "활동 목록은 내일 갱신" 안내를 띄울 수 있게 한다.
+            if (wantsRefresh) {
+                return rebuildComparisonFromCurrentSpec(cachedResponse, userSpec, targetJob);
+            }
             return cachedResponse;
         }
 
@@ -164,7 +177,7 @@ public class RecommendationService {
                 userSpecJson, targetJobStr, similarCasesStr, availableActivitiesJson,
                 userSpec, similarPassers, comparisonMessage, activeActivities,
                 targetJob != null ? targetJob.getJobType() : "미설정", similarPassers.size(),
-                globalCertPool, jobPasserCertRows
+                globalCertPool, jobPasserCertRows, today
         );
 
         // 6. 결과 캐싱 (일일 제한 카운트 증가) — 별도 Bean에서 호출
@@ -173,6 +186,39 @@ public class RecommendationService {
         }
 
         return response;
+    }
+
+    /**
+     * 캐시된 활동 목록은 유지하되, 점수·비교표·미인식 자격증 등 로컬에서 결정적으로 계산되는
+     * 부분만 현재 스펙 기준으로 다시 계산해 돌려준다. 하루 갱신 한도에 막혀 Gemini 재호출은
+     * 못 하는 상황에서, 최소한 사용자가 방금 바꾼 스펙이 점수에는 즉시 반영되게 하기 위한
+     * 경로다. toBuilder 결과는 반환 전용이며 캐시에 저장하지 않는다(저장하면 dailyLimitReached가
+     * 캐시에 박제됨 — DTO 주석 참고).
+     */
+    private RecommendationResponse rebuildComparisonFromCurrentSpec(
+            RecommendationResponse cachedResponse, UserSpec userSpec, TargetJob targetJob) {
+        String jobType = (targetJob != null) ? targetJob.getJobType() : null;
+        List<PasserData> similarPassers = similarSpecFinder.find(
+                jobType,
+                (userSpec != null) ? userSpec.getGpa() : null,
+                (userSpec != null) ? userSpec.getGpaMax() : null
+        );
+        Set<String> globalCertPool = globalCertPoolService.getGlobalCertPool();
+        List<String[]> jobPasserCertRows = globalCertPoolService.getJobPasserCertRows(jobType);
+        MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers, globalCertPool, jobPasserCertRows);
+
+        return cachedResponse.toBuilder()
+                .matchScore(matchResult.getTotalScore())
+                .compareRows(matchResult.getCompareRows())
+                .unrecognizedCertifications(matchResult.getUnrecognizedCertifications())
+                .recognizedCertificationCount(matchResult.getRecognizedCertificationCount())
+                .comparisonMessage(similarSpecFinder.buildComparisonMessage(similarPassers, jobType))
+                .targetJobName(jobType != null ? jobType : "미설정")
+                .similarPasserCount(similarPassers.size())
+                .sampleComparisonData(containsSampleOrUnclassifiedData(similarPassers))
+                .scoreFormulaVersion(MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION)
+                .dailyLimitReached(true)
+                .build();
     }
 
     private boolean hasUsableCachedActivities(RecommendationResponse response, LocalDate today) {
@@ -202,12 +248,12 @@ public class RecommendationService {
             String userSpecJson, String targetJobStr, String similarCasesStr, String availableActivitiesJson,
             UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage,
             List<Activity> activeActivities, String targetJobName, int similarPasserCount,
-            Set<String> globalCertPool, List<String[]> jobPasserCertRows) {
+            Set<String> globalCertPool, List<String[]> jobPasserCertRows, LocalDate today) {
 
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
                 String rawJson = geminiService.generateRecommendation(
-                        userSpecJson, targetJobStr, similarCasesStr, availableActivitiesJson);
+                        userSpecJson, targetJobStr, similarCasesStr, availableActivitiesJson, today);
                 if (rawJson != null && !rawJson.isBlank()) {
                     RecommendationResponse res = parseGeminiResponse(
                             rawJson, userSpec, similarPassers, comparisonMessage, activeActivities,
@@ -263,6 +309,7 @@ public class RecommendationService {
                 .matchScore(matchResult.getTotalScore())
                 .compareRows(matchResult.getCompareRows())
                 .unrecognizedCertifications(matchResult.getUnrecognizedCertifications())
+                .recognizedCertificationCount(matchResult.getRecognizedCertificationCount())
                 .targetJobName(targetJobName)
                 .similarPasserCount(similarPasserCount)
                 .comparisonMessage(comparisonMessage)
@@ -331,6 +378,7 @@ public class RecommendationService {
                 .matchScore(matchResult.getTotalScore())
                 .compareRows(matchResult.getCompareRows())
                 .unrecognizedCertifications(matchResult.getUnrecognizedCertifications())
+                .recognizedCertificationCount(matchResult.getRecognizedCertificationCount())
                 .targetJobName(targetJobName)
                 .similarPasserCount(similarPasserCount)
                 .comparisonMessage(comparisonMessage)

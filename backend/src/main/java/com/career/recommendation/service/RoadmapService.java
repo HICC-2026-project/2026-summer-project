@@ -112,7 +112,10 @@ public class RoadmapService {
                     // 형태의 갭이 여기선 두 곳(빈 타임라인 + 파싱 실패)에 있다.
                     if (cached.getLastUpdatedDate() != null && today.equals(cached.getLastUpdatedDate())
                             && cached.getDailyUpdateCount() != null && cached.getDailyUpdateCount() >= 3) {
-                        return deserialized;
+                        // 한도에 막혀 옛 로드맵을 주는 것임을 FE가 안내할 수 있게 플래그를
+                        // 붙인다. toBuilder 결과는 반환 전용 — 캐시에 저장하지 않는다
+                        // (RecommendationResponse.dailyLimitReached 주석 참고).
+                        return deserialized.toBuilder().dailyLimitReached(true).build();
                     }
                 }
             } catch (Exception e) {
@@ -188,7 +191,7 @@ public class RoadmapService {
             try {
                 String rawJson = geminiService.generateRoadmap(
                         userSpecJson, targetJobStr, grade,
-                        similarCasesStr, topRecommendedJson, availableActivitiesJson);
+                        similarCasesStr, topRecommendedJson, availableActivitiesJson, today);
                 if (rawJson == null || rawJson.isBlank()) {
                     log.warn("Gemini 로드맵 응답 비어있음 (시도 {}회)", attempt);
                 } else {

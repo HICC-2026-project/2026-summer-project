@@ -120,6 +120,12 @@ export interface RecommendationsResponse {
   aiRecommendation?: boolean;
   isAiRecommendation?: boolean;
   unrecognizedCertifications?: string[];
+  // 백엔드가 인식한 자격증 개수 (canonical 기준 — 비교 탭 자격증 행과 같은 집계).
+  // 홈 카드는 이 값을 그대로 써야 비교 탭과 항상 일치한다. 옛 캐시엔 없어 optional.
+  recognizedCertificationCount?: number;
+  // 스펙이 바뀌었지만 하루 갱신 한도(3회)에 막혀 캐시된 활동 목록을 반환한 경우 true.
+  // 점수·비교표는 새 스펙 기준으로 재계산돼 오지만 활동 목록은 어제 것일 수 있다.
+  dailyLimitReached?: boolean;
 }
 
 // 추천 목록과 함께 화면 상단에 표시할 요약 정보(응답 최상단 필드에서 추출).
@@ -132,6 +138,8 @@ export interface RecommendationMeta {
   compareRows?: CompareRow[];
   sampleComparisonData: boolean;
   unrecognizedCertifications?: string[];
+  recognizedCertificationCount?: number;
+  dailyLimitReached: boolean;
 }
 
 // 화면에서 쓰는 로드맵 단계 모델.
@@ -172,6 +180,8 @@ export interface RoadmapStep {
 // 명세서의 /roadmap · targetJob 필드와 달리 실제 컨트롤러는 /roadmaps이고 timeline만 반환한다.
 export interface RoadmapResponse {
   timeline: RoadmapStep[];
+  // 하루 갱신 한도(3회)에 막혀 이전 로드맵을 그대로 반환한 경우 true.
+  dailyLimitReached?: boolean;
 }
 
 // GET /api/v1/activities/{id} 응답. 추천 카드에는 없는 지원 링크·주최·태그를 담고 있어,

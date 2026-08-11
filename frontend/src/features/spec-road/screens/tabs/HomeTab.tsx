@@ -2,7 +2,7 @@
 
 import { DEMO_USER_NAME, PASSER_COUNT, PRIMARY, READINESS, READINESS_RANK } from "../../data";
 import { StateMessage } from "../../components/StateMessage";
-import { dday, ddayColor, jobLabel } from "../../helpers";
+import { dday, ddayColor, hasMeaningfulLangScore, jobLabel } from "../../helpers";
 import type { Recommendation, RecommendationMeta, Spec, Target } from "../../types";
 
 interface HomeTabProps {
@@ -22,13 +22,33 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
   const displayName = nickname ?? DEMO_USER_NAME;
 
   // 입력한 어학·자격증을 요약한다. 둘 다 없으면 안내 문구를 보여준다.
-  const langCount = Object.values(spec.langScores).filter((v) => v).length;
+  // 어학은 0점 입력을 미입력으로 취급한다(hasMeaningfulLangScore 주석 참고).
+  const langCount = Object.entries(spec.langScores).filter(([type, v]) => hasMeaningfulLangScore(type, v)).length;
+  // 자격증 개수는 백엔드가 "인식한" 개수(recognizedCertificationCount) 기준으로 보여준다 —
+  // 입력 원본 개수(spec.certs.length)를 그대로 쓰면 비교 탭(백엔드 compareRows, 인식된
+  // 것만 canonical 기준으로 집계)과 숫자가 어긋난다. 예: 정보처리기사·SQLD·"가나다라마바사"
+  // 입력 시 홈은 3개, 비교는 2개로 보이던 문제.
+  //
+  // ⚠️ "입력 개수 − 미인식 개수"로 역산하면 안 된다 — 백엔드 집계는 canonical 기준
+  // (공백·"필기/실기" 등 제거 후 dedup)이라 "정보처리기사 필기"+"정보처리기사 실기"처럼
+  // 원본 2개가 1개로 접히는 순간 뺄셈이 틀린다. 그래서 백엔드가 인식 개수를 직접 내려주고
+  // 여기선 그대로 쓴다. 미인식 개수는 비교 탭 하단 미인식 배너의 목록 길이와 같은 값을
+  // 써서 두 화면이 항상 같은 숫자를 말하게 한다. 옛 캐시(recognizedCertificationCount
+  // 없음)나 로딩 전엔 입력 개수로 폴백한다.
+  const unrecognizedCount = recMeta?.unrecognizedCertifications?.length ?? 0;
+  const recognizedCertCount = recMeta?.recognizedCertificationCount ?? spec.certs.length;
+  const certLabel =
+    spec.certs.length === 0
+      ? null
+      : recMeta?.recognizedCertificationCount != null
+        ? unrecognizedCount > 0
+          ? `자격증 ${recognizedCertCount}개 (미인식 ${unrecognizedCount}개)`
+          : `자격증 ${recognizedCertCount}개`
+        : `자격증 ${spec.certs.length}개`;
   const specSummary =
     langCount + spec.certs.length === 0
       ? "미입력"
-      : [langCount > 0 ? `어학 ${langCount}개` : null, spec.certs.length > 0 ? `자격증 ${spec.certs.length}개` : null]
-          .filter(Boolean)
-          .join(" · ");
+      : [langCount > 0 ? `어학 ${langCount}개` : null, certLabel].filter(Boolean).join(" · ");
 
   // 준비도는 실 API 응답(recMeta)에서만 나온다.
   // 예시 화면에서만 목업 수치를 쓰고, 로그인 사용자는 응답이 없으면(로딩·실패) 수치를 감춘다.
@@ -160,6 +180,27 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
         <p style={{ fontSize: 12, color: "#9797A1", margin: "0 0 12px", lineHeight: 1.5 }}>
           스펙을 수정하면 추천을 새로 만들어요. 하루 3번까지 갱신할 수 있어요.
         </p>
+      )}
+
+      {/* 하루 한도에 막혀 이전 활동 목록을 보여주는 중임을 알린다. 점수·비교는 서버가
+          현재 스펙으로 재계산해 주므로 활동 목록만 이전 것이다. 이 안내가 없으면
+          스펙을 바꾼 사용자가 "수정이 반영 안 된다"를 버그로 인지한다. */}
+      {recMeta?.dailyLimitReached && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: "11px 14px",
+            border: "1px solid #F0D8A8",
+            borderRadius: 12,
+            background: "#FFF9ED",
+            color: "#79551F",
+            fontSize: 12.5,
+            lineHeight: 1.5,
+          }}
+        >
+          오늘 추천 갱신 횟수(3회)를 모두 사용했어요. 점수·비교는 방금 수정한 스펙 기준이지만, 아래 활동
+          목록은 내일 첫 방문 때 새로 만들어져요.
+        </div>
       )}
 
       {recLoading ? (

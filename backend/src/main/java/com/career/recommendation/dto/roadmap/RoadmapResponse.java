@@ -26,7 +26,7 @@ import java.util.UUID;
  * 유지하면서 빌더 메서드명(aiRoadmap)을 직렬화 키와 일치시켰다.
  */
 @Getter
-@Builder
+@Builder(toBuilder = true)
 @Jacksonized
 public class RoadmapResponse {
 
@@ -34,6 +34,13 @@ public class RoadmapResponse {
 
     @Builder.Default
     private boolean aiRoadmap = true;
+
+    /**
+     * 재생성이 필요했지만 하루 갱신 한도(3회)에 막혀 캐시된 로드맵을 반환한 경우 true.
+     * RecommendationResponse.dailyLimitReached와 같은 목적 — 캐시에는 저장하지 않고
+     * 반환 직전에만 붙인다(그쪽 주석 참고).
+     */
+    private Boolean dailyLimitReached;
 
     @Getter
     @Builder

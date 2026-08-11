@@ -44,8 +44,9 @@ public class GeminiService {
      * @return Gemini API 응답 JSON 텍스트 (파싱 실패 시 빈 문자열)
      */
     public String generateRecommendation(String userSpecJson, String targetJob,
-                                         String similarCases, String availableActivitiesJson) {
-        String prompt = buildRecommendationPrompt(userSpecJson, targetJob, similarCases, availableActivitiesJson);
+                                         String similarCases, String availableActivitiesJson,
+                                         java.time.LocalDate today) {
+        String prompt = buildRecommendationPrompt(userSpecJson, targetJob, similarCases, availableActivitiesJson, today);
         String systemInstruction = "당신은 취업 커리어 어드바이저입니다. 사용자의 스펙을 분석하고, 제공된 활동 목록 중에서만 맞춤형 활동을 추천해 주세요. 목록에 없는 활동을 임의로 만들지 마세요. 반드시 JSON 형식으로만 응답하세요.";
         String raw = callGeminiApi(systemInstruction, prompt);
         return extractJsonBlock(raw);
@@ -62,8 +63,8 @@ public class GeminiService {
      */
     public String generateRoadmap(String userSpecJson, String targetJob, Integer grade,
                                   String similarCases, String topRecommendedActivities,
-                                  String availableActivitiesJson) {
-        String prompt = buildRoadmapPrompt(userSpecJson, targetJob, grade, similarCases, topRecommendedActivities, availableActivitiesJson);
+                                  String availableActivitiesJson, java.time.LocalDate today) {
+        String prompt = buildRoadmapPrompt(userSpecJson, targetJob, grade, similarCases, topRecommendedActivities, availableActivitiesJson, today);
         // ⚠️ 이 systemInstruction은 buildRoadmapPrompt의 규칙 4·5와 반드시 같은 매칭 정책을
         // 말해야 한다. 예전엔 여기서 "단기 기간에는 DB 활동 매칭, 먼 미래는 가이드 제안"이라는
         // 2분할을 못박아 규칙 4("각 시기마다 매칭")·5("적합한 공고가 없는 시기만 가이드")와
@@ -77,20 +78,26 @@ public class GeminiService {
         return extractJsonBlock(raw);
     }
 
-    private String buildRecommendationPrompt(String spec, String job, String cases, String availableActivities) {
+    private String buildRecommendationPrompt(String spec, String job, String cases, String availableActivities,
+                                             java.time.LocalDate today) {
+        // ⚠️ 오늘 날짜를 명시하지 않으면 Gemini는 학습 시점의 날짜 감각으로 마감일의 임박도를
+        // 추측한다 — "마감이 임박한/여유 있는 활동" 판단이 실제 오늘과 어긋날 수 있다.
         return String.format("""
+                [오늘 날짜]
+                %s
+
                 [사용자 현재 스펙]
                 %s
-                
+
                 [목표 직무]
                 %s
-                
+
                 [유사 합격자 케이스]
                 %s
-                
+
                 [추천 가능한 활동 목록 (DB 등록 활동)]
                 %s
-                
+
                 ## 규칙
                 1. 반드시 위 "추천 가능한 활동 목록"에 있는 활동 중에서만 선택하세요.
                 2. 각 활동의 id 값을 그대로 사용하세요 (UUID 형식). 목록에 없는 ID는 절대로 임의로 생성하지 마세요.
@@ -103,30 +110,40 @@ public class GeminiService {
                 9. 각 추천에는 id(UUID), name, type, reason(이 사용자에게 추천하는 구체적 이유), deadline(YYYY-MM-DD) 필드를 포함하세요.
                 10. 추천 이유(reason)에는 사용자가 충족한 조건과 확인이 필요한 조건을 구분하여 작성하세요.
                 11. 응답은 {"activities": [...]} JSON 형식으로만 출력하세요.
-                """, spec, job, cases, availableActivities);
+                """, today, spec, job, cases, availableActivities);
     }
 
     private String buildRoadmapPrompt(String spec, String job, Integer grade,
-                                      String cases, String topRecommended, String availableActivities) {
+                                      String cases, String topRecommended, String availableActivities,
+                                      java.time.LocalDate today) {
+        // ⚠️ periodGuide에 오늘 날짜를 반드시 명시한다. 예전엔 날짜 없이 학기/방학 구분
+        // 규칙만 줘서, Gemini가 타임라인의 "시작 시기"를 활동 마감일 등에서 추측했다 —
+        // 2학년 사용자의 로드맵이 8월 요청인데도 엉뚱한 학기에서 시작하거나, 6개월 창을
+        // 벗어난 시기까지 늘어지는 원인이었다(2026-08-11 사용자 제보: "로드맵이 3학년
+        // 1학기까지밖에 안 나온다" — 시작 앵커가 없으니 끝 앵커도 흔들린 것).
         String periodGuide = (grade != null)
                 ? String.format("""
-                현재 %d학년 학생입니다. 기간 구분은 반드시 "학기"와 "방학"을 기준으로 나눠주세요.
+                오늘은 %s이고, 사용자는 현재 %d학년입니다. 기간 구분은 반드시 "학기"와 "방학"을 기준으로 나눠주세요.
                 예시: "3학년 2학기 (9~11월)", "겨울방학 (12월~2월)", "4학년 1학기 (3~6월)" 등.
-                """, grade)
-                : "기간은 월 단위로 나눠주세요. 예: \"7월\", \"8~9월\" 등.";
+                타임라인의 첫 번째 시기는 오늘이 속한 학기/방학이어야 하고, 마지막 시기는 오늘로부터 6개월 이내여야 합니다.
+                """, today, grade)
+                : String.format("""
+                오늘은 %s입니다. 기간은 월 단위로 나눠주세요. 예: "7월", "8~9월" 등.
+                타임라인은 오늘이 속한 달부터 시작해 6개월 이내로 구성하세요.
+                """, today);
 
         return String.format("""
                 [사용자 현재 스펙]
                 %s
-                
+
                 [목표 직무]
                 %s
-                
+
                 [유사 합격자 케이스]
                 %s
-                
+
                 %s
-                
+
                 [우선 반영할 AI 추천 활동 (F-03 결과)]
                 %s
                 
