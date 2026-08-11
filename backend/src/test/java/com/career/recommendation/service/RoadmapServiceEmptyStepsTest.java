@@ -259,4 +259,57 @@ class RoadmapServiceEmptyStepsTest {
                 .as("3번째 시기 라벨과 무관한 활동을 잘못 붙이지 않는다")
                 .isEmpty();
     }
+
+    /**
+     * 캐시된 로드맵의 모든 스텝에서 matchedActivities가 비어 있으면(activity 텍스트는 있지만
+     * 실제로 매칭된 DB 활동이 하나도 없는 경우) hasUsableCachedActivities가 "사용 가능"으로
+     * 오판정하던 회귀를 고정한다. 빈 스트림에 대한 noneMatch(...)는 항상 true를 반환하는
+     * vacuous truth라서, 빈 목록 가드 없이는 "마감 지난 활동이 하나도 없다"와 "매칭된 활동
+     * 자체가 하나도 없다"를 구분하지 못했다. RecommendationService.hasUsableCachedActivities는
+     * 이미 !activities.isEmpty()로 이 케이스를 막고 있었는데, RoadmapService 쪽엔 이 가드가
+     * 없었다.
+     */
+    @Test
+    void 매칭된_활동이_하나도_없는_캐시는_사용_가능으로_판정하지_않는다() {
+        RoadmapResponse allEmpty = RoadmapResponse.builder()
+                .aiRoadmap(true)
+                .timeline(List.of(
+                        com.career.recommendation.dto.roadmap.RoadmapResponse.TimelineStep.builder()
+                                .period("1~2개월 차").priority("HIGH")
+                                .activity("자격증 취득 및 포트폴리오 구체화").reason("가이드")
+                                .matchedActivities(List.of())
+                                .build()
+                ))
+                .build();
+
+        boolean usable = ReflectionTestUtils.invokeMethod(
+                roadmapService, "hasUsableCachedActivities", allEmpty, java.time.LocalDate.of(2026, 8, 11));
+
+        assertThat(usable)
+                .as("매칭된 DB 활동이 하나도 없는 캐시는 재생성 대상이어야 한다")
+                .isFalse();
+
+        // 대조군: 마감 안 지난 활동이 하나라도 있으면 정상적으로 사용 가능 판정한다.
+        RoadmapResponse withActivity = RoadmapResponse.builder()
+                .aiRoadmap(true)
+                .timeline(List.of(
+                        com.career.recommendation.dto.roadmap.RoadmapResponse.TimelineStep.builder()
+                                .period("1~2개월 차").priority("HIGH")
+                                .activity("정보처리기사 취득").reason("가점")
+                                .matchedActivities(List.of(
+                                        com.career.recommendation.dto.roadmap.RoadmapResponse.MatchedActivity.builder()
+                                                .activityId(UUID.randomUUID())
+                                                .name("정보처리기사")
+                                                .deadline(java.time.LocalDate.of(2026, 9, 1))
+                                                .build()
+                                ))
+                                .build()
+                ))
+                .build();
+
+        boolean usableWithActivity = ReflectionTestUtils.invokeMethod(
+                roadmapService, "hasUsableCachedActivities", withActivity, java.time.LocalDate.of(2026, 8, 11));
+
+        assertThat(usableWithActivity).isTrue();
+    }
 }

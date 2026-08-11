@@ -430,15 +430,29 @@ public class RoadmapService {
      * 캐시된 로드맵에 붙어 있는 실제 DB 활동(matchedActivities)이 아직 유효한지 확인한다.
      * 마감이 지난 활동이 하나라도 있으면 로드맵을 다시 생성해야 한다.
      * (RecommendationService.hasUsableCachedActivities와 같은 목적)
+     *
+     * ⚠️ RecommendationService 쪽은 !activities.isEmpty()를 먼저 확인하는데, 이쪽엔 그
+     * 빈-목록 가드가 없었다. matchedActivities가 모든 스텝에서 전부 비어 있으면
+     * flatMap 결과가 빈 스트림이 되고, 빈 스트림에 대한 noneMatch는 항상 true를 반환한다
+     * (vacuous truth) — 즉 "사용 가능"으로 잘못 판정된다. DB에 신청 가능한 활동이 아직
+     * 하나도 없을 때(크롤러 미작동·전량 마감 등) Gemini가 activity 텍스트만 있고
+     * activityIds는 비거나 유효하지 않은 응답을 주면, parseGeminiResponse는 이 스텝을
+     * 버리지 않고(텍스트가 있으므로) aiRoadmap=true로 저장한다. 다음날 크롤러가 활동을
+     * 채워 넣어도 이 캐시는 "사용 가능"으로 영구 판정돼, 유저가 스펙을 다시 저장하기
+     * 전까지 실제 DB 활동을 절대 반영하지 못한다 — 위(263~270행) 완전-빈-스텝 케이스와
+     * 같은 자가회복 불가 상태가 "텍스트는 있지만 매칭된 활동이 하나도 없는" 케이스에도
+     * 똑같이 존재했다.
      */
     private boolean hasUsableCachedActivities(RoadmapResponse response, LocalDate today) {
         if (response == null || response.getTimeline() == null) {
             return false;
         }
-        return response.getTimeline().stream()
+        List<MatchedActivity> allMatched = response.getTimeline().stream()
                 .filter(step -> step != null && step.getMatchedActivities() != null)
                 .flatMap(step -> step.getMatchedActivities().stream())
-                .noneMatch(activity -> activity.getDeadline() != null
+                .toList();
+        return !allMatched.isEmpty()
+                && allMatched.stream().noneMatch(activity -> activity.getDeadline() != null
                         && activity.getDeadline().isBefore(today));
     }
 
