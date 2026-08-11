@@ -64,7 +64,15 @@ public class GeminiService {
                                   String similarCases, String topRecommendedActivities,
                                   String availableActivitiesJson) {
         String prompt = buildRoadmapPrompt(userSpecJson, targetJob, grade, similarCases, topRecommendedActivities, availableActivitiesJson);
-        String systemInstruction = "당신은 취업 커리어 어드바이저입니다. 사용자의 현재 스펙과 목표 직무, 유사 합격자 데이터 및 우선 추천 활동을 기반으로 시기별 커리어 로드맵을 생성하되, 단기 기간에는 제공된 DB 활동 목록 중 최적의 활동을 매칭하고, 먼 미래 기간에 적합한 공고가 없으면 역량 준비 가이드를 제안하세요. JSON 형식으로만 응답하세요.";
+        // ⚠️ 이 systemInstruction은 buildRoadmapPrompt의 규칙 4·5와 반드시 같은 매칭 정책을
+        // 말해야 한다. 예전엔 여기서 "단기 기간에는 DB 활동 매칭, 먼 미래는 가이드 제안"이라는
+        // 2분할을 못박아 규칙 4("각 시기마다 매칭")·5("적합한 공고가 없는 시기만 가이드")와
+        // 모순됐다 — Gemini는 systemInstruction을 유저 턴만큼 무겁게 반영하므로, 3~6개월
+        // 구간에 실제로 열려 있는 DB 활동이 있어도 매칭을 건너뛰고 가이드만 낼 위험이 있었다
+        // (Opus 5 높음 검토 12라운드가 규칙 4·5만 고친 이전 수정이 이 문장 때문에 절반만
+        // 효과가 있었을 거라고 지적). 규칙 4·5와 동일하게 "시기 무관, 적합한 활동이 있으면
+        // 매칭, 없는 시기만 가이드"로 통일한다.
+        String systemInstruction = "당신은 취업 커리어 어드바이저입니다. 사용자의 현재 스펙과 목표 직무, 유사 합격자 데이터 및 우선 추천 활동을 기반으로 시기별 커리어 로드맵을 생성하되, 각 시기마다 제공된 DB 활동 목록 중 마감일과 직무가 적합한 활동이 있으면 매칭하고, 적합한 공고가 없는 시기에만 역량 준비 가이드를 제안하세요. JSON 형식으로만 응답하세요.";
         String raw = callGeminiApi(systemInstruction, prompt);
         return extractJsonBlock(raw);
     }

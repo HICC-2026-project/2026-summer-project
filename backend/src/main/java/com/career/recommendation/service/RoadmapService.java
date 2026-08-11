@@ -103,6 +103,13 @@ public class RoadmapService {
                     // 0에 머물러 이 게이트가 절대 발동하지 않는다 — "실패를 반복할 때 막는
                     // 안전장치"라는 주석이 실패 반복 상황에서는 실제로 동작하지 않는다는 뜻이다.
                     // 실패 시도까지 세는 별도 카운터가 추가돼야 이름값대로 동작한다.
+                    //
+                    // 게다가 이 게이트는 RecommendationService보다 우회 경로가 하나 더 많다:
+                    // 위 87행의 "deserialized.getTimeline() != null && !isEmpty()" 조건에 걸리면
+                    // (캐시가 애초에 빈 타임라인이거나, 111행 catch로 파싱 자체가 실패하면) 이
+                    // if 블록 전체를 건너뛰어 게이트를 거치지 않고 곧장 Gemini 재호출로
+                    // 흘러간다 — RecommendationService의 cachedResponse==null 우회와 같은
+                    // 형태의 갭이 여기선 두 곳(빈 타임라인 + 파싱 실패)에 있다.
                     if (cached.getLastUpdatedDate() != null && today.equals(cached.getLastUpdatedDate())
                             && cached.getDailyUpdateCount() != null && cached.getDailyUpdateCount() >= 3) {
                         return deserialized;
@@ -153,8 +160,11 @@ public class RoadmapService {
         }
 
         // 3. 현재 신청 가능한 DB 활동 조회 (RAG 패턴)
+        // today를 위(82행)에서 이미 계산한 값과 동일하게 재사용한다 — 따로 다시
+        // LocalDate.now()를 부르면 자정 경계를 걸쳐 실행될 때 위 마감 필터(146행)와
+        // 하루 다른 기준일로 어긋날 수 있다.
         List<Activity> activeActivities = activityRepository.findRecommendableActivities(
-                LocalDate.now(SERVICE_ZONE_ID),
+                today,
                 PageRequest.of(0, MAX_RECOMMENDABLE_ACTIVITIES)
         );
         String availableActivitiesJson = promptDataBuilder.buildAvailableActivitiesJson(activeActivities);
@@ -178,7 +188,7 @@ public class RoadmapService {
                 String rawJson = geminiService.generateRoadmap(
                         userSpecJson, targetJobStr, grade,
                         similarCasesStr, topRecommendedJson, availableActivitiesJson);
-                if (rawJson.isBlank()) {
+                if (rawJson == null || rawJson.isBlank()) {
                     log.warn("Gemini 로드맵 응답 비어있음 (시도 {}회)", attempt);
                 } else {
                     RoadmapResponse parsed = parseGeminiResponse(rawJson, activeActivities);
