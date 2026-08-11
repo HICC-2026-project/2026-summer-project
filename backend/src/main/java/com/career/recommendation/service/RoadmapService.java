@@ -161,8 +161,8 @@ public class RoadmapService {
 
         // 3. 현재 신청 가능한 DB 활동 조회 (RAG 패턴)
         // today를 위(82행)에서 이미 계산한 값과 동일하게 재사용한다 — 따로 다시
-        // LocalDate.now()를 부르면 자정 경계를 걸쳐 실행될 때 위 마감 필터(146행)와
-        // 하루 다른 기준일로 어긋날 수 있다.
+        // LocalDate.now()를 부르면 자정 경계를 걸쳐 실행될 때 바로 위 topRecommendedJson
+        // 마감 필터(153행)와 하루 다른 기준일로 어긋날 수 있다.
         List<Activity> activeActivities = activityRepository.findRecommendableActivities(
                 today,
                 PageRequest.of(0, MAX_RECOMMENDABLE_ACTIVITIES)
