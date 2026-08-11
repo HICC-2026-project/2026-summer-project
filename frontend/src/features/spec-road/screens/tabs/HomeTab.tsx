@@ -178,7 +178,7 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
       {/* 추천 갱신 정책 안내: 스펙을 바꿔야 새로 생성되고, 하루 3회까지만 가능하다. 로그인 유저에게만 표시. */}
       {recMeta != null && (
         <p style={{ fontSize: 12, color: "#9797A1", margin: "0 0 12px", lineHeight: 1.5 }}>
-          스펙을 수정하면 추천을 새로 만들어요. 하루 3번까지 갱신할 수 있어요.
+          스펙을 수정하면 추천을 새로 만들어요. 하루 3번까지 호출할 수 있어요.
         </p>
       )}
 
@@ -198,7 +198,7 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
             lineHeight: 1.5,
           }}
         >
-          오늘 추천 갱신 횟수(3회)를 모두 사용했어요. 점수·비교는 방금 수정한 스펙 기준이지만, 아래 활동
+          오늘 추천 호출 횟수(3회)를 모두 사용했어요. 점수·비교는 방금 수정한 스펙 기준이지만, 아래 활동
           목록은 내일 첫 방문 때 새로 만들어져요.
         </div>
       )}
