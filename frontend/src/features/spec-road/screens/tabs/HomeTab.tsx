@@ -102,10 +102,13 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
             {hasReadiness && !recLoading ? readinessScore : "–"}
             <span style={{ fontSize: 20, fontWeight: 700 }}>점</span>
           </div>
-          <div style={{ paddingBottom: 6 }}>
+          <div style={{ paddingBottom: 6, flex: 1, minWidth: 0 }}>
             {/* 상위 N% 랭크는 백엔드가 주지 않아 예시 화면에서만 표시한다. */}
             {isDemo && <div style={{ fontSize: 13, fontWeight: 700 }}>상위 {READINESS_RANK}</div>}
-            <div style={{ fontSize: 12, opacity: 0.85, whiteSpace: "nowrap", maxWidth: 190 }}>
+            {/* 비교 문구는 폴백 상황("BACKEND 합격자 데이터가 부족해, 직무 구분 없이…")에서
+                꽤 길어진다 — nowrap+maxWidth로 두면 뒷부분이 잘려 문장이 중간에 끊긴다.
+                줄바꿈을 허용하고, 한국어가 어절 중간에서 끊기지 않게 keep-all을 쓴다. */}
+            <div style={{ fontSize: 12, opacity: 0.85, lineHeight: 1.45, wordBreak: "keep-all", overflowWrap: "anywhere" }}>
               {recLoading ? "분석 중이에요" : readinessSubtitle}
             </div>
           </div>
