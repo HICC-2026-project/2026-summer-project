@@ -142,7 +142,7 @@ public class GeminiService {
                 6. DB 활동을 매칭할 때 각 활동의 id 값을 그대로 사용하세요 (UUID 형식). 목록에 없는 ID는 절대로 임의로 만들지 마세요.
                 7. 각 시기에 최대 3개의 활동 또는 준비 가이드를 추천하세요.
                 8. 각 항목에는 period(시기 설명), priority(HIGH/MEDIUM/LOW), activity(활동명 또는 역량 준비 가이드 텍스트), reason(이유), activityIds(UUID 배열, 적합한 DB 활동이 없는 경우 빈 배열 []) 필드를 포함하세요.
-                   ⚠️ priority 규칙: 첫 번째 시기(1~2개월 내, 당장 시작할 단기 단계)에만 "HIGH"(화면 표기: "지금 집중")를 부여하세요. 두 번째 시기(3~4개월 차)에는 "MEDIUM"("중요"), 세 번째 시기(5~6개월 차)에는 "LOW"("준비")를 부여하세요.
+                   ⚠️ priority 규칙: 가장 이른 시기(당장 시작할 단기 단계)에만 "HIGH"(화면 표기: "지금 집중")를 부여하세요. 그 다음 시기에는 "MEDIUM"("중요")을, 그 이후의 나머지 모든 시기에는 "LOW"("준비")를 부여하세요. (학년이 없으면 월 단위로 4~6개 시기가 나올 수 있습니다 — 시기 개수와 무관하게 이 규칙을 적용하세요.)
                 9. 응답은 {"timeline": [...]} JSON 형식으로만 출력하세요.
                 """, spec, job, cases, periodGuide, topRecommended, availableActivities);
     }

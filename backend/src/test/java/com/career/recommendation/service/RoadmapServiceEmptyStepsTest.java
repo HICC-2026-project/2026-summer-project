@@ -168,4 +168,37 @@ class RoadmapServiceEmptyStepsTest {
         // 화이트리스트가 대소문자를 가리면 "high"가 조용히 MEDIUM으로 뭉개진다.
         assertThat(response.getTimeline().get(0).getPriority()).isEqualTo("HIGH");
     }
+
+    /**
+     * Gemini 폴백 로드맵의 시기 라벨이 요청 시점(today)과 무관하게 "N학년 2학기 (9~11월)"부터
+     * 하드코딩돼 있던 회귀를 고정한다. 4월에 3학년이 폴백을 받으면 예전 코드는 1번째(HIGH)
+     * 시기로 ~5개월 뒤인 "3학년 2학기"를 보여줬다 — "6개월 로드맵"이라는 계약을 벗어난다.
+     * computeFallbackPeriods는 private이라 리플렉션으로 직접 호출해, 시스템 시계와 무관하게
+     * 결정적으로 검증한다.
+     */
+    @Test
+    void 폴백_로드맵_시기_라벨은_실제_현재월부터_순서대로_계산된다() {
+        // 4월(1학기 구간) — 예전 코드라면 여기서도 "3학년 2학기"가 나왔을 것.
+        String[] april = ReflectionTestUtils.invokeMethod(
+                roadmapService, "computeFallbackPeriods", 3, java.time.LocalDate.of(2026, 4, 15));
+        assertThat(april).containsExactly(
+                "3학년 1학기 (3~6월)", "3학년 여름방학 (7~8월)", "3학년 2학기 (9~11월)");
+
+        // 12월(겨울방학 구간) — 다음 시기부터는 학년이 하나 올라가야 한다.
+        String[] december = ReflectionTestUtils.invokeMethod(
+                roadmapService, "computeFallbackPeriods", 3, java.time.LocalDate.of(2026, 12, 1));
+        assertThat(december).containsExactly(
+                "3학년 겨울방학 (12~2월)", "4학년 1학기 (3~6월)", "4학년 여름방학 (7~8월)");
+
+        // 4학년 겨울방학 다음은 "졸업 후 취업 준비"로 고정돼야 한다.
+        String[] graduating = ReflectionTestUtils.invokeMethod(
+                roadmapService, "computeFallbackPeriods", 4, java.time.LocalDate.of(2026, 12, 1));
+        assertThat(graduating).containsExactly(
+                "4학년 겨울방학 (12~2월)", "졸업 후 취업 준비", "졸업 후 취업 준비");
+
+        // grade가 없으면 상대적 라벨을 그대로 쓴다.
+        String[] noGrade = ReflectionTestUtils.invokeMethod(
+                roadmapService, "computeFallbackPeriods", (Integer) null, java.time.LocalDate.of(2026, 4, 15));
+        assertThat(noGrade).containsExactly("1~2개월 차", "3~4개월 차", "5~6개월 차");
+    }
 }

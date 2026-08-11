@@ -171,7 +171,7 @@ public class RoadmapService {
 
         // 4. Gemini API 호출 (최대 2회 시도)
         RoadmapResponse response = callGeminiWithRetry(userSpecJson, targetJobStr, grade,
-                similarCasesStr, topRecommendedJson, availableActivitiesJson, activeActivities);
+                similarCasesStr, topRecommendedJson, availableActivitiesJson, activeActivities, today);
 
         if (response.isAiRoadmap()) {
             roadmapCacheService.save(user, response);
@@ -182,7 +182,8 @@ public class RoadmapService {
 
     private RoadmapResponse callGeminiWithRetry(String userSpecJson, String targetJobStr, Integer grade,
                                                  String similarCasesStr, String topRecommendedJson,
-                                                 String availableActivitiesJson, List<Activity> activeActivities) {
+                                                 String availableActivitiesJson, List<Activity> activeActivities,
+                                                 LocalDate today) {
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
                 String rawJson = geminiService.generateRoadmap(
@@ -206,7 +207,7 @@ public class RoadmapService {
             }
         }
         log.info("Gemini 로드맵 미사용/실패 → DB 저장 활동 기반 로드맵 반환");
-        return buildFallbackRoadmap(grade, activeActivities);
+        return buildFallbackRoadmap(grade, activeActivities, today);
     }
 
     /**
@@ -312,11 +313,22 @@ public class RoadmapService {
                 .build();
     }
 
-    /** Gemini 미사용/실패 시 DB 등록 활동 기반 기본 로드맵 반환 */
-    private RoadmapResponse buildFallbackRoadmap(Integer grade, List<Activity> activeActivities) {
-        String semester1 = (grade != null) ? grade + "학년 2학기 (9~11월)" : "1~2개월 차";
-        String semester2 = (grade != null) ? grade + "학년 겨울방학 (12~2월)" : "3~4개월 차";
-        String semester3 = (grade != null) ? (grade < 4 ? (grade + 1) + "학년 1학기 (3~6월)" : "졸업 후 취업 준비") : "5~6개월 차";
+    /**
+     * Gemini 미사용/실패 시 DB 등록 활동 기반 기본 로드맵 반환.
+     *
+     * ⚠️ 예전엔 이 세 시기 라벨이 "N학년 2학기 (9~11월)"부터 시작하도록 하드코딩돼 있었다 —
+     * 요청 시점이 실제로 몇 월인지는 전혀 보지 않았다. 4월에 3학년이 폴백을 받으면 1번째
+     * (HIGH="지금 집중") 시기로 ~5개월 뒤인 "3학년 2학기"를, 3번째 시기로 ~11개월 뒤인
+     * "4학년 1학기"를 보여줘 클래스 상단 문서가 약속하는 "6개월 로드맵"을 벗어났다. grade가
+     * null인 분기는 이미 상대적("1~2개월 차"~"5~6개월 차")이라 문제가 없었는데, grade가 있는
+     * 분기만 절대 달력이었다. today를 기준으로 현재 속한 학기/방학 구간부터 3개를 순서대로
+     * 계산하도록 고친다.
+     */
+    private RoadmapResponse buildFallbackRoadmap(Integer grade, List<Activity> activeActivities, LocalDate today) {
+        String[] periods = computeFallbackPeriods(grade, today);
+        String semester1 = periods[0];
+        String semester2 = periods[1];
+        String semester3 = periods[2];
 
         List<MatchedActivity> step1Matched = new ArrayList<>();
         List<MatchedActivity> step2Matched = new ArrayList<>();
@@ -357,6 +369,49 @@ public class RoadmapService {
                 ))
                 .aiRoadmap(false)
                 .build();
+    }
+
+    /**
+     * grade가 있을 때, today가 속한 학기/방학 구간부터 순서대로 3개의 시기 라벨을 만든다.
+     * 한 해를 1학기(3~6월)·여름방학(7~8월)·2학기(9~11월)·겨울방학(12~2월) 4구간으로 보고,
+     * 겨울방학 다음엔 학년이 하나 올라간다. 4학년을 넘어가면 "졸업 후 취업 준비"로 고정한다.
+     * grade가 null이면 학기 개념이 없으므로 상대적인 "N~N개월 차" 라벨을 그대로 쓴다.
+     */
+    private String[] computeFallbackPeriods(Integer grade, LocalDate today) {
+        if (grade == null) {
+            return new String[]{"1~2개월 차", "3~4개월 차", "5~6개월 차"};
+        }
+        int month = today.getMonthValue();
+        int termIndex; // 0=1학기, 1=여름방학, 2=2학기, 3=겨울방학
+        if (month >= 3 && month <= 6) termIndex = 0;
+        else if (month >= 7 && month <= 8) termIndex = 1;
+        else if (month >= 9 && month <= 11) termIndex = 2;
+        else termIndex = 3;
+
+        String[] periods = new String[3];
+        int curGrade = grade;
+        int curTerm = termIndex;
+        for (int i = 0; i < 3; i++) {
+            periods[i] = fallbackTermLabel(curGrade, curTerm);
+            curTerm++;
+            if (curTerm > 3) {
+                curTerm = 0;
+                curGrade++;
+            }
+        }
+        return periods;
+    }
+
+    private String fallbackTermLabel(int grade, int termIndex) {
+        if (grade > 4) {
+            return "졸업 후 취업 준비";
+        }
+        return switch (termIndex) {
+            case 0 -> grade + "학년 1학기 (3~6월)";
+            case 1 -> grade + "학년 여름방학 (7~8월)";
+            case 2 -> grade + "학년 2학기 (9~11월)";
+            default -> grade + "학년 겨울방학 (12~2월)";
+        };
     }
 
     /**
