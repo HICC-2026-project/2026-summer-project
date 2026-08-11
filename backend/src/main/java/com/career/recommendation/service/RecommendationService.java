@@ -119,7 +119,7 @@ public class RecommendationService {
         // 증가한다. Gemini가 계속 실패하면 폴백만 반복되고 카운트는 0에 머무르므로, 위
         // 게이트는 "하루 3회"를 절대 못 보고 매 요청마다 무조건 통과시킨다 — 주석이
         // "안전장치"라고 부르는 게 실패 반복 상황에서는 실제로 발동하지 않는다는 뜻이다.
-        // 게다가 cachedResponse == null(캐시 JSON 자체가 파싱 불가)이면 아래 118행의 조기
+        // 게다가 cachedResponse == null(캐시 JSON 자체가 파싱 불가)이면 바로 아래 조기
         // 반환 조건(cachedResponse != null)을 만족 못해, needsNewAiCall이 false로 막혀도
         // 그대로 Gemini 재시도 경로로 흘러내려간다 — 이 경우엔 하루 제한이 완전히 우회된다.
         // 실패 시도까지 세는 별도 카운터(예: lastAttemptDate + dailyAttemptCount 컬럼)를
