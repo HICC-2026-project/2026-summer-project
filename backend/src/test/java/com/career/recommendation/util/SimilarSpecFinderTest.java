@@ -26,18 +26,25 @@ class SimilarSpecFinderTest {
     @Mock
     private PasserDataRepository passerDataRepository;
 
+    /** 최소 표본(3명) 검증을 통과하는 크기의 목록. 각 폴백 단계는 3명 미만이면 채택하지 않는다. */
+    private static List<PasserData> passers(int count) {
+        return java.util.stream.IntStream.range(0, count)
+                .mapToObj(i -> PasserData.builder().build())
+                .toList();
+    }
+
     @Test
     void 직무와_정규화_학점비율로_유사_합격자를_조회한다() {
-        PasserData expected = PasserData.builder().build();
+        List<PasserData> expected = passers(3);
         when(passerDataRepository.findSimilarByJobTypeAndGpaRatio(
                 eq("BACKEND"), any(), any(), any(Pageable.class)))
-                .thenReturn(List.of(expected));
+                .thenReturn(expected);
         SimilarSpecFinder finder = new SimilarSpecFinder(passerDataRepository);
 
         List<PasserData> result = finder.find(
                 "BACKEND", new BigDecimal("3.60"), new BigDecimal("4.50"));
 
-        assertThat(result).containsExactly(expected);
+        assertThat(result).isEqualTo(expected);
         ArgumentCaptor<BigDecimal> minCaptor = ArgumentCaptor.forClass(BigDecimal.class);
         ArgumentCaptor<BigDecimal> maxCaptor = ArgumentCaptor.forClass(BigDecimal.class);
         verify(passerDataRepository).findSimilarByJobTypeAndGpaRatio(
@@ -49,16 +56,51 @@ class SimilarSpecFinderTest {
 
     @Test
     void 동일_직무_결과가_없으면_학점비율만으로_다시_조회한다() {
-        PasserData expected = PasserData.builder().build();
+        List<PasserData> expected = passers(3);
         when(passerDataRepository.findSimilarByJobTypeAndGpaRatio(
                 eq("BACKEND"), any(), any(), any(Pageable.class)))
                 .thenReturn(List.of());
         when(passerDataRepository.findSimilarByGpaRatio(any(), any(), any(Pageable.class)))
-                .thenReturn(List.of(expected));
+                .thenReturn(expected);
         SimilarSpecFinder finder = new SimilarSpecFinder(passerDataRepository);
 
         assertThat(finder.find("BACKEND", new BigDecimal("3.60"), new BigDecimal("4.50")))
-                .containsExactly(expected);
+                .isEqualTo(expected);
+    }
+
+    /**
+     * 1~2명짜리 표본은 그 한두 사람의 개인 스펙이 "합격자 평균"이 되어 점수·막대·충족/부족이
+     * 통계적 근거 없이 그려지는 문제가 있었다(2026-08-11 사용자 제보: "합격자 1명과 비교한
+     * 결과입니다"). 각 폴백 단계는 3명 미만이면 채택하지 않고 다음 단계로 내려가야 한다.
+     */
+    @Test
+    void 표본이_3명_미만이면_채택하지_않고_다음_폴백으로_내려간다() {
+        List<PasserData> enough = passers(3);
+        when(passerDataRepository.findSimilarByJobTypeAndGpaRatio(eq("BACKEND"), any(), any(), any()))
+                .thenReturn(passers(2)); // 2명 — 미달
+        when(passerDataRepository.findSimilarByGpaRatio(any(), any(), any()))
+                .thenReturn(enough);
+        SimilarSpecFinder finder = new SimilarSpecFinder(passerDataRepository);
+
+        assertThat(finder.find("BACKEND", new BigDecimal("3.60"), new BigDecimal("4.50")))
+                .isEqualTo(enough);
+    }
+
+    @Test
+    void 최종_폴백까지_3명_미만이면_빈_목록을_반환한다() {
+        // 전체 테이블에 유효 합격자가 3명 미만 — 무의미한 1~2명 비교를 정식 결과처럼
+        // 보여주는 대신 빈 목록을 줘 FE의 "비교 가능한 데이터가 부족해요" 화면을 태운다.
+        when(passerDataRepository.findSimilarByJobTypeAndGpaRatio(eq("BACKEND"), any(), any(), any()))
+                .thenReturn(List.of());
+        when(passerDataRepository.findSimilarByGpaRatio(any(), any(), any()))
+                .thenReturn(List.of());
+        when(passerDataRepository.findClosestByJobTypeAndGpaRatio(eq("BACKEND"), any(), any()))
+                .thenReturn(passers(1));
+        when(passerDataRepository.findClosestByGpaRatio(any(), any()))
+                .thenReturn(passers(2));
+        SimilarSpecFinder finder = new SimilarSpecFinder(passerDataRepository);
+
+        assertThat(finder.find("BACKEND", new BigDecimal("4.50"), new BigDecimal("4.50"))).isEmpty();
     }
 
     @Test
@@ -71,19 +113,19 @@ class SimilarSpecFinderTest {
 
     @Test
     void 학점_범위_내_결과가_없으면_가장_가까운_학점_비율로_다시_조회한다() {
-        PasserData expected = PasserData.builder().build();
+        List<PasserData> expected = passers(3);
         when(passerDataRepository.findSimilarByJobTypeAndGpaRatio(eq("BACKEND"), any(), any(), any()))
                 .thenReturn(List.of());
         when(passerDataRepository.findSimilarByGpaRatio(any(), any(), any()))
                 .thenReturn(List.of());
         when(passerDataRepository.findClosestByJobTypeAndGpaRatio(eq("BACKEND"), any(), any()))
-                .thenReturn(List.of(expected));
+                .thenReturn(expected);
 
         SimilarSpecFinder finder = new SimilarSpecFinder(passerDataRepository);
 
         List<PasserData> result = finder.find("BACKEND", new BigDecimal("4.50"), new BigDecimal("4.50"));
 
-        assertThat(result).containsExactly(expected);
+        assertThat(result).isEqualTo(expected);
         verify(passerDataRepository).findClosestByJobTypeAndGpaRatio(eq("BACKEND"), eq(new BigDecimal("1.0000")), any());
     }
 

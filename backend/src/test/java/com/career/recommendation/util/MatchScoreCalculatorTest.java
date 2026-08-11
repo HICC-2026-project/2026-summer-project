@@ -172,19 +172,42 @@ class MatchScoreCalculatorTest {
     }
 
     @Test
-    void 합격자_전원이_자격증_0개면_막대는_0이고_상태는_충족이다() {
-        // 막대는 "합격자 대비"가 아니라 "절대 수준"이므로, 양쪽 다 자격증이 없으면 0%가 맞다.
-        // 감점되지 않는다는 사실은 status("충족")와 총점이 전달한다.
-        // (예전엔 상대 기준이라 0/0을 100%로 예외 처리했는데, 자격증이 없는 사용자에게
-        //  "만점"이라고 표시하는 셈이라 오해를 만들었다.)
+    void 양쪽_다_자격증이_없으면_자격증_행을_표시하지_않는다() {
+        // v7: 사용자도 미입력이고 합격자도 데이터가 없는 항목은 행 자체를 뺀다.
+        // 예전엔 0 >= 0 이 true라 "미입력" 옆에 초록 "충족" 배지가 붙었고, 비교 탭 요약
+        // ("항목별로 고르게 준비되어 있어요")까지 아무것도 입력 안 한 항목 덕에 좋게 나오는
+        // "이상한 결론"이 됐다. 비교 근거가 양쪽 다 없으면 충족도 부족도 아니다.
         UserSpec user = userSpec("3.80", "4.50", "IH", 900, new String[]{});
         PasserData passer = passer("3.80", "4.50", "IH", 900, new String[]{}, 1);
 
-        CompareRowDto certRow = calc(user, List.of(passer)).getCompareRows().get(2);
+        List<CompareRowDto> rows = calc(user, List.of(passer)).getCompareRows();
 
-        assertThat(certRow.getMyPct()).isZero();
-        assertThat(certRow.getAvgPct()).isZero();
-        assertThat(certRow.getStatus()).isEqualTo("충족");
+        assertThat(rows).extracting(CompareRowDto::getLabel)
+                .containsExactly("학점", "어학 성적"); // 자격증/수상 행 없음
+    }
+
+    /**
+     * v7 회귀 테스트: 결측 필드가 많은 합격자가 총점을 부풀리면 안 된다.
+     * 예전(~v6)엔 합격자 쪽 데이터가 없는 축이 자동 100점이라, 전 필드 결측 합격자가
+     * 표본에 섞일수록 총점이 위로 부풀었다(막대 평균은 결측을 "제외"해서 화면 안에서
+     * 총점 97 vs 막대 70~86%가 모순돼 보이던 문제). v7은 결측 축을 "그 합격자에 대해
+     * 계산에서 제외"하므로, 전 필드 결측 합격자는 섞여 있어도 총점이 변하지 않아야 한다.
+     */
+    @Test
+    void 전_필드_결측_합격자가_섞여도_총점이_부풀지_않는다() {
+        UserSpec user = userSpec("3.20", "4.50", "IM2", 700, new String[]{"SQLD"});
+        PasserData full1 = passer("4.20", "4.50", "AL", 950, new String[]{"정보처리기사", "SQLD"}, 1);
+        PasserData full2 = passer("4.00", "4.50", "IH", 900, new String[]{"정보처리기사"}, 1);
+        PasserData full3 = passer("3.90", "4.50", "IH", 880, new String[]{"SQLD", "ADSP"}, 1);
+        // 전 필드 결측 — 학점·어학·자격증 모두 없음.
+        PasserData allMissing = PasserData.builder().build();
+
+        int withoutMissing = calc(user, List.of(full1, full2, full3)).getTotalScore();
+        int withMissing = calc(user, List.of(full1, full2, full3, allMissing, allMissing)).getTotalScore();
+
+        assertThat(withMissing)
+                .as("결측 합격자는 점수를 올리지도 내리지도 않는 중립이어야 한다")
+                .isEqualTo(withoutMissing);
     }
 
     @Test

@@ -11,13 +11,23 @@ import type {
   Spec,
 } from "./types";
 
+// "YYYY-MM-DD"를 로컬 자정 기준 Date로 파싱한다.
+// ⚠️ new Date("YYYY-MM-DD")는 스펙상 UTC 자정으로 해석되는데, TODAY는 로컬(KST) 자정이라
+// 두 값 사이에 +9시간(+0.375일)이 항상 끼어든다. Math.ceil(N + 0.375) = N + 1이므로
+// 경계일뿐 아니라 모든 마감일의 D-day가 정확히 하루씩 부풀었다 — 오늘 마감이 "D-1",
+// 내일 마감이 "D-2"로 표시돼 사용자가 실제보다 하루 여유가 있다고 믿게 되는 문제.
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
 export function dday(dateStr: string): string {
-  const diff = Math.ceil((new Date(dateStr).getTime() - TODAY.getTime()) / 86400000);
+  const diff = Math.ceil((parseLocalDate(dateStr).getTime() - TODAY.getTime()) / 86400000);
   return diff <= 0 ? "마감" : `D-${diff}`;
 }
 
 export function ddayColor(dateStr: string): string {
-  const diff = Math.ceil((new Date(dateStr).getTime() - TODAY.getTime()) / 86400000);
+  const diff = Math.ceil((parseLocalDate(dateStr).getTime() - TODAY.getTime()) / 86400000);
   return diff <= 30 ? "#E5484D" : "#9797A1";
 }
 

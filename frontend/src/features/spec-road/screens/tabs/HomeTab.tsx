@@ -53,7 +53,13 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
   // 준비도는 실 API 응답(recMeta)에서만 나온다.
   // 예시 화면에서만 목업 수치를 쓰고, 로그인 사용자는 응답이 없으면(로딩·실패) 수치를 감춘다.
   // 값이 없을 때 목업으로 대체하면 실제 점수인 것처럼 보이기 때문이다.
-  const hasReadiness = recMeta != null || isDemo;
+  //
+  // 비교할 합격자가 0명이면(백엔드가 최소 표본 3명 미달로 빈 목록을 준 경우 포함) 점수도
+  // 감춘다 — 이때 matchScore는 "비교 불가"의 0이지 "준비도 0점"이 아닌데, 숫자 0을 그대로
+  // 보여주면 아무 근거 없는 최하점처럼 읽히는 "이상한 결론"이 된다. 문구(readinessSubtitle)가
+  // "데이터가 부족해..."로 이유를 대신 설명한다.
+  const hasComparablePassers = isDemo || (recMeta?.similarPasserCount ?? 0) > 0;
+  const hasReadiness = (recMeta != null && hasComparablePassers) || isDemo;
   const readinessScore = recMeta?.matchScore ?? READINESS;
   const readinessSubtitle = recMeta?.comparisonMessage ?? (isDemo ? `유사 합격자 ${PASSER_COUNT}명 기준` : "");
   const isFallbackRec = recMeta != null && !recMeta.isAiRecommendation;
