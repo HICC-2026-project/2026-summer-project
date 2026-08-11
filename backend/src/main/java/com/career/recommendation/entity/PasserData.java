@@ -58,6 +58,19 @@ public class PasserData {
     @Builder.Default
     private String dataOrigin = "UNKNOWN";
 
+    @Column(name = "proof_original_name", length = 255)
+    private String proofOriginalName;
+
+    /** 로컬 저장소 안에서 사용하는 UUID 기반 파일명. 외부에 직접 노출하지 않는다. */
+    @Column(name = "proof_stored_name", length = 100)
+    private String proofStoredName;
+
+    @Column(name = "proof_content_type", length = 50)
+    private String proofContentType;
+
+    @Column(name = "proof_file_size")
+    private Long proofFileSize;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

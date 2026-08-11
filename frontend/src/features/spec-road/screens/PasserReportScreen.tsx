@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties, type FormEvent } from "react";
+import { useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { Chip } from "../components/Chip";
 import { GPA_SCALE_OPTIONS, JOB_OPTIONS, LANG_MAX, LANG_TYPES, OPIC_GRADES, PRIMARY } from "../data";
 import { toLanguageScoresPayload } from "../helpers";
@@ -10,8 +10,11 @@ interface PasserReportScreenProps {
   initialSpec: Spec;
   initialJob: JobCode | "";
   onBack: () => void;
-  onSubmit: (request: PasserReportRequest) => Promise<PasserReportResponse>;
+  onSubmit: (request: PasserReportRequest, proof: File) => Promise<PasserReportResponse>;
 }
+
+const MAX_PROOF_FILE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_PROOF_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const cardStyle: CSSProperties = {
   background: "#fff",
@@ -80,10 +83,13 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
   const [certifications, setCertifications] = useState<string[]>(() => [...initialSpec.certs]);
   const [certInput, setCertInput] = useState("");
   const [experienceCount, setExperienceCount] = useState("0");
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofError, setProofError] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<PasserReportResponse | null>(null);
+  const proofInputRef = useRef<HTMLInputElement>(null);
 
   const numericYear = Number(year);
   const numericGpa = Number(gpa);
@@ -101,6 +107,10 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
               ? "관련 경험 수를 입력해주세요."
               : numericExperienceCount < 0 || numericExperienceCount > 100
                 ? "관련 경험 수는 0~100 사이여야 합니다."
+                : proofError
+                  ? proofError
+                  : proofFile === null
+                    ? "합격 증빙 이미지를 첨부해주세요."
                 : !consent
                   ? "익명 데이터 활용에 동의해주세요."
                   : null;
@@ -116,23 +126,58 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
     setCertInput("");
   }
 
+  function selectProofFile(file: File | null) {
+    setProofError(null);
+
+    if (!file) {
+      setProofFile(null);
+      return;
+    }
+    const hasAllowedExtension = /\.(jpe?g|png|webp)$/i.test(file.name);
+    if (!ALLOWED_PROOF_TYPES.has(file.type) && !hasAllowedExtension) {
+      setProofFile(null);
+      setProofError("JPEG, PNG, WebP 이미지 파일만 첨부할 수 있습니다.");
+      if (proofInputRef.current) proofInputRef.current.value = "";
+      return;
+    }
+    if (file.size > MAX_PROOF_FILE_SIZE) {
+      setProofFile(null);
+      setProofError("증빙 이미지는 5MB 이하만 첨부할 수 있습니다.");
+      if (proofInputRef.current) proofInputRef.current.value = "";
+      return;
+    }
+
+    setProofFile(file);
+  }
+
+  function clearProofFile() {
+    setProofFile(null);
+    setProofError(null);
+    if (proofInputRef.current) {
+      proofInputRef.current.value = "";
+    }
+  }
+
   async function submitReport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (validationMessage || jobType === "") return;
+    if (validationMessage || jobType === "" || proofFile === null) return;
 
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const response = await onSubmit({
-        jobType,
-        year: numericYear,
-        gpa: numericGpa,
-        gpaMax,
-        languageScores: toLanguageScoresPayload(langScores),
-        certifications,
-        experienceCount: numericExperienceCount,
-        consent,
-      });
+      const response = await onSubmit(
+        {
+          jobType,
+          year: numericYear,
+          gpa: numericGpa,
+          gpaMax,
+          languageScores: toLanguageScoresPayload(langScores),
+          certifications,
+          experienceCount: numericExperienceCount,
+          consent,
+        },
+        proofFile,
+      );
       setResult(response);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "제보 접수에 실패했습니다. 잠시 후 다시 시도해주세요.");
@@ -359,6 +404,80 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
           </div>
         </section>
 
+        <section style={cardStyle}>
+          <div style={{ ...fieldLabelStyle, marginBottom: 4 }}>합격 증빙자료</div>
+          <p style={{ margin: "0 0 13px", fontSize: 12, color: "#9797A1", lineHeight: 1.55 }}>
+            합격 안내 화면이나 메일을 첨부해주세요. 이름, 연락처, 수험번호 등 개인정보는 반드시 가려주세요.
+          </p>
+          <input
+            ref={proofInputRef}
+            id="report-proof"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+            onChange={(event) => selectProofFile(event.target.files?.[0] ?? null)}
+            style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0, 0, 0, 0)" }}
+          />
+          {proofFile ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 11,
+                padding: "13px 14px",
+                border: `1px solid color-mix(in srgb, ${PRIMARY} 30%, #E1E0EA)`,
+                borderRadius: 14,
+                background: `color-mix(in srgb, ${PRIMARY} 5%, #fff)`,
+              }}
+            >
+              <span aria-hidden="true" style={{ fontSize: 22 }}>🖼️</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13, fontWeight: 700, color: "#15141B" }}>
+                  {proofFile.name}
+                </div>
+                <div style={{ marginTop: 3, fontSize: 11.5, color: "#9797A1" }}>
+                  {(proofFile.size / 1024 / 1024).toFixed(2)}MB · 검수용
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={clearProofFile}
+                aria-label="선택한 증빙자료 제거"
+                style={{ width: 30, height: 30, border: "none", borderRadius: 9, background: "#fff", color: "#797984", fontSize: 16, cursor: "pointer" }}
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <label
+              htmlFor="report-proof"
+              style={{
+                minHeight: 84,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 5,
+                border: `1.5px dashed ${proofError ? "#E5484D" : "#D6D5E0"}`,
+                borderRadius: 14,
+                background: "#FAFAFC",
+                color: proofError ? "#E5484D" : PRIMARY,
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              <span aria-hidden="true" style={{ fontSize: 21 }}>＋</span>
+              이미지 선택하기
+              <span style={{ color: "#A3A3AD", fontSize: 11, fontWeight: 500 }}>JPEG · PNG · WebP / 최대 5MB</span>
+            </label>
+          )}
+          {proofError && (
+            <p role="alert" style={{ margin: "9px 2px 0", color: "#E5484D", fontSize: 11.5, fontWeight: 600 }}>
+              {proofError}
+            </p>
+          )}
+        </section>
+
         <label
           style={{
             display: "flex",
@@ -378,7 +497,7 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
             style={{ width: 18, height: 18, margin: "1px 0 0", accentColor: PRIMARY, flexShrink: 0 }}
           />
           <span style={{ fontSize: 13, color: "#4A4954", lineHeight: 1.55 }}>
-            제보한 스펙이 익명화되어 합격자 비교 및 추천 데이터로 활용되는 것에 동의합니다.
+            제보한 스펙이 익명화되어 합격자 비교 및 추천 데이터로 활용되고, 증빙 이미지는 검수 목적으로 저장되는 것에 동의합니다.
           </span>
         </label>
       </div>

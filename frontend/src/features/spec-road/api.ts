@@ -76,9 +76,16 @@ export function putTarget(target: Target): Promise<TargetJobResponse> {
 
 // 로그인 사용자의 익명 합격 스펙 제보.
 // 접수된 데이터는 팀 검수 전까지 추천·비교에 사용되지 않는다.
-export function postPasserReport(request: PasserReportRequest): Promise<PasserReportResponse> {
+export function postPasserReport(request: PasserReportRequest, proof: File): Promise<PasserReportResponse> {
+  const formData = new FormData();
+  formData.append(
+    "request",
+    new Blob([JSON.stringify(request)], { type: "application/json" }),
+  );
+  formData.append("proof", proof);
+
   return apiFetch<PasserReportResponse>("/api/v1/passers/reports", {
     method: "POST",
-    body: JSON.stringify(request),
+    body: formData,
   });
 }

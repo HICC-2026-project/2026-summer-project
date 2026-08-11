@@ -13,6 +13,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -34,6 +35,9 @@ class PasserReportServiceTest {
     private PasserDataRepository passerDataRepository;
 
     @Mock
+    private LocalProofStorageService localProofStorageService;
+
+    @Mock
     private Authentication authentication;
 
     @InjectMocks
@@ -48,19 +52,27 @@ class PasserReportServiceTest {
                 .providerId("provider-id")
                 .build();
         PasserReportRequest request = validRequest();
+        MockMultipartFile proof = new MockMultipartFile(
+                "proof", "accepted.png", "image/png", new byte[]{1, 2, 3}
+        );
 
         when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
-        when(passerDataRepository.save(any(PasserData.class)))
+        when(localProofStorageService.store(proof)).thenReturn(
+                new LocalProofStorageService.StoredProof(
+                        "accepted.png", "proof-uuid.png", "image/png", 3L
+                )
+        );
+        when(passerDataRepository.saveAndFlush(any(PasserData.class)))
                 .thenAnswer(invocation -> {
                     PasserData report = invocation.getArgument(0);
                     report.setId(reportId);
                     return report;
                 });
 
-        PasserReportResponse response = passerReportService.submit(authentication, request);
+        PasserReportResponse response = passerReportService.submit(authentication, request, proof);
 
         ArgumentCaptor<PasserData> captor = ArgumentCaptor.forClass(PasserData.class);
-        verify(passerDataRepository).save(captor.capture());
+        verify(passerDataRepository).saveAndFlush(captor.capture());
 
         PasserData saved = captor.getValue();
         assertThat(saved.getActivity()).isNull();
@@ -73,6 +85,10 @@ class PasserReportServiceTest {
         assertThat(saved.getIsVerified()).isFalse();
         assertThat(saved.getDataOrigin()).isEqualTo("USER_REPORT");
         assertThat(saved.getSpecSummary()).isNull();
+        assertThat(saved.getProofOriginalName()).isEqualTo("accepted.png");
+        assertThat(saved.getProofStoredName()).isEqualTo("proof-uuid.png");
+        assertThat(saved.getProofContentType()).isEqualTo("image/png");
+        assertThat(saved.getProofFileSize()).isEqualTo(3L);
 
         assertThat(response.getReportId()).isEqualTo(reportId);
         assertThat(response.getStatus()).isEqualTo("PENDING");
