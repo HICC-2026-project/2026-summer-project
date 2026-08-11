@@ -356,7 +356,12 @@ public class RoadmapService {
                                 .period(semester2)
                                 .priority("MEDIUM")
                                 .activity("[AI 응답 지연] 부트캠프 및 프로젝트 몰입")
-                                .reason("[서버 지연 임시 로드맵] 방학 기간을 활용하여 포트폴리오를 대폭 강화합니다.")
+                                // ⚠️ "방학 기간을 활용하여"처럼 계절을 못박은 문구는 쓰지 않는다 —
+                                // computeFallbackPeriods가 today 기준으로 학기/방학을 동적으로
+                                // 계산하면서 semester2가 방학이 아니라 학기(2학기·1학기)인 경우도
+                                // 생겼다(예: 7~8월 요청 → 2번째 시기가 "2학기"). 방학이라고 단정하는
+                                // 문구가 남아 있으면 그 경우 카드 본문과 기간 라벨이 서로 모순된다.
+                                .reason("[서버 지연 임시 로드맵] 이 시기를 활용하여 포트폴리오를 대폭 강화합니다.")
                                 .matchedActivities(step2Matched)
                                 .build(),
                         TimelineStep.builder()
