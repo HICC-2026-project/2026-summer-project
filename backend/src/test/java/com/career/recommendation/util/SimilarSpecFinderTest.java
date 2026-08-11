@@ -86,4 +86,66 @@ class SimilarSpecFinderTest {
         assertThat(result).containsExactly(expected);
         verify(passerDataRepository).findClosestByJobTypeAndGpaRatio(eq("BACKEND"), eq(new BigDecimal("1.0000")), any());
     }
+
+    // --- 비교 문구 (buildComparisonMessage) ---
+
+    @Test
+    void 결과가_비어있으면_데이터_부족_문구를_반환한다() {
+        SimilarSpecFinder finder = new SimilarSpecFinder(passerDataRepository);
+
+        assertThat(finder.buildComparisonMessage(List.of(), "BACKEND"))
+                .isEqualTo("아직 비교할 합격자 데이터가 부족해 AI 일반 추천을 제공합니다.");
+        assertThat(finder.buildComparisonMessage(null, "BACKEND"))
+                .isEqualTo("아직 비교할 합격자 데이터가 부족해 AI 일반 추천을 제공합니다.");
+    }
+
+    @Test
+    void 결과_전원이_목표_직무면_직무명을_단언한다() {
+        SimilarSpecFinder finder = new SimilarSpecFinder(passerDataRepository);
+        List<PasserData> passers = List.of(
+                PasserData.builder().jobType("BACKEND").build(),
+                PasserData.builder().jobType("BACKEND").build());
+
+        assertThat(finder.buildComparisonMessage(passers, "BACKEND"))
+                .isEqualTo("유사 BACKEND 합격자 2명과 비교한 결과입니다.");
+    }
+
+    @Test
+    void 목표_직무가_없으면_직무_미설정_문구를_반환한다() {
+        // find()는 gpa/gpaMax가 없으면 DB를 보지도 않고 빈 리스트를 주므로, 이 분기에
+        // 실제로 도달했다면 원인은 "직무 데이터 부족"이 아니라 "목표 직무 미설정"이다.
+        SimilarSpecFinder finder = new SimilarSpecFinder(passerDataRepository);
+        List<PasserData> passers = List.of(PasserData.builder().jobType("BACKEND").build());
+
+        assertThat(finder.buildComparisonMessage(passers, null))
+                .isEqualTo("목표 직무 미설정 상태로, 학점이 비슷한 전체 합격자 1명과 비교한 결과입니다.");
+        assertThat(finder.buildComparisonMessage(passers, ""))
+                .isEqualTo("목표 직무 미설정 상태로, 학점이 비슷한 전체 합격자 1명과 비교한 결과입니다.");
+    }
+
+    @Test
+    void 목표_직무는_있지만_결과에_다른_직무가_섞이면_폴백_문구를_반환한다() {
+        // find()의 2차·4차 폴백(직무 무시, 학점만/최근접)이 실제로 발동한 상황을 재현한다.
+        // 예전엔 이 경우에도 무조건 "유사 BACKEND 합격자 N명과 비교한 결과입니다"라고
+        // 단언해, 실제로는 다른 직무와 비교했는데도 그렇게 말하는 버그가 있었다.
+        SimilarSpecFinder finder = new SimilarSpecFinder(passerDataRepository);
+        List<PasserData> passers = List.of(
+                PasserData.builder().jobType("FRONTEND").build(),
+                PasserData.builder().jobType("PM").build());
+
+        assertThat(finder.buildComparisonMessage(passers, "BACKEND"))
+                .isEqualTo("BACKEND 합격자 데이터가 부족해, 직무 구분 없이 학점이 비슷한 합격자 2명과 비교한 결과입니다.");
+    }
+
+    @Test
+    void 결과에_목표_직무와_다른_직무가_한_명이라도_섞이면_직무명을_단언하지_않는다() {
+        // 전원이 아니라 한 명만 섞여도 "유사 {jobType} 합격자"라고 말하면 안 된다.
+        SimilarSpecFinder finder = new SimilarSpecFinder(passerDataRepository);
+        List<PasserData> passers = List.of(
+                PasserData.builder().jobType("BACKEND").build(),
+                PasserData.builder().jobType("FRONTEND").build());
+
+        assertThat(finder.buildComparisonMessage(passers, "BACKEND"))
+                .doesNotContain("유사 BACKEND 합격자");
+    }
 }

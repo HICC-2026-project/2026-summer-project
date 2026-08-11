@@ -48,7 +48,14 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     private User upsertUser(CustomOAuth2User oAuth2User) {
         return userRepository.findByProviderAndProviderId(oAuth2User.getProvider(), oAuth2User.getProviderId())
                 .map(existing -> {
-                    existing.setNickname(oAuth2User.getNickname());
+                    // 카카오의 profile_nickname은 선택 동의 항목이라, 이미 닉네임이 있는 유저가
+                    // 동의를 철회하고 재로그인하면 닉네임이 null로 내려온다. 그대로 덮어쓰면
+                    // 기존 닉네임이 조용히 지워지므로(로그인만 했는데 프로필이 비는 현상),
+                    // 값이 실제로 있을 때만 갱신한다.
+                    String nickname = oAuth2User.getNickname();
+                    if (nickname != null && !nickname.isBlank()) {
+                        existing.setNickname(nickname);
+                    }
                     return userRepository.save(existing);
                 })
                 .orElseGet(() -> userRepository.save(User.builder()

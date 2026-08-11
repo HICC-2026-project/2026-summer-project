@@ -125,6 +125,12 @@ public class PromptDataBuilder {
      */
     public String buildTargetJobString(TargetJob targetJob) {
         if (targetJob == null) return "미설정";
-        return targetJob.getJobType() + " / " + targetJob.getCompanySize() + " / " + targetJob.getIndustry();
+        // companySize·industry는 선택 입력이라 null일 수 있다(TargetJobRequest에 @NotBlank가
+        // 없다). null 폴백 없이 그대로 이어붙이면 문자열 결합 규칙상 "BACKEND / null / null"이
+        // 되어 그 리터럴 "null"이 Gemini 프롬프트에 그대로 들어간다 — 다른 필드들처럼
+        // "미설정"으로 폴백한다.
+        String companySize = targetJob.getCompanySize() != null ? targetJob.getCompanySize() : "미설정";
+        String industry = targetJob.getIndustry() != null ? targetJob.getIndustry() : "미설정";
+        return targetJob.getJobType() + " / " + companySize + " / " + industry;
     }
 }

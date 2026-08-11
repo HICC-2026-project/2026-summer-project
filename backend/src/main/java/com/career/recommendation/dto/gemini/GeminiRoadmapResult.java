@@ -40,7 +40,7 @@ public class GeminiRoadmapResult {
         private String priority;
         private String activity;
         private String reason;
-        /** Gemini가 선택한 DB 활동 UUID 목록 (장기 기간에는 빈 배열) */
+        /** Gemini가 선택한 DB 활동 UUID 목록 (적합한 DB 활동이 없는 시기는 빈 배열) */
         private List<String> activityIds;
     }
 }

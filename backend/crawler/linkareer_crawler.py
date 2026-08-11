@@ -9,19 +9,33 @@ import sys
 import time
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
-from zoneinfo import ZoneInfo
 from xml.etree import ElementTree
 
 
+# activities 테이블(V4 마이그레이션)의 실제 컬럼 폭. description·요건 항목은 이미
+# build_description()/clean_requirement()에서 1000자·500자로 잘리지만, 이 세 컬럼은
+# 잘리지 않은 채로 나가고 있었다. write_sql()이 최대 50건을 단일 multi-row INSERT
+# 하나로 묶어서 내보내므로, 한 행만 폭을 넘겨도 문장 전체가 "value too long for type
+# character varying(N)"으로 실패해 정상 39건까지 전부 롤백된다. 현재 실데이터는
+# max_name=81/max_org=20/max_url=180이라 아직 안 터졌지만, 긴 홍보성 제목이나
+# 파라미터 많은 채용 URL(500자 초과 흔함) 하나면 발동한다.
+NAME_MAX_LENGTH = 200
+ORGANIZATION_MAX_LENGTH = 100
+URL_MAX_LENGTH = 500
+
 BASE_URL = "https://linkareer.com"
-SEOUL = ZoneInfo("Asia/Seoul")
+# zoneinfo.ZoneInfo("Asia/Seoul")는 Windows에 시스템 tz 데이터베이스가 없어 tzdata
+# 패키지가 있어야만 동작한다(README는 "외부 패키지 없음"을 명시하는데 이 부분만 어겼다).
+# 한국은 서머타임이 없으므로 고정 UTC+9로 대체해도 결과가 완전히 같고, 외부 의존성이
+# 없어진다.
+SEOUL = timezone(timedelta(hours=9))
 ALLOWED_TYPES = {"INTERNSHIP", "EXTERNAL", "COMPETITION", "EDUCATION"}
 ACTIVITY_TYPE_MAP = {
     1: "EXTERNAL",
@@ -805,15 +819,18 @@ def crawl_candidate(candidate: Candidate, extra_keywords: Iterable[str] = ()) ->
     return CrawledActivity(
         id=str(uuid.uuid5(uuid.NAMESPACE_URL, candidate.source_url)),
         type=activity_type,
-        name=name,
-        organization=organization,
+        # name·organization·url은 relevance()·infer_tags() 등 원본 텍스트를 다 쓰는
+        # 계산이 끝난 뒤 여기서만 DB 컬럼 폭에 맞춰 자른다 — 앞단에서 자르면 키워드
+        # 매칭·태그 추론이 잘린 텍스트를 보게 되어 결과가 달라진다.
+        name=name[:NAME_MAX_LENGTH],
+        organization=organization[:ORGANIZATION_MAX_LENGTH],
         description=build_description(activity, job_posting, content),
         deadline=deadline,
         startDate=start_date,
         endDate=end_date,
         targetSpec=target_spec,
         tags=tags,
-        url=official_url,
+        url=official_url[:URL_MAX_LENGTH],
         sourceUrl=candidate.source_url,
         isActive=is_active,
         relevanceScore=relevance_score,

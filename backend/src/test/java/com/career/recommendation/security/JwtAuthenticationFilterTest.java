@@ -60,4 +60,22 @@ class JwtAuthenticationFilterTest {
         mockMvc.perform(get("/api/v1/auth/refresh"))
                 .andExpect(status().is(org.springframework.http.HttpStatus.METHOD_NOT_ALLOWED.value()));
     }
+
+    @Test
+    void 리프레시_토큰으로는_보호된_경로에_접근할_수_없다() throws Exception {
+        // 리프레시 토큰은 role 클레임 유무 말고는 액세스 토큰과 서명·만료 구조가 같아서,
+        // typ 클레임을 확인하지 않으면 그대로 API 인증에 통용됐다 — 로그아웃(DB의
+        // refresh_tokens 행 삭제)해도 리프레시 토큰 JWT 자체는 만료 전까지 계속 유효한
+        // 베어러로 쓸 수 있었다는 뜻이다.
+        User user = userRepository.save(User.builder()
+                .email("filter-test-refresh-" + System.nanoTime() + "@example.com")
+                .nickname("tester")
+                .provider("KAKAO")
+                .providerId("provider-id-" + System.nanoTime())
+                .build());
+        String refreshToken = jwtTokenProvider.createRefreshToken(user.getId());
+
+        mockMvc.perform(get(PROTECTED_PATH).header("Authorization", "Bearer " + refreshToken))
+                .andExpect(status().isUnauthorized());
+    }
 }

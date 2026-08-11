@@ -64,7 +64,15 @@ public class GeminiService {
                                   String similarCases, String topRecommendedActivities,
                                   String availableActivitiesJson) {
         String prompt = buildRoadmapPrompt(userSpecJson, targetJob, grade, similarCases, topRecommendedActivities, availableActivitiesJson);
-        String systemInstruction = "당신은 취업 커리어 어드바이저입니다. 사용자의 현재 스펙과 목표 직무, 유사 합격자 데이터 및 우선 추천 활동을 기반으로 시기별 커리어 로드맵을 생성하되, 단기 기간에는 제공된 DB 활동 목록 중 최적의 활동을 매칭하고, 먼 미래 기간에 적합한 공고가 없으면 역량 준비 가이드를 제안하세요. JSON 형식으로만 응답하세요.";
+        // ⚠️ 이 systemInstruction은 buildRoadmapPrompt의 규칙 4·5와 반드시 같은 매칭 정책을
+        // 말해야 한다. 예전엔 여기서 "단기 기간에는 DB 활동 매칭, 먼 미래는 가이드 제안"이라는
+        // 2분할을 못박아 규칙 4("각 시기마다 매칭")·5("적합한 공고가 없는 시기만 가이드")와
+        // 모순됐다 — Gemini는 systemInstruction을 유저 턴만큼 무겁게 반영하므로, 3~6개월
+        // 구간에 실제로 열려 있는 DB 활동이 있어도 매칭을 건너뛰고 가이드만 낼 위험이 있었다
+        // (Opus 5 높음 검토 12라운드가 규칙 4·5만 고친 이전 수정이 이 문장 때문에 절반만
+        // 효과가 있었을 거라고 지적). 규칙 4·5와 동일하게 "시기 무관, 적합한 활동이 있으면
+        // 매칭, 없는 시기만 가이드"로 통일한다.
+        String systemInstruction = "당신은 취업 커리어 어드바이저입니다. 사용자의 현재 스펙과 목표 직무, 유사 합격자 데이터 및 우선 추천 활동을 기반으로 시기별 커리어 로드맵을 생성하되, 각 시기마다 제공된 DB 활동 목록 중 마감일과 직무가 적합한 활동이 있으면 매칭하고, 적합한 공고가 없는 시기에만 역량 준비 가이드를 제안하세요. JSON 형식으로만 응답하세요.";
         String raw = callGeminiApi(systemInstruction, prompt);
         return extractJsonBlock(raw);
     }
@@ -88,7 +96,7 @@ public class GeminiService {
                 2. 각 활동의 id 값을 그대로 사용하세요 (UUID 형식). 목록에 없는 ID는 절대로 임의로 생성하지 마세요.
                 3. 사용자의 스펙과 목표 직무에 가장 적합한 활동을 최대 5개 골라 추천하세요.
                 4. 목록에 적합한 활동이 5개 미만이면 있는 만큼만 추천하세요.
-                5. required_qualifications는 공고의 필수 지원 조건입니다. 사용자가 명확하게 충족하지 못하는 활동은 우선 추천하지 마세요.
+                5. targetSpec은 공고의 필수 지원 조건입니다. 사용자가 명확하게 충족하지 못하는 활동은 우선 추천하지 마세요.
                 6. UserSpec에 해당 정보가 없으면 불충족으로 단정하지 말고 '확인 필요'로 처리하세요.
                 7. 우대사항은 targetSpec에 포함되지 않습니다.
                 8. UserSpec에 없는 경력·전공·학력 정보는 임의로 생성하지 마세요.
@@ -129,12 +137,12 @@ public class GeminiService {
                 1. 6개월 커리어 로드맵을 위 기간 단위로 작성해 주세요.
                 2. [유사 합격자 케이스]의 준비 경험(자격증, 경험 수 등) 및 시기별 흐름을 반영하세요.
                 3. [우선 반영할 AI 추천 활동]에 포함된 활동들을 6개월 타임라인 중 적절한 시기에 우선적으로 배치하세요.
-                4. 단기 기간(1~3개월 차)에는 [전체 DB 등록 활동 목록]에서 마감일과 직무가 적합한 실제 활동의 ID를 매칭하세요.
-                5. 장기 기간(4~6개월 차)에 적합한 DB 활동 공고가 없거나 마감된 경우, activityIds는 빈 배열([])로 두고, 해당 시기에 필수적으로 준비해야 할 역량 개발 가이드(예: "자격증 취득 및 포트폴리오 구체화", "알고리즘 코딩테스트 대비", "주요 부스트캠프/인턴십 차기 기수 모집 대비")를 activity 필드와 reason 필드에 설명하세요.
+                4. 각 시기마다 [전체 DB 등록 활동 목록]에서 마감일과 직무가 적합한 실제 활동의 ID를 매칭하세요.
+                5. 적합한 DB 활동 공고가 없거나 마감된 시기는, activityIds는 빈 배열([])로 두고, 해당 시기에 필수적으로 준비해야 할 역량 개발 가이드(예: "자격증 취득 및 포트폴리오 구체화", "알고리즘 코딩테스트 대비", "주요 부스트캠프/인턴십 차기 기수 모집 대비")를 activity 필드와 reason 필드에 설명하세요.
                 6. DB 활동을 매칭할 때 각 활동의 id 값을 그대로 사용하세요 (UUID 형식). 목록에 없는 ID는 절대로 임의로 만들지 마세요.
                 7. 각 시기에 최대 3개의 활동 또는 준비 가이드를 추천하세요.
                 8. 각 항목에는 period(시기 설명), priority(HIGH/MEDIUM/LOW), activity(활동명 또는 역량 준비 가이드 텍스트), reason(이유), activityIds(UUID 배열, 적합한 DB 활동이 없는 경우 빈 배열 []) 필드를 포함하세요.
-                   ⚠️ priority 규칙: 첫 번째 시기(1~2개월 내, 당장 시작할 단기 단계)에만 "HIGH"(화면 표기: "지금 집중")를 부여하세요. 두 번째 시기(3~4개월 차)에는 "MEDIUM"("중요"), 세 번째 시기(5~6개월 차)에는 "LOW"("준비")를 부여하세요.
+                   ⚠️ priority 규칙: 가장 이른 시기(당장 시작할 단기 단계)에만 "HIGH"(화면 표기: "지금 집중")를 부여하세요. 그 다음 시기에는 "MEDIUM"("중요")을, 그 이후의 나머지 모든 시기에는 "LOW"("준비")를 부여하세요. (학년이 없으면 월 단위로 4~6개 시기가 나올 수 있습니다 — 시기 개수와 무관하게 이 규칙을 적용하세요.)
                 9. 응답은 {"timeline": [...]} JSON 형식으로만 출력하세요.
                 """, spec, job, cases, periodGuide, topRecommended, availableActivities);
     }
@@ -174,6 +182,13 @@ public class GeminiService {
             return "";
         }
 
+        // ⚠️ 알려진 이슈: API 키가 쿼리스트링(?key=...)에 실린다. URL은 프록시·APM·에러
+        // 스택트레이스(WebClientResponseException 메시지에 요청 URL이 포함되는 경우가 있다)에
+        // 남을 수 있어, 쿼리스트링에 두면 그 로그에 키가 찍힐 위험이 있다. Gemini는
+        // x-goog-api-key 헤더도 지원해서 그쪽으로 옮기는 게 더 안전하지만, 이 세션엔 실제
+        // Gemini API 키로 호출을 검증할 방법이 없어(로컬에 키 없음) 추천·로드맵 핵심 경로를
+        // 검증 없이 바꾸지 않고 보류한다. 나중에 로컬/스테이징에서 실제 호출로 검증한 뒤
+        // 옮기는 걸 권장한다.
         String uri = String.format("/models/%s:generateContent?key=%s", model, apiKey);
 
         try {

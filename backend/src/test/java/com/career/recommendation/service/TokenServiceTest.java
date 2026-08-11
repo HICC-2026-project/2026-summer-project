@@ -79,6 +79,17 @@ class TokenServiceTest {
     }
 
     @Test
+    void reissue_액세스_토큰으로는_재발급할_수_없다() {
+        // 액세스 토큰은 refresh_tokens 테이블에 저장된 적이 없어 findByToken이 이미 걸러내지만,
+        // typ 클레임 검증이 그 앞에서 먼저 막아야 한다(두 겹 방어의 앞단).
+        User user = createUser();
+        TokenService.TokenPair pair = tokenService.issueTokens(user);
+
+        assertThatThrownBy(() -> tokenService.reissue(pair.accessToken()))
+                .isInstanceOf(InvalidTokenException.class);
+    }
+
+    @Test
     void revoke_리프레시_토큰을_삭제한다() {
         User user = createUser();
         TokenService.TokenPair pair = tokenService.issueTokens(user);

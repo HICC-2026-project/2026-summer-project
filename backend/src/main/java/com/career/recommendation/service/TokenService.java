@@ -34,7 +34,10 @@ public class TokenService {
 
     @Transactional
     public TokenPair reissue(String refreshToken) {
-        if (!jwtTokenProvider.validateToken(refreshToken)) {
+        if (!jwtTokenProvider.validateToken(refreshToken) || !jwtTokenProvider.isRefreshToken(refreshToken)) {
+            // refresh_tokens 테이블 조회(DB 존재 여부)가 이미 액세스 토큰을 걸러내긴 하지만
+            // (액세스 토큰은 이 테이블에 저장된 적이 없다), typ 클레임으로도 명시적으로
+            // 막아 두 겹으로 방어한다 — DB 조회 로직이 나중에 바뀌어도 이 방어선은 남는다.
             throw new InvalidTokenException("리프레시 토큰이 유효하지 않습니다.");
         }
 
