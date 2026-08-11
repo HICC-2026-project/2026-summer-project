@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.core.env.Environment;
 import org.springframework.security.jackson2.SecurityJackson2Modules;
 import org.springframework.security.oauth2.client.jackson2.OAuth2ClientJackson2Module;
 import org.springframework.security.oauth2.client.web.AuthorizationRequestRepository;
@@ -31,11 +30,6 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
     private static final int COOKIE_EXPIRE_SECONDS = 180;
 
     private final ObjectMapper objectMapper = createObjectMapper();
-    private final Environment environment;
-
-    public HttpCookieOAuth2AuthorizationRequestRepository(Environment environment) {
-        this.environment = environment;
-    }
 
     private static ObjectMapper createObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
@@ -59,7 +53,7 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
             deleteCookie(response, OAUTH2_AUTHORIZATION_REQUEST_COOKIE_NAME);
             return;
         }
-        addCookie(response, OAUTH2_AUTHORIZATION_REQUEST_COOKIE_NAME, serialize(authorizationRequest), COOKIE_EXPIRE_SECONDS);
+        addCookie(request, response, OAUTH2_AUTHORIZATION_REQUEST_COOKIE_NAME, serialize(authorizationRequest), COOKIE_EXPIRE_SECONDS);
     }
 
     @Override
@@ -79,22 +73,28 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
     }
 
     /**
-     * ⚠️ HttpOnly만 있고 Secure·SameSite가 없었다. Secure가 없으면 HTTPS 배포 환경에서도
-     * 평문 HTTP 요청이 한 번이라도 발생하면(리다이렉트 체인 중 실수 등) 이 쿠키(=OAuth state)가
-     * 노출될 수 있다. state 자체의 CSRF 방어(Spring이 생성해 콜백에서 대조)는 이 쿠키가 있어야
-     * 성립하므로, 쿠키 유출은 곧 state 방어 우회로 이어진다.
-     *
      * SameSite=Lax는 항상 붙인다 — 카카오→백엔드 콜백은 top-level GET 리다이렉트라 Lax에서도
-     * 정상 왕복된다. Secure는 local 프로파일(평문 HTTP로 개발)에서만 끈다 — local에서 Secure를
-     * 강제하면 브라우저가 쿠키를 아예 안 보내 로그인 자체가 깨진다.
+     * 정상 왕복된다.
+     *
+     * ⚠️ Secure는 "프로파일이 local이 아니면 켠다"로 판단하면 안 된다. 실제로 그렇게 배포했다가
+     * 프로덕션 카카오 로그인이 전면 불능이 된 적이 있다(2026-08-11): prod 프로파일이지만 서버가
+     * 아직 평문 HTTP(탄력적 IP 직접 접근, 도메인·인증서 없음)라서, 브라우저가 Secure 쿠키를
+     * 조용히 버렸다 → 카카오에서 돌아온 콜백에 state 쿠키가 없음 → authorization request 조회
+     * 실패 → 전원 login_failed. 프로파일은 접속 프로토콜을 보장하지 않으므로, 지금 이 요청이
+     * 실제로 HTTPS로 왔는지(request.isSecure())를 기준으로 켠다 — HTTP 요청에 Secure를 붙이는
+     * 것은 어차피 브라우저가 저장을 거부하니 보호 효과도 없다. 나중에 HTTPS(도메인+인증서 또는
+     * ALB)로 전환하면 별도 수정 없이 Secure가 자동으로 켜진다. 단, TLS를 프록시에서 종료하는
+     * 구조(ALB 등)로 가면 X-Forwarded-Proto를 반영하도록 server.forward-headers-strategy 설정이
+     * 함께 필요하다.
      */
-    private void addCookie(HttpServletResponse response, String name, String value, int maxAgeSeconds) {
+    private void addCookie(HttpServletRequest request, HttpServletResponse response,
+                           String name, String value, int maxAgeSeconds) {
         Cookie cookie = new Cookie(name, value);
         cookie.setPath("/");
         cookie.setHttpOnly(true);
         cookie.setMaxAge(maxAgeSeconds);
         cookie.setAttribute("SameSite", "Lax");
-        if (!environment.matchesProfiles("local")) {
+        if (request.isSecure()) {
             cookie.setSecure(true);
         }
         response.addCookie(cookie);
