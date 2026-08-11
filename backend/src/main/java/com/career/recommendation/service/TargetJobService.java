@@ -59,6 +59,12 @@ public class TargetJobService {
             return insertAttempt.execute(status -> {
                 TargetJob targetJob = targetJobRepository.findByUser_Id(user.getId())
                         .orElseGet(() -> TargetJob.builder().user(user).build());
+                // ⚠️ 값이 하나도 안 바뀐 저장은 UPDATE 없이 기존 행을 그대로 돌려준다 —
+                // updatedAt(@UpdateTimestamp)이 갱신되면 추천·로드맵의 isSpecChanged가
+                // "변경"으로 오판해 하루 호출 횟수를 소진한다(UserSpecService와 같은 이유).
+                if (targetJob.getId() != null && isSameContent(targetJob, request)) {
+                    return targetJob;
+                }
                 targetJob.setJobType(request.getJobType());
                 targetJob.setCompanySize(request.getCompanySize());
                 targetJob.setIndustry(request.getIndustry());
@@ -70,11 +76,20 @@ public class TargetJobService {
             return retry.execute(status -> {
                 TargetJob existing = targetJobRepository.findByUser_Id(user.getId())
                         .orElseThrow(() -> e);
+                if (isSameContent(existing, request)) {
+                    return existing;
+                }
                 existing.setJobType(request.getJobType());
                 existing.setCompanySize(request.getCompanySize());
                 existing.setIndustry(request.getIndustry());
                 return targetJobRepository.saveAndFlush(existing);
             });
         }
+    }
+
+    private boolean isSameContent(TargetJob targetJob, TargetJobRequest request) {
+        return java.util.Objects.equals(targetJob.getJobType(), request.getJobType())
+                && java.util.Objects.equals(targetJob.getCompanySize(), request.getCompanySize())
+                && java.util.Objects.equals(targetJob.getIndustry(), request.getIndustry());
     }
 }

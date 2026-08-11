@@ -82,6 +82,14 @@ public class UserSpecService {
             return insertAttempt.execute(status -> {
                 UserSpec userSpec = userSpecRepository.findByUser_Id(user.getId())
                         .orElseGet(() -> UserSpec.builder().user(user).build());
+                // ⚠️ 값이 하나도 안 바뀐 저장은 UPDATE 없이 기존 행을 그대로 돌려준다.
+                // 예전엔 무조건 setter를 호출해 (배열·리스트는 새 인스턴스라 dirty로 판정)
+                // updatedAt(@UpdateTimestamp)이 매번 갱신됐고, 추천·로드맵 쪽 isSpecChanged가
+                // "스펙 변경"으로 오판해 온보딩에서 아무것도 안 바꾸고 "분석 시작하기"만 눌러도
+                // 하루 호출 횟수(3회)가 1회씩 소진됐다(2026-08-11 사용자 제보의 원인 중 하나).
+                if (userSpec.getId() != null && isSameContent(userSpec, request)) {
+                    return userSpec;
+                }
                 updateUserSpecFields(userSpec, request);
                 return userSpecRepository.saveAndFlush(userSpec);
             });
@@ -96,10 +104,36 @@ public class UserSpecService {
             return retry.execute(status -> {
                 UserSpec existing = userSpecRepository.findByUser_Id(user.getId())
                         .orElseThrow(() -> e);
+                // 위 insertAttempt와 같은 무변경 short-circuit — 경합에서 진 요청이
+                // 이긴 요청과 같은 내용이면(더블클릭 재시도 등) UPDATE를 생략한다.
+                if (isSameContent(existing, request)) {
+                    return existing;
+                }
                 updateUserSpecFields(existing, request);
                 return userSpecRepository.saveAndFlush(existing);
             });
         }
+    }
+
+    /**
+     * 요청이 저장된 값과 완전히 같은지 비교한다(무변경 저장 감지용).
+     * - BigDecimal은 equals가 아니라 compareTo로 비교한다 — DB numeric은 3.8을 3.80으로
+     *   돌려줘 scale이 달라도 같은 값이다.
+     * - languageScores는 저장 형태(toMap 결과)로 변환해 리스트째 비교한다. jsonb 왕복에서
+     *   타입·순서가 달라지면 "다름"으로 판정돼 그냥 UPDATE가 나갈 뿐이라(기존 동작),
+     *   틀려도 안전한 방향으로만 틀린다.
+     */
+    private boolean isSameContent(UserSpec userSpec, UserSpecRequest request) {
+        return bigDecimalEquals(userSpec.getGpa(), request.getGpa())
+                && bigDecimalEquals(userSpec.getGpaMax(), request.getGpaMax())
+                && Objects.equals(userSpec.getGrade(), request.getGrade())
+                && Objects.equals(userSpec.getLanguageScores(), convertLanguageScores(request))
+                && java.util.Arrays.equals(userSpec.getCertifications(), convertCertifications(request));
+    }
+
+    private boolean bigDecimalEquals(java.math.BigDecimal a, java.math.BigDecimal b) {
+        if (a == null || b == null) return a == b;
+        return a.compareTo(b) == 0;
     }
 
     private void updateUserSpecFields(

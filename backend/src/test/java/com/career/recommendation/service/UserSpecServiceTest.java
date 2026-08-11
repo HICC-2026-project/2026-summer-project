@@ -136,6 +136,40 @@ class UserSpecServiceTest {
         assertThat(existingUserSpec.getGrade()).isEqualTo(3);
     }
 
+    /**
+     * 값이 하나도 안 바뀐 저장은 UPDATE를 생략해야 한다. 예전엔 무조건 setter를 호출해
+     * updatedAt(@UpdateTimestamp)이 매번 갱신됐고, 추천·로드맵의 isSpecChanged가 "스펙
+     * 변경"으로 오판해 온보딩에서 아무것도 안 바꾸고 "분석 시작하기"만 눌러도 하루 호출
+     * 횟수(3회)가 1회씩 소진됐다(2026-08-11 사용자 제보의 원인 중 하나). DB numeric은
+     * 3.8을 3.80으로 돌려주므로 scale이 달라도 같은 값으로 판정해야 한다(compareTo 비교).
+     */
+    @Test
+    void 값이_같으면_저장을_생략해_updatedAt이_갱신되지_않는다() {
+        UUID userId = UUID.randomUUID();
+        User user = createUser(userId);
+        UserSpec existingUserSpec = UserSpec.builder()
+                .id(UUID.randomUUID())
+                .user(user)
+                .gpa(new BigDecimal("3.80"))   // 요청은 3.8 — scale만 다른 같은 값
+                .gpaMax(new BigDecimal("4.50"))
+                .grade(3)
+                .languageScores(List.of(
+                        Map.of("type", "TOEIC", "score", 850, "maxScore", 990),
+                        Map.of("type", "OPIC", "grade", "IH")
+                ))
+                .certifications(new String[]{"SQLD", "정보처리기사"})
+                .build();
+        UserSpecRequest request = createRequest();
+
+        stubTransactionManager();
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+        when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.of(existingUserSpec));
+
+        userSpecService.saveOrUpdateMySpec(authentication, request);
+
+        verify(userSpecRepository, org.mockito.Mockito.never()).saveAndFlush(any(UserSpec.class));
+    }
+
     @Test
     void 빈_목록은_null이_아닌_빈_배열로_저장한다() {
         UUID userId = UUID.randomUUID();
