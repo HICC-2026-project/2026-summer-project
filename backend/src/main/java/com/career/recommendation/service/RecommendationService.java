@@ -93,12 +93,18 @@ public class RecommendationService {
                     || cachedResponse.getScoreFormulaVersion() == null
                     || cachedResponse.getScoreFormulaVersion() < MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION;
 
-            if (isLegacyCache) {
-                needsNewAiCall = true; // 출처 표시 필드가 없는 구버전 캐시는 한 번 재생성
-            } else if (!hasUsableActivities || isSpecChanged) {
-                // 활동 만료 또는 스펙 변경으로 갱신이 필요하지만, 하루 제한(3회) 내인지 확인한다.
-                // 이 체크가 없으면 Gemini가 장애로 폴백만 반환할 때(캐시 미저장) 만료 활동이
-                // 계속 남아 매 요청마다 API를 호출하게 된다(RoadmapService와 동일한 안전장치).
+            // ⚠️ isLegacyCache는 예전엔 이 하루 제한 체크를 건너뛰고 무조건 needsNewAiCall=true였다
+            // ("한 번만 재생성하니 괜찮다"는 의도). 그런데 폴백 응답은 저장되지 않으므로
+            // (isAiRecommendation()==false일 때 recommendationCacheService.save()를 안 부름),
+            // Gemini가 장애 중이거나 키 미설정이면 "한 번"이 아니라 그 유저가 요청할 때마다
+            // 매번 legacy 판정 → Gemini 2회 호출(2초 sleep 포함, 최대 60초 타임아웃) → 폴백 →
+            // 캐시 미저장 → 다음 요청도 다시 legacy, 이 반복이 스스로 끝나지 않았다.
+            // scoreFormulaVersion을 올려 배포하는 순간 전 유저 캐시가 동시에 legacy가 되는
+            // 시나리오와 겹치면 실제로 밟을 수 있는 경로다. legacy도 같은 하루 3회 게이트를
+            // 통과하게 해서, 하루 제한에 도달하면 legacy든 아니든 옛 캐시를 그대로 반환한다.
+            if (isLegacyCache || !hasUsableActivities || isSpecChanged) {
+                // 이 체크가 없으면 Gemini가 장애로 폴백만 반환할 때(캐시 미저장) 매 요청마다
+                // API를 호출하게 된다(RoadmapService와 동일한 안전장치).
                 if (cached.getLastUpdatedDate() == null || !today.equals(cached.getLastUpdatedDate())) {
                     needsNewAiCall = true;
                 } else if (cached.getDailyUpdateCount() < 3) {
@@ -278,6 +284,11 @@ public class RecommendationService {
 
         List<ActivityRecommendation> result = new ArrayList<>();
         for (GeminiActivity a : geminiResult.getActivities()) {
+            // Gemini가 배열 원소로 null을 섞어 보내면(스키마 이탈) a.getId()에서 NPE가 나
+            // 이 시도 전체가 버려진다 — 정상 원소가 섞여 있어도 배열 전체를 버리고 재시도
+            // (2초 sleep + 최대 60초 Gemini 재호출)를 낭비하게 되므로, null 원소만 건너뛴다.
+            if (a == null) continue;
+
             // Gemini가 반환한 ID를 UUID로 파싱
             UUID activityId = null;
             if (a.getId() != null) {

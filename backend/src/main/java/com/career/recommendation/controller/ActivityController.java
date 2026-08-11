@@ -51,8 +51,8 @@ public class ActivityController {
             @RequestParam(defaultValue = "10") int size,
             @Parameter(description = "정렬 기준 필드")
             @RequestParam(defaultValue = "createdAt") String sortBy,
-            @Parameter(description = "정렬 방향 (ASC/DESC)")
-            @RequestParam(defaultValue = "DESC") Sort.Direction direction
+            @Parameter(description = "정렬 방향 (ASC/DESC, 대소문자 무관)")
+            @RequestParam(defaultValue = "DESC") String direction
     ) {
         if (page < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "page는 0 이상이어야 합니다.");
@@ -66,10 +66,17 @@ public class ActivityController {
                     "sortBy는 " + SORTABLE_FIELDS + " 중 하나여야 합니다.");
         }
 
+        // direction을 Sort.Direction으로 직접 바인딩하면(Enum.valueOf 기반) 대소문자를
+        // 가려 "desc"·"asc" 같은 흔한 소문자 입력이 400이 났다. 이 엔드포인트는 인증이
+        // 필요 없어(PUBLIC_URLS) 다양한 클라이언트가 호출할 수 있다. fromString()은
+        // 대소문자를 가리지 않고, 그 외 값은 IllegalArgumentException → 전용 핸들러로
+        // 정확히 400이 나가 기존 검증들과 일관된 실패 방식을 유지한다.
+        Sort.Direction sortDirection = Sort.Direction.fromString(direction);
+
         PageRequest pageRequest = PageRequest.of(
                 page,
                 size,
-                Sort.by(direction, sortBy)
+                Sort.by(sortDirection, sortBy)
         );
 
         return activityService.getActivities(type, pageRequest);

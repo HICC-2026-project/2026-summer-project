@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -62,6 +63,10 @@ public class RoadmapService {
 
     private static final int MAX_RECOMMENDABLE_ACTIVITIES = 20;
     private static final ZoneId SERVICE_ZONE_ID = ZoneId.of("Asia/Seoul");
+    /** 프롬프트가 HIGH/MEDIUM/LOW만 쓰라고 지시하지만 강제되지 않아, Gemini가 임의 문자열을
+     * 반환해도 검증 없이 그대로 FE에 전달되고 있었다. FE가 이 값으로 배지를 매핑한다면
+     * 미매핑 값에서 빈 배지가 뜬다. */
+    private static final Set<String> VALID_PRIORITIES = Set.of("HIGH", "MEDIUM", "LOW");
 
     /**
      * 현재 로그인한 유저의 6개월 커리어 로드맵을 반환한다.
@@ -156,13 +161,17 @@ public class RoadmapService {
                         similarCasesStr, topRecommendedJson, availableActivitiesJson);
                 if (rawJson.isBlank()) {
                     log.warn("Gemini 로드맵 응답 비어있음 (시도 {}회)", attempt);
-                    continue;
+                } else {
+                    RoadmapResponse parsed = parseGeminiResponse(rawJson, activeActivities);
+                    if (parsed != null) return parsed;
                 }
-                RoadmapResponse parsed = parseGeminiResponse(rawJson, activeActivities);
-                if (parsed != null) return parsed;
             } catch (Exception e) {
                 log.warn("Gemini 로드맵 파싱 실패 (시도 {}회): {}", attempt, e.getMessage());
             }
+            // ⚠️ 예전엔 rawJson.isBlank()일 때 continue로 곧장 다음 반복으로 넘어가,
+            // 아래 백오프(2초 sleep)를 건너뛰고 즉시 재호출했다. Gemini가 과부하·레이트리밋으로
+            // 빈 응답을 주는 상황에서 백오프 없이 바로 재시도하면 오히려 상황을 악화시킨다.
+            // if/else로 바꿔 모든 실패 경로가 이 sleep을 반드시 거치게 했다.
             if (attempt < 2) {
                 try { Thread.sleep(2000); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
             }
@@ -189,6 +198,11 @@ public class RoadmapService {
 
         List<TimelineStep> steps = new ArrayList<>();
         for (GeminiTimelineStep t : geminiResult.getTimeline()) {
+            // Gemini가 배열 원소로 null을 섞어 보내면(스키마 이탈) t.getPeriod() 등에서
+            // NPE가 나 이 시도 전체가 버려진다 — 재시도 1회(2초 sleep + 최대 60초 Gemini
+            // 호출)를 그냥 낭비하는 셈이라, null 원소만 건너뛰고 나머지는 살린다.
+            if (t == null) continue;
+
             String period = t.getPeriod() != null ? t.getPeriod() : "";
 
             // Gemini가 반환한 activityIds에서 DB에 실재하는 활동만 매칭
@@ -216,9 +230,19 @@ public class RoadmapService {
                 activityText = matched.stream().map(MatchedActivity::getName).reduce((a, b) -> a + ", " + b).orElse("");
             }
 
+            // ⚠️ 알맹이(활동 텍스트도, 매칭된 실제 DB 활동도) 하나도 없는 스텝은 버린다.
+            // 예전엔 스텝 "개수"만 보고(steps.isEmpty()) "AI 성공"으로 판정했는데, Gemini가
+            // {"timeline":[{},{},{}]}처럼 형태만 갖추고 내용이 빈 응답을 주면 activity=''·
+            // matchedActivities=[]인 스텝 여러 개가 그대로 통과해 aiRoadmap=true로 캐시에
+            // 영구 저장됐다. 이 캐시는 스스로 회복되지 않는다 — hasUsableCachedActivities()가
+            // matchedActivities를 flatMap해서 마감일을 보는데 전부 비어있으니 noneMatch가
+            // 항상 true가 되어 "사용 가능"으로 판정되고, 유저가 스펙을 다시 저장하기 전까지
+            // 빈 로드맵이 영구히 반환된다.
+            if (activityText.isBlank() && matched.isEmpty()) continue;
+
             steps.add(TimelineStep.builder()
                     .period(period)
-                    .priority(t.getPriority() != null ? t.getPriority() : "MEDIUM")
+                    .priority(VALID_PRIORITIES.contains(t.getPriority()) ? t.getPriority() : "MEDIUM")
                     .activity(activityText)
                     .reason(t.getReason() != null ? t.getReason() : "")
                     .matchedActivities(matched)
