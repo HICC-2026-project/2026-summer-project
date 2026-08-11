@@ -12,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -30,6 +31,22 @@ public class UserSpecService {
     private final UserSpecRepository userSpecRepository;
     private final PlatformTransactionManager transactionManager;
 
+    /**
+     * ⚠️ 클래스 레벨 @Transactional(readOnly = true)를 명시적으로 벗어난다(NOT_SUPPORTED).
+     * 이 메서드에 트랜잭션이 하나라도 걸려 있으면, 아래 upsert()의 insertAttempt(REQUIRES_NEW)가
+     * 실패한 뒤 재개되는 시점에 이 메서드의 트랜잭션이 여전히 살아있는 채로 남아있고, retry가
+     * REQUIRES_NEW 없이 PROPAGATION_REQUIRED로만 열리면 그 살아있는(=readOnly) 트랜잭션에
+     * 합류해버린다 — Hibernate가 readOnly 세션에서 로드한 엔티티는 dirty-checking에서
+     * 제외되므로, retry의 saveAndFlush()가 예외 없이 조용히 아무 SQL도 안 보낸다. 클라이언트는
+     * 200과 함께 자신이 보낸 값을 그대로 돌려받지만 DB에는 전혀 반영되지 않는, 500보다 훨씬
+     * 나쁜 조용한 데이터 유실이었다(Sonnet 5 재검토가 pg_backend_pid()로 직접 재현·확인).
+     *
+     * NOT_SUPPORTED로 이 메서드 자체를 트랜잭션 밖에 두면, upsert() 내부의 TransactionTemplate
+     * 호출들이 각자 독립적으로 트랜잭션을 열고 닫는다 — insertAttempt와 retry는 같은 시점에
+     * 동시에 열리지 않고 순차적으로만 열리므로, 이 메서드 하나가 커넥션 풀에서 항상 2개를
+     * 동시에 점유하던 문제(동시 요청 10개 이상에서 HikariCP 풀 고갈 실측)도 같이 해소된다.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public UserSpecResponse saveOrUpdateMySpec(
             Authentication authentication,
             UserSpecRequest request
@@ -69,7 +86,13 @@ public class UserSpecService {
                 return userSpecRepository.saveAndFlush(userSpec);
             });
         } catch (DataIntegrityViolationException e) {
+            // insertAttempt와 마찬가지로 REQUIRES_NEW를 명시한다 — saveOrUpdateMySpec을
+            // NOT_SUPPORTED로 막아둔 지금은 합류할 활성 트랜잭션이 없어 필수는 아니지만,
+            // "재시도는 항상 격리된 새 트랜잭션에서 실행한다"는 불변식을 REQUIRES_NEW
+            // 하나로 명시적으로 못박아 둔다 — 이 메서드의 전파 설정이 나중에 바뀌어도
+            // (또는 이 코드가 다른 트랜잭션 컨텍스트에서 재사용돼도) 위 버그가 재발하지 않게.
             TransactionTemplate retry = new TransactionTemplate(transactionManager);
+            retry.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             return retry.execute(status -> {
                 UserSpec existing = userSpecRepository.findByUser_Id(user.getId())
                         .orElseThrow(() -> e);

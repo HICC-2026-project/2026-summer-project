@@ -82,7 +82,7 @@ class SpecTargetJobConcurrencyTest {
         request.setLanguageScores(List.of());
         request.setCertifications(List.of());
 
-        runConcurrently(() -> userSpecService.saveOrUpdateMySpec(auth, request));
+        runConcurrently(2, () -> userSpecService.saveOrUpdateMySpec(auth, request));
 
         assertThat(userSpecRepository.findByUser_Id(testUser.getId())).isPresent();
     }
@@ -95,13 +95,42 @@ class SpecTargetJobConcurrencyTest {
         TargetJobRequest request = new TargetJobRequest();
         request.setJobType("BACKEND");
 
-        runConcurrently(() -> targetJobService.saveOrUpdateMyTarget(auth, request));
+        runConcurrently(2, () -> targetJobService.saveOrUpdateMyTarget(auth, request));
 
         assertThat(targetJobRepository.findByUser_Id(testUser.getId())).isPresent();
     }
 
-    private void runConcurrently(Runnable action) throws InterruptedException {
-        int threadCount = 2;
+    /**
+     * NOT_SUPPORTED(saveOrUpdateMySpec)로 고치기 전에는, 요청 하나가 항상 커넥션 2개를
+     * 동시에 물고 있었다(outer readOnly 트랜잭션 1개 + upsert() 내부 REQUIRES_NEW 1개).
+     * HikariCP 기본 풀 크기(10)에서 동시 요청 10개 = 최대 20 커넥션 슬롯 필요 → 풀 고갈로
+     * "Connection is not available" 타임아웃이 실제로 재현됐다(Sonnet 5 재검토 실측).
+     * NOT_SUPPORTED 이후엔 요청 하나가 항상 1개씩만 순차 점유하므로, 풀 크기 안에서는
+     * 동시 요청 수가 늘어도 견뎌야 한다.
+     */
+    @Test
+    void 스펙_저장_동시_요청_10건도_커넥션_풀_고갈_없이_전부_성공한다() throws Exception {
+        // HikariCP 기본 풀 크기(10)와 동일한 수. 고치기 전 코드는 요청 하나가 항상 커넥션
+        // 2개(outer readOnly + upsert 내부 REQUIRES_NEW)를 동시에 물어 10개 동시 요청 =
+        // 최대 20 슬롯이 필요했고, 실제로 여기서 풀 고갈 타임아웃이 재현됐다(8개까지는
+        // 짧은 점유 시간 덕에 자연스럽게 순환돼 통과하는 것까지 확인했다 — 정확히 10개부터
+        // 재현되는 경계다).
+        testUser = createUser();
+        Authentication auth = authFor(testUser.getId());
+
+        UserSpecRequest request = new UserSpecRequest();
+        request.setGpa(new BigDecimal("3.80"));
+        request.setGpaMax(new BigDecimal("4.50"));
+        request.setGrade(3);
+        request.setLanguageScores(List.of());
+        request.setCertifications(List.of());
+
+        runConcurrently(10, () -> userSpecService.saveOrUpdateMySpec(auth, request));
+
+        assertThat(userSpecRepository.findByUser_Id(testUser.getId())).isPresent();
+    }
+
+    private void runConcurrently(int threadCount, Runnable action) throws InterruptedException {
         ExecutorService pool = Executors.newFixedThreadPool(threadCount);
         CountDownLatch ready = new CountDownLatch(threadCount);
         CountDownLatch start = new CountDownLatch(1);
@@ -124,7 +153,9 @@ class SpecTargetJobConcurrencyTest {
         ready.await(5, TimeUnit.SECONDS);
         start.countDown();
         pool.shutdown();
-        pool.awaitTermination(10, TimeUnit.SECONDS);
+        // HikariCP 기본 connection-timeout(30s)보다 넉넉히 잡는다 — 풀이 고갈되는
+        // 회귀가 재발하면 여기서 타임아웃 예외로 잡히지, 조용히 통과하지 않는다.
+        pool.awaitTermination(40, TimeUnit.SECONDS);
 
         assertThat(failures.get())
                 .withFailMessage("동시 요청 중 %d건 실패: %s", failures.get(), errors)
