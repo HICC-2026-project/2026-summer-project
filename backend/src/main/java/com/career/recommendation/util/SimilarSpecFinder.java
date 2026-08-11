@@ -26,6 +26,18 @@ public class SimilarSpecFinder {
     /** 유사 합격자 최대 조회 수 */
     private static final int TOP_N = 5;
 
+    /**
+     * 비교 결과를 신뢰하기 위한 최소 표본 수. 예전엔 각 폴백 단계를 "0건만 아니면 채택"으로
+     * 판정해, 고학점 사용자처럼 유사 범위에 데이터가 희박한 경우 합격자 "1명"과의 비교가
+     * 그대로 채택됐다 — 그 한 사람의 개인 스펙이 "합격자 평균"이 되어 점수 도넛·막대·
+     * 충족/부족 배지가 5명 비교와 똑같은 확신으로 그려지는 "이상한 결론"이 나왔다
+     * (2026-08-11 사용자 제보: "합격자 1명과 비교한 결과입니다"). 이 값 미만이면 다음
+     * 폴백 단계로 내려가고, 최종 단계까지 미달이면 빈 목록을 반환해 FE의 "비교 가능한
+     * 데이터가 부족해요" 화면을 태운다 — 통계적으로 무의미한 비교를 자신 있게 보여주는
+     * 것보다 안 보여주는 게 정직하다.
+     */
+    private static final int MIN_SAMPLE = 3;
+
     private final PasserDataRepository passerDataRepository;
 
     /**
@@ -47,11 +59,14 @@ public class SimilarSpecFinder {
         BigDecimal maxRatio = userRatio.add(GPA_RATIO_MARGIN).min(BigDecimal.ONE);
         PageRequest pageRequest = PageRequest.of(0, TOP_N);
 
+        // 각 단계는 MIN_SAMPLE(3명) 이상일 때만 채택한다 — "0건만 아니면 채택"이던 예전
+        // 규칙은 1~2명짜리 표본을 통과시켜 무의미한 비교가 정식 결과처럼 보였다(상수 주석 참고).
+
         // 1차: 직무 + 정규화 학점 비율 복합 검색 (±7%p)
         if (jobType != null && !jobType.isBlank()) {
             List<PasserData> result = passerDataRepository.findSimilarByJobTypeAndGpaRatio(
                     jobType, minRatio, maxRatio, pageRequest);
-            if (!result.isEmpty()) {
+            if (result.size() >= MIN_SAMPLE) {
                 return result;
             }
         }
@@ -59,7 +74,7 @@ public class SimilarSpecFinder {
         // 2차 폴백: 해당 직무 범위 내 데이터 부족 → 정규화 학점 비율만으로 재시도 (±7%p)
         List<PasserData> result = passerDataRepository.findSimilarByGpaRatio(
                 minRatio, maxRatio, pageRequest);
-        if (!result.isEmpty()) {
+        if (result.size() >= MIN_SAMPLE) {
             return result;
         }
 
@@ -67,14 +82,16 @@ public class SimilarSpecFinder {
         if (jobType != null && !jobType.isBlank()) {
             result = passerDataRepository.findClosestByJobTypeAndGpaRatio(
                     jobType, userRatio, pageRequest);
-            if (!result.isEmpty()) {
+            if (result.size() >= MIN_SAMPLE) {
                 return result;
             }
         }
 
-        // 4차 폴백: 전체 합격자 데이터 중 학점 차이 최솟값 순 검색
-        return passerDataRepository.findClosestByGpaRatio(
-                userRatio, pageRequest);
+        // 4차 폴백: 전체 합격자 데이터 중 학점 차이 최솟값 순 검색.
+        // 여기서도 미달이면(전체 테이블에 유효 합격자가 3명 미만) 빈 목록 — FE가
+        // "비교 가능한 데이터가 부족해요"를 보여주고, 점수·막대·배지는 그리지 않는다.
+        result = passerDataRepository.findClosestByGpaRatio(userRatio, pageRequest);
+        return result.size() >= MIN_SAMPLE ? result : List.of();
     }
 
     /**

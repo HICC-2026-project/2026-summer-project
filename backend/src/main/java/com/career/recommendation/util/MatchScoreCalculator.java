@@ -48,8 +48,12 @@ public class MatchScoreCalculator {
      * 6: 자격증 가중치를 목표 직무 합격자의 보유율에서 유도(JOB_WEIGHT_MIN~MAX 보간).
      *    난이도에 대한 임의 판단 대신 "그 직무 합격자가 실제로 갖고 있는 비율"을 쓴다.
      *    직무 데이터가 없으면 기존 큐레이션 표(CERT_WEIGHTS)로 폴백한다.
+     * 7: 총점 구조를 "합격자별 가중합의 평균"에서 "축별(데이터 보유 합격자만) 평균의
+     *    가중합 + 결측 축 제외·가중치 재정규화"로 재구성. 합격자 결측 필드가 자동 100점으로
+     *    잡혀 총점을 부풀리던 문제(비교 탭 막대는 결측을 "제외"로 처리해 화면 안에서 총점과
+     *    막대가 모순돼 보이던 문제)를 바로잡는다 — calculateTotalScore 주석 참고.
      */
-    public static final int CURRENT_SCORE_FORMULA_VERSION = 6;
+    public static final int CURRENT_SCORE_FORMULA_VERSION = 7;
 
     /**
      * 직무별 자격증 가중치의 하한·상한. 해당 직무 합격자의 보유율 0~100%를 이 구간으로 편다.
@@ -237,10 +241,7 @@ public class MatchScoreCalculator {
                     .build();
         }
 
-        double totalScore = passerList.stream()
-                .mapToDouble(passer -> calculateSingle(userSpec, passer, certContext))
-                .average()
-                .orElse(0.0);
+        double totalScore = calculateTotalScore(userSpec, passerList, certContext);
 
         List<CompareRowDto> rows = calculateDetails(userSpec, passerList, certContext);
 
@@ -261,18 +262,43 @@ public class MatchScoreCalculator {
                 .collect(Collectors.toSet());
     }
 
-    private double calculateSingle(UserSpec userSpec, PasserData passer, CertContext certContext) {
-        if (passer == null) return 0.0;
+    /**
+     * ⚠️ v7 재구성: 예전(~v6)에는 "합격자별로 3축 가중합 → 합격자 평균" 구조였고, 그 안에서
+     * 합격자 쪽 데이터가 결측인 축은 자동 100점이었다(scoreGpa/scoreLang/scoreCert의
+     * "비교 불가 → 감점 없음" 분기). 그런데 자동 100은 "감점 없음"이 아니라 "만점 가산"이다 —
+     * 합격자 테이블에 결측 필드가 흔한 상황(운영 60행)에서 결측 많은 합격자가 뽑힐수록
+     * 총점이 위로 부풀었고, 비교 탭 평균(calculateDetails)은 같은 결측을 "제외"로 처리해서
+     * 화면의 막대(70~86%)와 총점(97점)이 서로 모순돼 보이는 "이상한 결론"이 나왔다
+     * (2026-08-11 사용자 제보의 핵심 원인).
+     *
+     * v7은 축 단위로 계산한다: 각 축(학점·어학·자격증)마다 "그 축 데이터를 실제로 가진
+     * 합격자"만 상대로 점수를 내 평균하고, 그 축 데이터를 가진 합격자가 한 명도 없으면 그
+     * 축을 아예 제외하고 남은 축의 가중치로 재정규화한다. 이러면 결측은 점수를 올리지도
+     * 내리지도 않는 진짜 "중립"이 되고, 총점과 비교 탭이 같은 결측 규칙을 쓰게 된다.
+     * 전 축이 제외되면(합격자 전원이 전 필드 결측 — 사실상 불량 데이터) 0점을 반환한다.
+     */
+    private double calculateTotalScore(UserSpec userSpec, List<PasserData> passerList, CertContext certContext) {
+        // 축별로 "데이터를 가진 합격자 대상 점수"들의 평균. 데이터 가진 합격자가 없으면 비어 있음.
+        java.util.OptionalDouble gpaAxis = passerList.stream()
+                .filter(p -> p != null && p.getGpa() != null && p.getGpaMax() != null && p.getGpaMax().signum() > 0)
+                .mapToDouble(p -> scoreGpa(userSpec.getGpa(), userSpec.getGpaMax(), p.getGpa(), p.getGpaMax()))
+                .average();
+        java.util.OptionalDouble langAxis = passerList.stream()
+                .filter(p -> p != null && getMaxEquivalentToeic(p.getLanguageScores()) > 0)
+                .mapToDouble(p -> scoreLang(userSpec.getLanguageScores(), p.getLanguageScores()))
+                .average();
+        java.util.OptionalDouble certAxis = passerList.stream()
+                .filter(p -> p != null && certValue(p.getCertifications(), certContext) > 0)
+                .mapToDouble(p -> scoreCert(userSpec.getCertifications(), p.getCertifications(), certContext))
+                .average();
 
-        double gpaScore  = scoreGpa(
-                userSpec.getGpa(), userSpec.getGpaMax(),
-                passer.getGpa(), passer.getGpaMax());
-        double langScore = scoreLang(userSpec.getLanguageScores(), passer.getLanguageScores());
-        double certScore = scoreCert(userSpec.getCertifications(), passer.getCertifications(), certContext);
+        double weightedSum = 0.0;
+        double weightUsed = 0.0;
+        if (gpaAxis.isPresent())  { weightedSum += gpaAxis.getAsDouble()  * WEIGHT_GPA;  weightUsed += WEIGHT_GPA; }
+        if (langAxis.isPresent()) { weightedSum += langAxis.getAsDouble() * WEIGHT_LANG; weightUsed += WEIGHT_LANG; }
+        if (certAxis.isPresent()) { weightedSum += certAxis.getAsDouble() * WEIGHT_CERT; weightUsed += WEIGHT_CERT; }
 
-        return gpaScore  * WEIGHT_GPA
-             + langScore * WEIGHT_LANG
-             + certScore * WEIGHT_CERT;
+        return weightUsed > 0 ? weightedSum / weightUsed : 0.0;
     }
 
     private List<CompareRowDto> calculateDetails(UserSpec userSpec, List<PasserData> passerList, CertContext certContext) {
@@ -356,7 +382,17 @@ public class MatchScoreCalculator {
                 .status(userCertValue >= avgPasserCertValue ? "충족" : "부족")
                 .build();
 
-        return List.of(gpaRow, langRow, certRow);
+        // ⚠️ 사용자도 미입력이고 합격자 쪽도 데이터가 없는 항목은 행 자체를 뺀다.
+        // 두 값이 모두 0이면 status 판정(user >= avg)이 0 >= 0 = true로 떨어져,
+        // "미입력" 옆에 초록 "충족" 배지가 붙고 비교 탭 요약("항목별로 고르게 준비되어
+        // 있어요")까지 아무것도 입력 안 한 항목 덕에 좋게 나오는 "이상한 결론"이 됐다.
+        // 비교할 근거가 양쪽 다 없는 항목은 충족도 부족도 아니므로 표시하지 않는 게 정직하다
+        // (사용자만 미입력이고 합격자 데이터는 있는 경우는 "부족"이 맞으므로 그대로 남긴다).
+        java.util.List<CompareRowDto> rows = new java.util.ArrayList<>(3);
+        if (!(userGpaNorm <= 0 && avgPasserGpaNorm <= 0)) rows.add(gpaRow);
+        if (!(userMaxToeic <= 0 && avgPasserToeic <= 0)) rows.add(langRow);
+        if (!(userCertValue <= 0 && avgPasserCertValue <= 0)) rows.add(certRow);
+        return rows;
     }
 
     private double normalizeGpaTo45(BigDecimal gpa, BigDecimal gpaMax) {
@@ -375,8 +411,9 @@ public class MatchScoreCalculator {
 
     private double scoreGpa(BigDecimal userGpa, BigDecimal userGpaMax,
                             BigDecimal passerGpa, BigDecimal passerGpaMax) {
-        // 합격자 쪽 학점이 없으면 비교 자체가 불가능하다. 사용자 잘못이 아니므로 감점하지 않는다
-        // (합격자가 자격증을 갖고 있지 않을 때 scoreCert가 100을 주는 것과 같은 원칙).
+        // v7부터 합격자 쪽 학점 결측은 호출부(calculateTotalScore)가 필터로 "축 제외" 처리한다 —
+        // 자동 100은 "감점 없음"이 아니라 "만점 가산"이라 총점을 부풀렸기 때문(버전 이력 7 참고).
+        // 이 분기는 정상 경로에선 도달하지 않는 방어선으로만 남긴다.
         if (passerGpa == null || passerGpaMax == null || passerGpaMax.signum() <= 0) {
             return 100.0;
         }
@@ -405,7 +442,8 @@ public class MatchScoreCalculator {
 
     private double scoreLang(List<Map<String, Object>> userLangScores,
                              List<Map<String, Object>> passerLangScores) {
-        // 합격자가 어학 성적을 갖고 있지 않으면 이 항목은 변별력이 없다 → 감점하지 않는다.
+        // v7부터 합격자 어학 결측은 호출부가 필터로 "축 제외" 처리한다(scoreGpa 주석 참고).
+        // 이 분기는 정상 경로에선 도달하지 않는 방어선으로만 남긴다.
         double passerMaxToeic = getMaxEquivalentToeic(passerLangScores);
         if (passerMaxToeic <= 0) {
             return 100.0;
@@ -477,8 +515,8 @@ public class MatchScoreCalculator {
      */
     private double scoreCert(String[] userCerts, String[] passerCerts, CertContext certContext) {
         double passerValue = certValue(passerCerts, certContext);
-        // 합격자 쪽에 자격증이 없으면 이 항목은 변별력이 없다 → 감점하지 않는다
-        // (scoreGpa·scoreLang에서 합격자 데이터가 없을 때 100점을 주는 것과 같은 원칙).
+        // v7부터 합격자 자격증 결측(가중치 합 0)은 호출부가 필터로 "축 제외" 처리한다
+        // (scoreGpa 주석 참고). 이 분기는 정상 경로에선 도달하지 않는 방어선으로만 남긴다.
         if (passerValue <= 0) return 100.0;
 
         double userValue = certValue(userCerts, certContext);
