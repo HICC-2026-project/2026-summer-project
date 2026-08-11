@@ -213,6 +213,7 @@ public class MatchScoreCalculator {
                     .totalScore(0)
                     .compareRows(List.of())
                     .unrecognizedCertifications(List.of())
+                    .recognizedCertificationCount(0)
                     .build();
         }
 
@@ -220,11 +221,19 @@ public class MatchScoreCalculator {
         // 못 내는 상황에서도 "이 자격증은 우리가 못 알아봤다"는 사실 자체는 알려줄 수 있다.
         List<String> unrecognized = unrecognizedCertifications(userSpec.getCertifications(), certContext);
 
+        // ⚠️ 인식 개수는 여기서 직접 내려준다 — FE가 "입력 개수 − 미인식 개수"로 역산하면
+        // 안 된다. 이 클래스의 인식·미인식 집계는 전부 canonicalCert 기준(공백·"필기/실기"
+        // 등 제거 후 dedup)이라, "정보처리기사 필기"+"정보처리기사 실기"처럼 원본 2개가
+        // canonical 1개로 접히는 순간 원본 개수 기반 뺄셈은 틀린 값이 된다(비교 탭 자격증
+        // 행의 집계 — countRecognized — 와 어긋나는, 이 필드가 고치려는 바로 그 불일치).
+        int recognizedCount = countRecognized(userSpec.getCertifications(), certContext);
+
         if (passerList == null || passerList.isEmpty()) {
             return MatchScoreResult.builder()
                     .totalScore(0)
                     .compareRows(List.of())
                     .unrecognizedCertifications(unrecognized)
+                    .recognizedCertificationCount(recognizedCount)
                     .build();
         }
 
@@ -239,6 +248,7 @@ public class MatchScoreCalculator {
                 .totalScore((int) Math.round(totalScore))
                 .compareRows(rows)
                 .unrecognizedCertifications(unrecognized)
+                .recognizedCertificationCount(recognizedCount)
                 .build();
     }
 

@@ -128,6 +128,7 @@ export function toRecommendationMeta(res: RecommendationsResponse): Recommendati
     compareRows: res.compareRows,
     sampleComparisonData: res.sampleComparisonData ?? false,
     unrecognizedCertifications: res.unrecognizedCertifications,
+    recognizedCertificationCount: res.recognizedCertificationCount,
     dailyLimitReached: res.dailyLimitReached ?? false,
   };
 }

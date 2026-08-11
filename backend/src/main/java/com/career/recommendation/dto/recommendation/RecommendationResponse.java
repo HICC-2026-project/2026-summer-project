@@ -85,6 +85,13 @@ public class RecommendationResponse {
     private List<String> unrecognizedCertifications;
 
     /**
+     * 인식된 자격증 개수 (canonical 기준 — 비교 탭 자격증 행과 같은 집계).
+     * FE 홈 카드가 이 값을 그대로 표시해야 비교 탭과 항상 일치한다. 옛 캐시엔 없어
+     * null일 수 있다(그 경우 FE는 입력 개수로 폴백).
+     */
+    private Integer recognizedCertificationCount;
+
+    /**
      * matchScore·compareRows를 계산한 점수 공식 버전 (MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION).
      * 옛 캐시 JSON엔 이 필드가 없어 역직렬화 시 null이 되고, RecommendationService가 이를
      * legacy로 판정해 다음 요청에서 한 번 강제로 재계산한다. 공식을 바꿀 때마다
