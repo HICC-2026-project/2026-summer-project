@@ -25,13 +25,20 @@ export class ApiError extends Error {
 }
 
 function request(path: string, options: RequestInit | undefined, accessToken: string | null) {
+  const headers = new Headers(options?.headers);
+  const isFormData = typeof FormData !== "undefined" && options?.body instanceof FormData;
+
+  // multipart/form-data는 브라우저가 boundary를 포함한 Content-Type을 직접 만들어야 한다.
+  if (!isFormData && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
   return fetch(`${API_BASE_URL}${path}`, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...options?.headers,
-    },
+    headers,
   });
 }
 

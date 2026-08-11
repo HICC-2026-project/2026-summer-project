@@ -2,6 +2,11 @@ spring:
   application:
     name: career-recommendation-service
 
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5433/career_db}
     username: ${DB_USERNAME:postgres}
@@ -50,6 +55,8 @@ server:
   port: 8080
 
 app:
+  storage:
+    passer-proof-directory: ${PASSER_PROOF_STORAGE_PATH:./uploads/passer-proofs}
   oauth2:
     frontend-redirect-uri: ${FRONTEND_REDIRECT_URI:http://localhost:3000/oauth/callback}
   cors:

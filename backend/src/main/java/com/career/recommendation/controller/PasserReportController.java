@@ -10,9 +10,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,12 +32,13 @@ public class PasserReportController {
             summary = "합격자 스펙 제보",
             description = "제보를 미검수(USER_REPORT) 상태로 저장한다. 팀 검수 전에는 추천·비교 데이터로 사용하지 않는다."
     )
-    @PostMapping
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     public PasserReportResponse submit(
             Authentication authentication,
-            @Valid @RequestBody PasserReportRequest request
+            @Valid @RequestPart("request") PasserReportRequest request,
+            @RequestPart("proof") MultipartFile proof
     ) {
-        return passerReportService.submit(authentication, request);
+        return passerReportService.submit(authentication, request, proof);
     }
 }

@@ -9,9 +9,12 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
+
+import java.nio.charset.StandardCharsets;
 
 import static org.mockito.Mockito.verifyNoInteractions;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -43,9 +46,22 @@ class PasserReportControllerValidationTest {
                 }
                 """;
 
-        mockMvc.perform(post("/api/v1/passers/reports")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(requestBody))
+        MockMultipartFile requestPart = new MockMultipartFile(
+                "request",
+                "request.json",
+                MediaType.APPLICATION_JSON_VALUE,
+                requestBody.getBytes(StandardCharsets.UTF_8)
+        );
+        MockMultipartFile proofPart = new MockMultipartFile(
+                "proof",
+                "accepted.png",
+                MediaType.IMAGE_PNG_VALUE,
+                new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47}
+        );
+
+        mockMvc.perform(multipart("/api/v1/passers/reports")
+                        .file(requestPart)
+                        .file(proofPart))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 

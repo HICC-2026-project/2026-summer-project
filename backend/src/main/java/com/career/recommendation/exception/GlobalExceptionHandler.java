@@ -10,6 +10,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -47,6 +48,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleActivityNotFoundException(ActivityNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(errorBody("ACTIVITY_NOT_FOUND", e.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidProofFileException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidProofFileException(InvalidProofFileException e) {
+        return ResponseEntity.badRequest()
+                .body(errorBody("INVALID_PROOF_FILE", e.getMessage()));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(errorBody("PROOF_FILE_TOO_LARGE", "증빙 파일은 최대 5MB까지 업로드할 수 있습니다."));
     }
 
     /** CurrentUserService의 401/404가 여기로 정확히 매핑되게 한다. */
