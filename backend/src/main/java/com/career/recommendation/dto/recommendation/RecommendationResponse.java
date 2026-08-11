@@ -26,11 +26,22 @@ import com.career.recommendation.dto.recommendation.CompareRowDto;
  * @JsonPOJOBuilder(withPrefix="")를 함께 생성해 이 매칭을 정상화한다.
  */
 @Getter
-@Builder
+@Builder(toBuilder = true)
 @Jacksonized
 public class RecommendationResponse {
 
     private List<ActivityRecommendation> activities;
+
+    /**
+     * 스펙·목표가 바뀌어 재생성이 필요했지만 하루 갱신 한도(3회)에 막혀 캐시된 추천을
+     * 반환한 경우 true. FE가 이 플래그로 "오늘 갱신 횟수를 모두 사용했어요"를 안내한다 —
+     * 이 안내가 없으면 사용자는 스펙을 바꿨는데 결과가 그대로인 것을 버그로 인지한다
+     * (2026-08-11 실제 사용자 제보). 캐시에 저장되는 응답에는 이 플래그를 싣지 않는다
+     * (반환 직전에만 toBuilder로 붙임) — 저장되면 한도가 풀린 다음날에도 계속 true로
+     * 내려가는 거짓 안내가 된다. Boolean(nullable)인 이유: 옛 캐시 JSON엔 이 필드가
+     * 없어 역직렬화 시 null이 되는데, primitive boolean이면 이 구분이 사라진다.
+     */
+    private Boolean dailyLimitReached;
 
     /**
      * MatchScoreCalculator가 계산한 0~100 점수.

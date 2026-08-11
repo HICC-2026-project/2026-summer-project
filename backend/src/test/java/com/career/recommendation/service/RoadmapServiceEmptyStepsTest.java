@@ -76,7 +76,7 @@ class RoadmapServiceEmptyStepsTest {
         when(promptDataBuilder.buildAvailableActivitiesJson(any())).thenReturn("[]");
 
         // 형태만 있고 알맹이는 없는 응답 — period/priority/activity/reason/activityIds 전부 없음.
-        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any()))
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn("{\"timeline\":[{},{},{}]}");
 
         ReflectionTestUtils.setField(roadmapService, "objectMapper", new ObjectMapper());
@@ -124,7 +124,7 @@ class RoadmapServiceEmptyStepsTest {
 
         // priority만 빠지고 나머지(period·activity·reason)는 전부 정상인, 실제로 흔히
         // 발생 가능한 스키마 이탈 케이스.
-        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any()))
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn("{\"timeline\":[{\"period\":\"3학년 2학기\",\"activity\":\"정보처리기사 취득\","
                         + "\"reason\":\"서류 가점\",\"activityIds\":[]}]}");
 
@@ -158,7 +158,7 @@ class RoadmapServiceEmptyStepsTest {
         when(promptDataBuilder.buildSimilarCasesText(any())).thenReturn("");
         when(promptDataBuilder.buildAvailableActivitiesJson(any())).thenReturn("[]");
 
-        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any()))
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn("{\"timeline\":[{\"period\":\"3학년 2학기\",\"priority\":\"high\","
                         + "\"activity\":\"정보처리기사 취득\",\"reason\":\"서류 가점\",\"activityIds\":[]}]}");
 
@@ -242,7 +242,7 @@ class RoadmapServiceEmptyStepsTest {
         when(promptDataBuilder.buildAvailableActivitiesJson(any())).thenReturn("[]");
 
         // Gemini 응답이 계속 비어 있어 폴백 경로로 떨어지게 한다.
-        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any())).thenReturn("");
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any())).thenReturn("");
 
         ReflectionTestUtils.setField(roadmapService, "objectMapper", new ObjectMapper());
 

@@ -47,6 +47,9 @@ class RecommendationServiceLegacyCacheTest {
     @Mock private RecommendationRepository recommendationRepository;
     @Mock private RecommendationCacheService recommendationCacheService;
     @Mock private GeminiService geminiService;
+    @Mock private com.career.recommendation.util.SimilarSpecFinder similarSpecFinder;
+    @Mock private GlobalCertPoolService globalCertPoolService;
+    @Mock private com.career.recommendation.util.MatchScoreCalculator matchScoreCalculator;
     @Mock private Authentication authentication;
     @Mock private User user;
 
@@ -90,11 +93,27 @@ class RecommendationServiceLegacyCacheTest {
         }
         org.springframework.test.util.ReflectionTestUtils.setField(recommendationService, "objectMapper", realMapper);
 
+        // 한도에 막혀 캐시를 주더라도, 점수·비교표는 로컬 계산이므로 현재 스펙 기준으로
+        // 다시 계산해서 준다(rebuildComparisonFromCurrentSpec 경로).
+        when(similarSpecFinder.find(any(), any(), any())).thenReturn(List.of());
+        when(similarSpecFinder.buildComparisonMessage(any(), any())).thenReturn("현재 스펙 기준 메시지");
+        when(globalCertPoolService.getGlobalCertPool()).thenReturn(java.util.Set.of());
+        when(globalCertPoolService.getJobPasserCertRows(any())).thenReturn(List.of());
+        when(matchScoreCalculator.calculate(any(), any(), any(), any()))
+                .thenReturn(com.career.recommendation.dto.recommendation.MatchScoreResult.builder()
+                        .totalScore(70)
+                        .compareRows(List.of())
+                        .build());
+
         RecommendationResponse response = recommendationService.getRecommendations(authentication);
 
-        // 하루 제한에 도달했으므로 legacy든 아니든 Gemini를 다시 부르지 않고 옛 캐시를 그대로 준다.
-        verify(geminiService, never()).generateRecommendation(any(), any(), any(), any());
-        assertThat(response.getComparisonMessage()).isEqualTo("옛 캐시");
-        assertThat(response.getMatchScore()).isEqualTo(55);
+        // 핵심 불변식: 하루 제한에 도달했으므로 legacy든 아니든 Gemini를 다시 부르지 않는다.
+        verify(geminiService, never()).generateRecommendation(any(), any(), any(), any(), any());
+        // 점수·비교 관련 필드는 옛 캐시 값(55/"옛 캐시")이 아니라 현재 스펙으로 재계산된 값이다 —
+        // 예전엔 캐시를 통째로 반환해 스펙을 바꾼 사용자에게 옛 점수가 그대로 보였다.
+        assertThat(response.getMatchScore()).isEqualTo(70);
+        assertThat(response.getComparisonMessage()).isEqualTo("현재 스펙 기준 메시지");
+        // FE가 "오늘 갱신 횟수를 모두 사용했어요"를 안내할 수 있도록 플래그가 붙는다.
+        assertThat(response.getDailyLimitReached()).isTrue();
     }
 }

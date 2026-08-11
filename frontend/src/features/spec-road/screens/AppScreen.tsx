@@ -20,6 +20,7 @@ interface AppScreenProps {
   roadmap: RoadmapMilestone[];
   roadmapLoading: boolean;
   roadmapError: boolean;
+  roadmapLimitReached: boolean;
   isDemo: boolean;
   onOpenDetail: (id: string | number) => void;
   onEditSpec: () => void;
@@ -40,6 +41,7 @@ export function AppScreen({
   roadmap,
   roadmapLoading,
   roadmapError,
+  roadmapLimitReached,
   isDemo,
   onOpenDetail,
   onEditSpec,
@@ -63,7 +65,13 @@ export function AppScreen({
           />
         )}
         {tab === "roadmap" && (
-          <RoadmapTab target={target} roadmap={roadmap} roadmapLoading={roadmapLoading} roadmapError={roadmapError} />
+          <RoadmapTab
+            target={target}
+            roadmap={roadmap}
+            roadmapLoading={roadmapLoading}
+            roadmapError={roadmapError}
+            roadmapLimitReached={roadmapLimitReached}
+          />
         )}
         {tab === "compare" && <CompareTab isDemo={isDemo} recMeta={recMeta} />}
         {tab === "profile" && (

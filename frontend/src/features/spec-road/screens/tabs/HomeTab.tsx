@@ -23,12 +23,23 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
 
   // 입력한 어학·자격증을 요약한다. 둘 다 없으면 안내 문구를 보여준다.
   const langCount = Object.values(spec.langScores).filter((v) => v).length;
+  // 자격증 개수는 백엔드가 "인식한" 개수 기준으로 보여준다 — 입력 원본 개수(spec.certs.length)를
+  // 그대로 쓰면 비교 탭(백엔드 compareRows, 인식된 것만 집계)과 숫자가 어긋난다.
+  // 예: 정보처리기사·SQLD·"가나다라마바사" 입력 시 홈은 3개, 비교는 2개로 보이던 문제.
+  // 미인식분은 숨기는 대신 개수로 함께 보여줘, 비교 탭의 미인식 안내와 연결되게 한다.
+  // recMeta가 아직 없으면(로딩·둘러보기) 인식 여부를 알 수 없으니 입력 개수를 그대로 쓴다.
+  const unrecognizedCount = recMeta?.unrecognizedCertifications?.length ?? 0;
+  const recognizedCertCount = Math.max(0, spec.certs.length - unrecognizedCount);
+  const certLabel =
+    spec.certs.length === 0
+      ? null
+      : unrecognizedCount > 0
+        ? `자격증 ${recognizedCertCount}개 (미인식 ${unrecognizedCount}개)`
+        : `자격증 ${spec.certs.length}개`;
   const specSummary =
     langCount + spec.certs.length === 0
       ? "미입력"
-      : [langCount > 0 ? `어학 ${langCount}개` : null, spec.certs.length > 0 ? `자격증 ${spec.certs.length}개` : null]
-          .filter(Boolean)
-          .join(" · ");
+      : [langCount > 0 ? `어학 ${langCount}개` : null, certLabel].filter(Boolean).join(" · ");
 
   // 준비도는 실 API 응답(recMeta)에서만 나온다.
   // 예시 화면에서만 목업 수치를 쓰고, 로그인 사용자는 응답이 없으면(로딩·실패) 수치를 감춘다.
@@ -160,6 +171,27 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
         <p style={{ fontSize: 12, color: "#9797A1", margin: "0 0 12px", lineHeight: 1.5 }}>
           스펙을 수정하면 추천을 새로 만들어요. 하루 3번까지 갱신할 수 있어요.
         </p>
+      )}
+
+      {/* 하루 한도에 막혀 이전 활동 목록을 보여주는 중임을 알린다. 점수·비교는 서버가
+          현재 스펙으로 재계산해 주므로 활동 목록만 이전 것이다. 이 안내가 없으면
+          스펙을 바꾼 사용자가 "수정이 반영 안 된다"를 버그로 인지한다. */}
+      {recMeta?.dailyLimitReached && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: "11px 14px",
+            border: "1px solid #F0D8A8",
+            borderRadius: 12,
+            background: "#FFF9ED",
+            color: "#79551F",
+            fontSize: 12.5,
+            lineHeight: 1.5,
+          }}
+        >
+          오늘 추천 갱신 횟수(3회)를 모두 사용했어요. 점수·비교는 방금 수정한 스펙 기준이지만, 아래 활동
+          목록은 내일 첫 방문 때 새로 만들어져요.
+        </div>
       )}
 
       {recLoading ? (

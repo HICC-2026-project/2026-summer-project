@@ -81,7 +81,7 @@ class RecommendationServiceFallbackTest {
         when(globalCertPoolService.getGlobalCertPool()).thenReturn(Set.of());
         when(globalCertPoolService.getJobPasserCertRows(any())).thenReturn(List.of());
 
-        when(geminiService.generateRecommendation(any(), any(), any(), any()))
+        when(geminiService.generateRecommendation(any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("Gemini 장애 시뮬레이션"));
 
         when(matchScoreCalculator.calculate(any(), any(), any(), any())).thenReturn(matchResult);

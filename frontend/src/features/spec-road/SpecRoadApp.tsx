@@ -68,6 +68,10 @@ const ANALYZING_MAX_MS = 40000;
 export function SpecRoadApp() {
   const [screen, setScreen] = useState<Screen>("login");
   const [onboardStep, setOnboardStep] = useState<OnboardStep>(0);
+  // 온보딩에 어디서 들어왔는지 기억한다. 첫 로그인(스펙 없음)은 "login"에서, 프로필의
+  // "스펙·목표 수정하기"는 "profile"에서 진입하는데, 뒤로가기가 이걸 구분하지 않으면
+  // 로그인 상태로 프로필에서 들어온 사용자까지 카카오 로그인 화면으로 튕겨 나간다.
+  const [onboardFrom, setOnboardFrom] = useState<"login" | "profile">("login");
   const [tab, setTab] = useState<Tab>("home");
   const [detailId, setDetailId] = useState<string | number | null>(null);
   const [spec, setSpec] = useState<Spec>(INITIAL_SPEC);
@@ -94,6 +98,9 @@ export function SpecRoadApp() {
   const [roadmap, setRoadmap] = useState<RoadmapMilestone[]>([]);
   const [roadmapLoading, setRoadmapLoading] = useState(false);
   const [roadmapError, setRoadmapError] = useState(false);
+  // 하루 갱신 한도(3회)에 막혀 이전 로드맵을 보고 있는지. 안내가 없으면 사용자는
+  // 스펙을 바꿨는데 로드맵이 그대로인 것을 버그로 인지한다.
+  const [roadmapLimitReached, setRoadmapLimitReached] = useState(false);
 
   // 로그인 화면으로 되돌리며 유저별 상태를 모두 비운다(다음 로그인 유저에게 남지 않도록).
   function resetToLogin() {
@@ -199,6 +206,7 @@ export function SpecRoadApp() {
         const steps = fromRoadmapResponse(res);
         latest.roadmap = steps;
         setRoadmap(steps);
+        setRoadmapLimitReached(res.dailyLimitReached ?? false);
       })
       .catch(() => {
         if (cancelled) return;
@@ -262,6 +270,7 @@ export function SpecRoadApp() {
           if (!me.spec) setSpec(EMPTY_SPEC);
           if (!me.target) setTarget(EMPTY_TARGET);
           setOnboardStep(0);
+          setOnboardFrom("login");
           setScreen("onboard");
         }
       })
@@ -311,6 +320,12 @@ export function SpecRoadApp() {
   function handleOnboardBack() {
     if (onboardStep === 1) {
       setOnboardStep(0);
+    } else if (onboardFrom === "profile") {
+      // 프로필의 "스펙·목표 수정하기"로 들어온 경우 — 로그인 상태이므로 프로필로 되돌린다.
+      // (예전엔 무조건 로그인 화면으로 보내, 로그인한 사용자가 수정을 취소만 해도
+      // 카카오 로그인 페이지로 튕겨 나갔다)
+      setScreen("app");
+      setTab("profile");
     } else {
       setScreen("login");
     }
@@ -409,6 +424,7 @@ export function SpecRoadApp() {
             roadmap={isDemo ? ROADMAP : roadmap}
             roadmapLoading={isDemo ? false : roadmapLoading}
             roadmapError={isDemo ? false : roadmapError}
+            roadmapLimitReached={isDemo ? false : roadmapLimitReached}
             isDemo={isDemo}
             onOpenDetail={setDetailId}
             onOpenPasserReport={() => setScreen("passer-report")}
@@ -419,6 +435,7 @@ export function SpecRoadApp() {
                 return;
               }
               setOnboardStep(0);
+              setOnboardFrom("profile");
               setScreen("onboard");
             }}
             onLogout={() => {

@@ -16,9 +16,10 @@ interface RoadmapTabProps {
   roadmap: RoadmapMilestone[];
   roadmapLoading: boolean;
   roadmapError: boolean;
+  roadmapLimitReached: boolean;
 }
 
-export function RoadmapTab({ target, roadmap, roadmapLoading, roadmapError }: RoadmapTabProps) {
+export function RoadmapTab({ target, roadmap, roadmapLoading, roadmapError, roadmapLimitReached }: RoadmapTabProps) {
   const targetSummary = `${target.size} ${jobLabel(target.job)}`;
 
   return (
@@ -27,6 +28,26 @@ export function RoadmapTab({ target, roadmap, roadmapLoading, roadmapError }: Ro
       <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 22px", lineHeight: 1.55 }}>
         {targetSummary} 목표까지, 시기별로 해야 할 일을 정리했어요.
       </p>
+
+      {/* 하루 갱신 한도에 막혀 이전 로드맵을 보여주는 중이면 그 사실을 알린다.
+          이 안내가 없으면 스펙을 바꾼 사용자가 "수정이 반영 안 된다"를 버그로 인지한다. */}
+      {roadmapLimitReached && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "11px 14px",
+            border: "1px solid #F0D8A8",
+            borderRadius: 12,
+            background: "#FFF9ED",
+            color: "#79551F",
+            fontSize: 12.5,
+            lineHeight: 1.5,
+          }}
+        >
+          오늘 로드맵 갱신 횟수(3회)를 모두 사용해서 이전 로드맵을 보여드리고 있어요. 내일 첫 방문 때 새로
+          만들어져요.
+        </div>
+      )}
 
       {roadmapLoading ? (
         <StateMessage variant="loading" title="AI가 로드맵을 그리고 있어요…" />
