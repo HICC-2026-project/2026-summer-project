@@ -1,0 +1,43 @@
+name: Ops DB Check (temporary)
+
+# 점수 공식 v7 재계산 검증용 임시 읽기 전용 조회. 확인 후 삭제 예정.
+# ⚠️ 저장소가 공개라 로그도 공개된다 — 닉네임·ID 등 식별 정보는 절대 출력하지 않는다.
+on:
+  workflow_dispatch:
+
+jobs:
+  query:
+    name: 읽기 전용 캐시 버전 조회
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH 키 준비
+        env:
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: 캐시 버전·점수 조회 (식별 정보 미출력)
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          set +x
+          source ~/2026-summer-project/backend/.env
+          HOSTDB=$(echo "$DB_URL" | sed 's|jdbc:postgresql://||')
+          docker run --rm postgres:16-alpine psql "postgresql://$DB_USERNAME:$DB_PASSWORD@$HOSTDB" -c "
+          SELECT row_number() OVER (ORDER BY r.created_at) AS anon_row,
+                 (r.result_json::json->>'scoreFormulaVersion') AS cache_ver,
+                 (r.result_json::json->>'matchScore')          AS cached_score,
+                 r.created_at                                  AS cache_updated_at,
+                 r.daily_update_count                          AS count_today,
+                 r.last_updated_date                           AS last_date
+          FROM recommendations r
+          ORDER BY r.created_at;"
+          REMOTE
