@@ -1,6 +1,7 @@
 package com.career.recommendation.service;
 
 import com.career.recommendation.dto.roadmap.RoadmapResponse;
+import com.career.recommendation.entity.Activity;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.repository.ActivityRepository;
 import com.career.recommendation.repository.RecommendationRepository;
@@ -200,5 +201,62 @@ class RoadmapServiceEmptyStepsTest {
         String[] noGrade = ReflectionTestUtils.invokeMethod(
                 roadmapService, "computeFallbackPeriods", (Integer) null, java.time.LocalDate.of(2026, 4, 15));
         assertThat(noGrade).containsExactly("1~2개월 차", "3~4개월 차", "5~6개월 차");
+    }
+
+    /**
+     * 폴백 로드맵이 활동을 리스트 인덱스(0~2/3~5/6~8)로만 3등분해 2·3번째 시기에도
+     * matchedActivities를 채워 넣던 회귀를 고정한다. activeActivities는 deadline ASC로
+     * 정렬돼 오므로, 시기 라벨이 today 기준 실제 달력 구간(computeFallbackPeriods)이 된
+     * 지금은 "가장 빨리 마감되는 활동"이 "가장 먼 미래 시기" 밑에 나올 수 있었다 — 예:
+     * 8월에 마감하는 활동이 "3학년 겨울방학 (12~2월)" 카드에 실려 마감일과 시기 라벨이
+     * 정면으로 모순됐다. 이제 1번째(HIGH="지금 집중") 시기에만 실제 DB 활동을 붙이고
+     * 2·3번째는 텍스트 가이드만 보여준다.
+     */
+    @Test
+    void 폴백_로드맵은_1번째_시기에만_실제_DB_활동을_붙인다() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(user.getId()).thenReturn(userId);
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+
+        when(roadmapCacheRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(recommendationRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(similarSpecFinder.find(any(), any(), any())).thenReturn(List.of());
+
+        List<Activity> activities = new java.util.ArrayList<>();
+        for (int i = 0; i < 9; i++) {
+            activities.add(Activity.builder()
+                    .id(UUID.randomUUID())
+                    .type("EXTERNAL")
+                    .name("활동" + i)
+                    .deadline(java.time.LocalDate.now().plusDays(i))
+                    .isActive(true)
+                    .build());
+        }
+        when(activityRepository.findRecommendableActivities(any(), any())).thenReturn(activities);
+
+        when(promptDataBuilder.serializeSpecForRoadmap(any())).thenReturn("{}");
+        when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
+        when(promptDataBuilder.buildSimilarCasesText(any())).thenReturn("");
+        when(promptDataBuilder.buildAvailableActivitiesJson(any())).thenReturn("[]");
+
+        // Gemini 응답이 계속 비어 있어 폴백 경로로 떨어지게 한다.
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any())).thenReturn("");
+
+        ReflectionTestUtils.setField(roadmapService, "objectMapper", new ObjectMapper());
+
+        RoadmapResponse response = roadmapService.getRoadmap(authentication);
+
+        assertThat(response.getTimeline()).hasSize(3);
+        assertThat(response.getTimeline().get(0).getMatchedActivities())
+                .as("1번째(HIGH) 시기에만 실제 DB 활동이 붙어야 한다")
+                .hasSize(3);
+        assertThat(response.getTimeline().get(1).getMatchedActivities())
+                .as("2번째 시기 라벨과 무관한 활동을 잘못 붙이지 않는다")
+                .isEmpty();
+        assertThat(response.getTimeline().get(2).getMatchedActivities())
+                .as("3번째 시기 라벨과 무관한 활동을 잘못 붙이지 않는다")
+                .isEmpty();
     }
 }

@@ -330,18 +330,25 @@ public class RoadmapService {
         String semester2 = periods[1];
         String semester3 = periods[2];
 
+        // ⚠️ 예전엔 활동을 리스트 인덱스로만 3등분해(0~2→1번째, 3~5→2번째, 6~8→3번째)
+        // step1/2/3에 나눠 담았다. activeActivities는 findRecommendableActivities가
+        // deadline ASC로 정렬해 준 목록이라, 그때는 "가장 빨리 마감되는 활동들이 가장 먼
+        // 미래 시기"에 배정되는 게 항상 가능했다 — computeFallbackPeriods가 세 시기를
+        // 여전히 절대 달력(9~11월 고정)으로 보여줄 때는 두 값이 아무 관계도 없어 눈에 안
+        // 띄었을 뿐이다. 이제 시기 라벨이 today 기준 실제 달력 구간이 되면서, 예를 들어
+        // 8월에 마감하는 활동이 "3학년 겨울방학 (12~2월)" 밑에 나오는 것처럼 카드에 적힌
+        // matchedActivities의 마감일과 그 시기 라벨이 정면으로 모순될 수 있다. 시기별
+        // 실제 마감일 구간을 계산해 재배정하는 대신(이번 마감 전 범위를 넘는 작업), 첫
+        // 번째(HIGH="지금 집중") 시기에만 실제 DB 활동을 붙이고 2·3번째는 텍스트 가이드만
+        // 보여준다 — 이러면 최소한 "틀린 날짜 주장"은 절대 나오지 않는다.
         List<MatchedActivity> step1Matched = new ArrayList<>();
-        List<MatchedActivity> step2Matched = new ArrayList<>();
-        List<MatchedActivity> step3Matched = new ArrayList<>();
-
         if (activeActivities != null) {
-            for (int i = 0; i < activeActivities.size(); i++) {
-                Activity a = activeActivities.get(i);
-                if (i < 3) step1Matched.add(toMatchedActivity(a));
-                else if (i < 6) step2Matched.add(toMatchedActivity(a));
-                else if (i < 9) step3Matched.add(toMatchedActivity(a));
+            for (int i = 0; i < activeActivities.size() && i < 3; i++) {
+                step1Matched.add(toMatchedActivity(activeActivities.get(i)));
             }
         }
+        List<MatchedActivity> step2Matched = List.of();
+        List<MatchedActivity> step3Matched = List.of();
 
         return RoadmapResponse.builder()
                 .timeline(List.of(
