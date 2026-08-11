@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.domain.Page;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.server.ResponseStatusException;
@@ -56,6 +57,32 @@ class ActivityControllerValidationTest {
         mockMvc.perform(get("/api/v1/activities").param("direction", "SIDEWAYS"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_PARAMETER"));
+    }
+
+    @Test
+    void 정렬_방향_소문자도_정상_동작한다() throws Exception {
+        // Sort.Direction을 컨트롤러 파라미터로 직접 바인딩하면(Enum.valueOf 기반) 대소문자를
+        // 가려 흔한 소문자 입력(direction=desc)이 400이었다. String으로 받아
+        // Sort.Direction.fromString()으로 변환하도록 고친 뒤 이 케이스가 실제로 통과하는지
+        // 직접 검증한다 — 인증이 필요 없는 공개 API라 클라이언트 다양성이 크다.
+        when(activityService.getActivities(any(), any())).thenReturn(Page.empty());
+
+        mockMvc.perform(get("/api/v1/activities").param("direction", "desc"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/activities").param("direction", "asc"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void 정렬_방향_기본값은_대문자_DESC로_정상_동작한다() throws Exception {
+        when(activityService.getActivities(any(), any())).thenReturn(Page.empty());
+
+        mockMvc.perform(get("/api/v1/activities"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/activities").param("direction", "DESC"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/activities").param("direction", "ASC"))
+                .andExpect(status().isOk());
     }
 
     @Test
