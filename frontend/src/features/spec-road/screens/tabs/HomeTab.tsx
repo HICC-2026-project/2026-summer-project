@@ -2,7 +2,7 @@
 
 import { DEMO_USER_NAME, PASSER_COUNT, PRIMARY, READINESS, READINESS_RANK } from "../../data";
 import { StateMessage } from "../../components/StateMessage";
-import { dday, ddayColor, jobLabel } from "../../helpers";
+import { dday, ddayColor, hasMeaningfulLangScore, jobLabel } from "../../helpers";
 import type { Recommendation, RecommendationMeta, Spec, Target } from "../../types";
 
 interface HomeTabProps {
@@ -22,13 +22,19 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
   const displayName = nickname ?? DEMO_USER_NAME;
 
   // 입력한 어학·자격증을 요약한다. 둘 다 없으면 안내 문구를 보여준다.
-  const langCount = Object.values(spec.langScores).filter((v) => v).length;
+  // 어학은 0점 입력을 미입력으로 취급한다(hasMeaningfulLangScore 주석 참고).
+  const langCount = Object.entries(spec.langScores).filter(([type, v]) => hasMeaningfulLangScore(type, v)).length;
   // 자격증 개수는 백엔드가 "인식한" 개수 기준으로 보여준다 — 입력 원본 개수(spec.certs.length)를
   // 그대로 쓰면 비교 탭(백엔드 compareRows, 인식된 것만 집계)과 숫자가 어긋난다.
   // 예: 정보처리기사·SQLD·"가나다라마바사" 입력 시 홈은 3개, 비교는 2개로 보이던 문제.
   // 미인식분은 숨기는 대신 개수로 함께 보여줘, 비교 탭의 미인식 안내와 연결되게 한다.
   // recMeta가 아직 없으면(로딩·둘러보기) 인식 여부를 알 수 없으니 입력 개수를 그대로 쓴다.
-  const unrecognizedCount = recMeta?.unrecognizedCertifications?.length ?? 0;
+  //
+  // spec은 getMe()로 매번 새로 오지만 recMeta는 localStorage 캐시(직전 결과)에서 먼저
+  // 채워질 수 있다 — 서로 다른 시점의 두 소스를 그대로 빼면, 스펙을 바꾼 직후 잠깐
+  // 옛 미인식 목록 기준의 엉뚱한 개수가 보인다. 현재 spec.certs에 실제로 존재하는
+  // 미인식 항목만 세서(교집합) 두 소스를 항상 일관되게 맞춘다.
+  const unrecognizedCount = (recMeta?.unrecognizedCertifications ?? []).filter((c) => spec.certs.includes(c)).length;
   const recognizedCertCount = Math.max(0, spec.certs.length - unrecognizedCount);
   const certLabel =
     spec.certs.length === 0

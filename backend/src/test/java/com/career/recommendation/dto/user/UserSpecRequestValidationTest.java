@@ -73,6 +73,30 @@ class UserSpecRequestValidationTest {
                 .contains("어학점수 형식이 시험 종류와 일치하지 않습니다.");
     }
 
+    /**
+     * 0점은 "미입력"과 구분되지 않아 받지 않는다. 예전엔 @PositiveOrZero + score >= 0으로
+     * 0점이 통과해, 사용자가 TOEIC에 0을 적으면 홈 요약에 "어학 1개"가 뜨고 점수 계산에도
+     * 없는 성적이 잡혔다(2026-08-11 사용자 제보). FE도 0점 항목을 요청에서 제외하지만,
+     * API를 직접 부르는 경우까지 막는 백엔드 방어선을 검증한다.
+     */
+    @Test
+    void TOEIC_점수_0점은_미입력으로_보고_거부한다() {
+        UserSpecRequest request = validRequest();
+        request.setLanguageScores(List.of(toeic(0)));
+
+        assertThat(validationMessages(request))
+                .contains("어학 점수는 1 이상이어야 합니다. 점수가 없으면 항목을 비워주세요.");
+    }
+
+    @Test
+    void TOEFL_점수_0점은_미입력으로_보고_거부한다() {
+        UserSpecRequest request = validRequest();
+        request.setLanguageScores(List.of(toefl(0)));
+
+        assertThat(validationMessages(request))
+                .contains("어학 점수는 1 이상이어야 합니다. 점수가 없으면 항목을 비워주세요.");
+    }
+
     @Test
     void TOEFL_점수가_120점을_초과하면_검증에_실패한다() {
         UserSpecRequest request = validRequest();

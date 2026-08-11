@@ -111,6 +111,9 @@ export function SpecRoadApp() {
     setRecommendations([]);
     setRecMeta(null);
     setRoadmap([]);
+    // 별도 상태라 recMeta처럼 자동으로 비워지지 않는다 — 안 비우면 이전 유저의
+    // "한도 도달" 배너가 다음 로그인 유저의 첫 화면에 잠깐 남는다.
+    setRoadmapLimitReached(false);
     setIsDemo(false);
     setScreen("login");
   }
@@ -175,6 +178,9 @@ export function SpecRoadApp() {
     setRecError(false);
     setRoadmapLoading(!hasCache);
     setRoadmapError(false);
+    // 매 사이클 시작 시 초기화 — 안 하면 이번 요청이 실패했을 때 이전 사이클의
+    // "한도 도달" 배너가 에러 문구와 동시에 떠 서로 모순된 설명이 된다.
+    setRoadmapLimitReached(false);
 
     const latest: { recommendations?: Recommendation[]; recMeta?: RecommendationMeta | null; roadmap?: RoadmapMilestone[] } = {};
 

@@ -58,22 +58,33 @@ const FRONT_LANGUAGE_TYPE_NAMES: Record<string, string> = {
   OPIC: "OPIc",
 };
 
+// 점수형 시험(TOEIC·TOEFL — LANG_MAX에 만점이 있는 시험)의 "0"은 미입력과 같게 취급한다.
+// 실제 최저점도 0이 아니고, 0을 값으로 치면 홈 요약이 "어학 1개", 프로필이 "TOEIC 0"으로
+// 잡혀 없는 성적이 있는 것처럼 보인다. 등급형(OPIc)은 비어있지만 않으면 유효하다.
+// 숫자가 아닌 쓰레기 입력(Number → NaN)도 여기서 함께 걸러진다.
+export function hasMeaningfulLangScore(type: string, value: string): boolean {
+  if (!value) return false;
+  return LANG_MAX[type] == null ? true : Number(value) > 0;
+}
+
 // GET /users/me 응답의 languageScores 배열을 화면 state({ TOEIC: "850" })로 되돌린다.
+// 0점 방지 이전에 저장된 옛 데이터에 score 0이 남아 있을 수 있어 여기서도 걸러낸다.
 export function fromLanguageScoresPayload(payload: LanguageScorePayload[]): Spec["langScores"] {
   const result: Spec["langScores"] = {};
   for (const item of payload) {
     const type = FRONT_LANGUAGE_TYPE_NAMES[item.type] ?? item.type;
     const value = item.grade ?? (item.score != null ? String(item.score) : "");
-    if (value) result[type] = value;
+    if (hasMeaningfulLangScore(type, value)) result[type] = value;
   }
   return result;
 }
 
 // Converts the flat { TOEIC: "850", OPIc: "IH" } state into the
 // [{ type, score, maxScore } | { type, grade }] array PUT /users/me/spec expects.
+// 0점(및 숫자가 아닌 값)은 미입력으로 보고 요청에서 제외한다 — 백엔드도 @Positive로 거부한다.
 export function toLanguageScoresPayload(langScores: Spec["langScores"]): LanguageScorePayload[] {
   return Object.entries(langScores)
-    .filter(([, value]) => value !== "")
+    .filter(([type, value]) => hasMeaningfulLangScore(type, value))
     .map(([type, value]) => {
       const apiType = API_LANGUAGE_TYPE_NAMES[type] ?? type;
       const maxScore = LANG_MAX[type] ?? null;
