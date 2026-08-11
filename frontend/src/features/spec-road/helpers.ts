@@ -1,4 +1,4 @@
-import { JOB_OPTIONS, LANG_MAX, PRIMARY, TODAY } from "./data";
+import { JOB_OPTIONS, LANG_MAX, PRIMARY } from "./data";
 import type {
   JobCode,
   LanguageScorePayload,
@@ -21,13 +21,23 @@ function parseLocalDate(dateStr: string): Date {
   return new Date(y, (m || 1) - 1, d || 1);
 }
 
+// 기준일(오늘 자정)은 호출할 때마다 새로 계산한다.
+// ⚠️ 예전엔 모듈 로드 시점에 한 번 고정되는 상수(TODAY)를 썼는데, SPA 특성상 탭을 새로고침
+// 없이 자정 넘겨 계속 열어두면 "오늘"이 어제(또는 며칠 전)에 고정된 채 모든 D-day가
+// 조용히 부풀어 보였다 — 마감일 문자열은 맞는데 D-N만 어긋나는 이상한 결론.
+function todayMidnight(): number {
+  const t = new Date();
+  t.setHours(0, 0, 0, 0);
+  return t.getTime();
+}
+
 export function dday(dateStr: string): string {
-  const diff = Math.ceil((parseLocalDate(dateStr).getTime() - TODAY.getTime()) / 86400000);
+  const diff = Math.ceil((parseLocalDate(dateStr).getTime() - todayMidnight()) / 86400000);
   return diff <= 0 ? "마감" : `D-${diff}`;
 }
 
 export function ddayColor(dateStr: string): string {
-  const diff = Math.ceil((parseLocalDate(dateStr).getTime() - TODAY.getTime()) / 86400000);
+  const diff = Math.ceil((parseLocalDate(dateStr).getTime() - todayMidnight()) / 86400000);
   return diff <= 30 ? "#E5484D" : "#9797A1";
 }
 

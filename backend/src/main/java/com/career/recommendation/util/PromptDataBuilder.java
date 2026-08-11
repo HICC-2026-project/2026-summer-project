@@ -82,7 +82,13 @@ public class PromptDataBuilder {
 
     /**
      * 유저 스펙을 Gemini 프롬프트용 JSON 문자열로 직렬화한다.
-     * 로드맵(F-05)용 — 학점, 학년, 자격증만 포함.
+     * 로드맵(F-05)용 — 학점, 학년, 자격증, 어학 성적 포함.
+     *
+     * ⚠️ 어학 성적(languageScores)을 반드시 포함한다. 예전엔 학점·학년·자격증만 보내서
+     * Gemini가 사용자의 어학 보유 여부를 알 수 없었고, 이미 토익 900을 가진 사용자에게
+     * "토익 900 목표로 학습" 같은 스텝을 추천하거나 반대로 진짜 어학 공백을 놓치는
+     * "이상한 결론"이 로드맵에 나올 수 있었다(추천 프롬프트 쪽 직렬화에는 원래부터
+     * 어학이 포함돼 있어 두 프롬프트가 서로 다른 스펙을 보고 있었다).
      */
     public String serializeSpecForRoadmap(UserSpec userSpec) {
         if (userSpec == null) return "{}";
@@ -90,7 +96,8 @@ public class PromptDataBuilder {
             return objectMapper.writeValueAsString(Map.of(
                     "gpa", userSpec.getGpa() != null ? userSpec.getGpa() : "없음",
                     "grade", userSpec.getGrade() != null ? userSpec.getGrade() : "미입력",
-                    "certifications", userSpec.getCertifications() != null ? userSpec.getCertifications() : new String[]{}
+                    "certifications", userSpec.getCertifications() != null ? userSpec.getCertifications() : new String[]{},
+                    "languageScores", userSpec.getLanguageScores() != null ? userSpec.getLanguageScores() : List.of()
             ));
         } catch (Exception e) {
             return "{}";
