@@ -127,7 +127,7 @@ export function activityTypeLabel(type: string): string {
 
 // GET /recommendations 응답을 화면 추천 카드 모델로 변환한다.
 // 백엔드는 개별 활동 점수·기관·태그·bullets를 주지 않으므로 해당 필드는 비워 둔다
-// (Recommendation에서 optional). 점수는 응답 최상단 matchScore 하나로 통일됐다.
+// (Recommendation에서 optional). 위치·갭 요약은 응답 최상단 specPosition 하나로 온다.
 export function fromRecommendationsResponse(res: RecommendationsResponse): Recommendation[] {
   return res.activities.map((a) => ({
     id: a.id,
@@ -138,17 +138,22 @@ export function fromRecommendationsResponse(res: RecommendationsResponse): Recom
   }));
 }
 
+// percentile(합격자 분포 내 위치)을 사람이 읽는 표기로 바꾼다. 62 → "상위 38%".
+// - null은 "미입력" — 최하위(0)와 다른 상태라 숫자로 그리면 안 된다(백엔드가 의도적으로 구분).
+// - 0은 "최하위" — "상위 100%"라고 쓰면 항상 참인 무의미한(오히려 긍정적으로 읽히는) 라벨이 된다.
+// 비교 탭과 홈 카드가 같은 percentile을 다른 문구로 말하지 않도록 반드시 이 함수를 공용으로 쓴다.
+export function percentileLabel(percentile: number | null): string {
+  if (percentile == null) return "미입력";
+  if (percentile >= 100) return "최상위";
+  if (percentile <= 0) return "최하위";
+  return `상위 ${100 - percentile}%`;
+}
+
 export function toRecommendationMeta(res: RecommendationsResponse): RecommendationMeta {
   return {
-    matchScore: res.matchScore,
-    comparisonMessage: res.comparisonMessage,
+    specPosition: res.specPosition ?? null,
     isAiRecommendation: res.aiRecommendation ?? res.isAiRecommendation ?? false,
     targetJobName: res.targetJobName,
-    similarPasserCount: res.similarPasserCount,
-    compareRows: res.compareRows,
-    sampleComparisonData: res.sampleComparisonData ?? false,
-    unrecognizedCertifications: res.unrecognizedCertifications,
-    recognizedCertificationCount: res.recognizedCertificationCount,
     dailyLimitReached: res.dailyLimitReached ?? false,
   };
 }

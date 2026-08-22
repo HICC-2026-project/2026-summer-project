@@ -1,5 +1,6 @@
 package com.career.recommendation.dto.recommendation;
 
+import com.career.recommendation.dto.position.SpecPositionResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -17,15 +18,18 @@ class RecommendationResponseTest {
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @Test
-    void 샘플_비교_여부를_API_응답에_표시한다() throws Exception {
+    void 데모_데이터_포함_여부를_API_응답에_표시한다() throws Exception {
         RecommendationResponse response = RecommendationResponse.builder()
                 .activities(List.of())
-                .sampleComparisonData(true)
+                .specPosition(SpecPositionResult.builder()
+                        .basis("JOB")
+                        .demoDataIncluded(true)
+                        .build())
                 .build();
 
         JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(response));
 
-        assertThat(json.path("sampleComparisonData").asBoolean()).isTrue();
+        assertThat(json.path("specPosition").path("demoDataIncluded").asBoolean()).isTrue();
     }
 
     /**
@@ -34,11 +38,28 @@ class RecommendationResponseTest {
      *
      * 이 클래스가 예전엔 직렬화(write)만 검증하고 역직렬화(read)는 전혀 검증하지 않아서,
      * 빌더 기반 역직렬화가 완전히 깨져 있는 버그(캐시를 읽으면 활동 없음·점수 0·플래그 전부
-     * false인 빈 객체가 나오던 문제)를 놓쳤다. @Jacksonized 도입 전 코드로 되돌리면 이
-     * 테스트가 실패한다 — 회귀를 실제로 잡는지 그렇게 확인했다.
+     * false인 빈 객체가 나오던 문제)를 놓쳤다. @Jacksonized가 빠지면 이 테스트가 실패한다 —
+     * specPosition의 중첩 DTO(AxisPosition·SpecGap)까지 왕복을 검증하는 이유다.
      */
     @Test
     void 캐시_저장과_같은_방식으로_직렬화한_뒤_역직렬화하면_모든_필드가_복원된다() throws Exception {
+        SpecPositionResult position = SpecPositionResult.builder()
+                .basis("JOB")
+                .basisMessage("BACKEND 합격자 12명의 분포와 비교한 결과입니다.")
+                .sampleSize(12)
+                .demoDataIncluded(false)
+                .axes(List.of(SpecPositionResult.AxisPosition.builder()
+                        .axis("GPA").label("학점")
+                        .myValue("3.80/4.5").medianValue("3.70/4.5")
+                        .percentile(62).coverage(11)
+                        .build()))
+                .gaps(List.of(SpecPositionResult.SpecGap.builder()
+                        .name("정보처리기사").holderRatePercent(70)
+                        .build()))
+                .matchedCertifications(List.of("SQLD"))
+                .unmatchedCertifications(List.of("완전정크자격증123"))
+                .build();
+
         RecommendationResponse original = RecommendationResponse.builder()
                 .activities(List.of(RecommendationResponse.ActivityRecommendation.builder()
                         .id(java.util.UUID.randomUUID())
@@ -47,15 +68,10 @@ class RecommendationResponseTest {
                         .reason("테스트 이유")
                         .deadline(java.time.LocalDate.of(2026, 12, 31))
                         .build()))
-                .matchScore(77)
-                .comparisonMessage("유사 BACKEND 합격자 5명과 비교한 결과입니다.")
+                .specPosition(position)
                 .aiRecommendation(true)
                 .targetJobName("BACKEND")
-                .similarPasserCount(5)
-                .compareRows(List.of())
-                .sampleComparisonData(false)
-                .unrecognizedCertifications(List.of("완전정크자격증123"))
-                .scoreFormulaVersion(6)
+                .scoreFormulaVersion(9)
                 .build();
 
         String json = objectMapper.writeValueAsString(original);
@@ -63,12 +79,22 @@ class RecommendationResponseTest {
 
         assertThat(restored.getActivities()).hasSize(1);
         assertThat(restored.getActivities().get(0).getName()).isEqualTo("테스트 활동");
-        assertThat(restored.getMatchScore()).isEqualTo(77);
         assertThat(restored.isAiRecommendation()).isTrue();
         assertThat(restored.getTargetJobName()).isEqualTo("BACKEND");
-        assertThat(restored.getSimilarPasserCount()).isEqualTo(5);
-        assertThat(restored.getSampleComparisonData()).isFalse();
-        assertThat(restored.getUnrecognizedCertifications()).containsExactly("완전정크자격증123");
-        assertThat(restored.getScoreFormulaVersion()).isEqualTo(6);
+        assertThat(restored.getScoreFormulaVersion()).isEqualTo(9);
+
+        SpecPositionResult restoredPosition = restored.getSpecPosition();
+        assertThat(restoredPosition).isNotNull();
+        assertThat(restoredPosition.getBasis()).isEqualTo("JOB");
+        assertThat(restoredPosition.getSampleSize()).isEqualTo(12);
+        assertThat(restoredPosition.getDemoDataIncluded()).isFalse();
+        assertThat(restoredPosition.getAxes()).hasSize(1);
+        assertThat(restoredPosition.getAxes().get(0).getPercentile()).isEqualTo(62);
+        assertThat(restoredPosition.getAxes().get(0).getMyValue()).isEqualTo("3.80/4.5");
+        assertThat(restoredPosition.getGaps()).hasSize(1);
+        assertThat(restoredPosition.getGaps().get(0).getName()).isEqualTo("정보처리기사");
+        assertThat(restoredPosition.getGaps().get(0).getHolderRatePercent()).isEqualTo(70);
+        assertThat(restoredPosition.getMatchedCertifications()).containsExactly("SQLD");
+        assertThat(restoredPosition.getUnmatchedCertifications()).containsExactly("완전정크자격증123");
     }
 }

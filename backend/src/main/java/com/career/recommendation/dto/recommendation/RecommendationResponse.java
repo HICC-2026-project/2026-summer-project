@@ -8,7 +8,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-import com.career.recommendation.dto.recommendation.CompareRowDto;
+import com.career.recommendation.dto.position.SpecPositionResult;
 
 /**
  * GET /api/v1/recommendations 응답 DTO.
@@ -44,12 +44,13 @@ public class RecommendationResponse {
     private Boolean dailyLimitReached;
 
     /**
-     * MatchScoreCalculator가 계산한 0~100 점수.
+     * 사용자 스펙의 합격자 분포 내 위치·갭 (SpecPositionCalculator 계산 결과).
+     * 예전의 matchScore(가중 총점)·compareRows(충족/부족 행)·comparisonMessage·
+     * similarPasserCount·unrecognizedCertifications를 전부 이 객체가 대체한다 —
+     * 비교 기준 설명은 specPosition.basisMessage, 표본 수는 specPosition.sampleSize,
+     * 미매칭 자격증 고지는 specPosition.unmatchedCertifications.
      */
-    private int matchScore;
-
-    /** "유사 합격자 N명과 비교한 결과" 또는 "데이터가 부족해 AI 일반 추천을 제공합니다" */
-    private String comparisonMessage;
+    private SpecPositionResult specPosition;
 
     /**
      * false면 프론트에서 "일반 추천" 배지 표시.
@@ -68,35 +69,12 @@ public class RecommendationResponse {
     /** 비교 대상 직무명 (예: BACKEND) */
     private String targetJobName;
 
-    /** 비교 대상 유사 합격자 수 */
-    private Integer similarPasserCount;
-
-    /** 항목별 세부 비교 내역 */
-    private List<CompareRowDto> compareRows;
-
-    /** 비교 대상에 합성 DEMO 데이터가 한 건이라도 포함되었는지 여부 */
-    private Boolean sampleComparisonData;
-
     /**
-     * 사용자가 입력했지만 자격증 인식 층(MatchScoreCalculator) 어디에서도 매칭되지 않은
-     * 원본 표기 목록. 비어있지 않으면 FE에서 "이 자격증은 점수에 반영되지 않았어요" 같은
-     * 안내를 띄워, 오타·특이 표기를 사용자가 스스로 확인·수정할 수 있게 한다.
-     */
-    private List<String> unrecognizedCertifications;
-
-    /**
-     * 인식된 자격증 개수 (canonical 기준 — 비교 탭 자격증 행과 같은 집계).
-     * FE 홈 카드가 이 값을 그대로 표시해야 비교 탭과 항상 일치한다. 옛 캐시엔 없어
-     * null일 수 있다(그 경우 FE는 입력 개수로 폴백).
-     */
-    private Integer recognizedCertificationCount;
-
-    /**
-     * matchScore·compareRows를 계산한 점수 공식 버전 (MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION).
-     * 옛 캐시 JSON엔 이 필드가 없어 역직렬화 시 null이 되고, RecommendationService가 이를
-     * legacy로 판정해 다음 요청에서 한 번 강제로 재계산한다. 공식을 바꿀 때마다
-     * CURRENT_SCORE_FORMULA_VERSION을 올리지 않으면 배포 후에도 유저마다 옛 공식/새 공식
-     * 점수가 뒤섞여 보이게 된다.
+     * specPosition을 계산한 공식 버전 (SpecPositionCalculator.CURRENT_SCORE_FORMULA_VERSION).
+     * 옛 캐시 JSON엔 이 필드가 없거나(역직렬화 시 null) 낮은 버전(v8 이하 — 구 점수 체계)이
+     * 들어 있고, RecommendationService가 이를 legacy로 판정해 다음 요청에서 한 번 강제로
+     * 재계산한다. 계산 방식이 바뀔 때마다 버전을 올리지 않으면 배포 후에도 유저마다
+     * 옛 방식/새 방식 결과가 뒤섞여 보이게 된다.
      */
     private Integer scoreFormulaVersion;
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { DEMO_USER_NAME, PASSER_COUNT, PRIMARY, READINESS, READINESS_RANK } from "../../data";
+import { DEMO_SPEC_POSITION, DEMO_USER_NAME, PRIMARY } from "../../data";
 import { StateMessage } from "../../components/StateMessage";
-import { dday, ddayColor, hasMeaningfulLangScore, jobLabel } from "../../helpers";
+import { dday, ddayColor, hasMeaningfulLangScore, jobLabel, percentileLabel } from "../../helpers";
 import type { Recommendation, RecommendationMeta, Spec, Target } from "../../types";
 
 interface HomeTabProps {
@@ -24,44 +24,22 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
   // 입력한 어학·자격증을 요약한다. 둘 다 없으면 안내 문구를 보여준다.
   // 어학은 0점 입력을 미입력으로 취급한다(hasMeaningfulLangScore 주석 참고).
   const langCount = Object.entries(spec.langScores).filter(([type, v]) => hasMeaningfulLangScore(type, v)).length;
-  // 자격증 개수는 백엔드가 "인식한" 개수(recognizedCertificationCount) 기준으로 보여준다 —
-  // 입력 원본 개수(spec.certs.length)를 그대로 쓰면 비교 탭(백엔드 compareRows, 인식된
-  // 것만 canonical 기준으로 집계)과 숫자가 어긋난다. 예: 정보처리기사·SQLD·"가나다라마바사"
-  // 입력 시 홈은 3개, 비교는 2개로 보이던 문제.
-  //
-  // ⚠️ "입력 개수 − 미인식 개수"로 역산하면 안 된다 — 백엔드 집계는 canonical 기준
-  // (공백·"필기/실기" 등 제거 후 dedup)이라 "정보처리기사 필기"+"정보처리기사 실기"처럼
-  // 원본 2개가 1개로 접히는 순간 뺄셈이 틀린다. 그래서 백엔드가 인식 개수를 직접 내려주고
-  // 여기선 그대로 쓴다. 미인식 개수는 비교 탭 하단 미인식 배너의 목록 길이와 같은 값을
-  // 써서 두 화면이 항상 같은 숫자를 말하게 한다. 옛 캐시(recognizedCertificationCount
-  // 없음)나 로딩 전엔 입력 개수로 폴백한다.
-  const unrecognizedCount = recMeta?.unrecognizedCertifications?.length ?? 0;
-  const recognizedCertCount = recMeta?.recognizedCertificationCount ?? spec.certs.length;
-  const certLabel =
-    spec.certs.length === 0
-      ? null
-      : recMeta?.recognizedCertificationCount != null
-        ? unrecognizedCount > 0
-          ? `자격증 ${recognizedCertCount}개 (미인식 ${unrecognizedCount}개)`
-          : `자격증 ${recognizedCertCount}개`
-        : `자격증 ${spec.certs.length}개`;
+  // 자격증은 "내가 입력한 개수"를 그대로 보여준다. 비교 탭의 자격증 축은 "합격자 프로필과
+  // 매칭된 개수"라는 다른 개념이고, 매칭·미매칭 목록을 화면에서 직접 구분해 보여주므로
+  // (예전 matchScore 체계처럼) 같은 라벨의 두 숫자가 어긋나 보이는 문제가 없다.
+  const certLabel = spec.certs.length === 0 ? null : `자격증 ${spec.certs.length}개`;
   const specSummary =
     langCount + spec.certs.length === 0
       ? "미입력"
       : [langCount > 0 ? `어학 ${langCount}개` : null, certLabel].filter(Boolean).join(" · ");
 
-  // 준비도는 실 API 응답(recMeta)에서만 나온다.
-  // 예시 화면에서만 목업 수치를 쓰고, 로그인 사용자는 응답이 없으면(로딩·실패) 수치를 감춘다.
-  // 값이 없을 때 목업으로 대체하면 실제 점수인 것처럼 보이기 때문이다.
-  //
-  // 비교할 합격자가 0명이면(백엔드가 최소 표본 3명 미달로 빈 목록을 준 경우 포함) 점수도
-  // 감춘다 — 이때 matchScore는 "비교 불가"의 0이지 "준비도 0점"이 아닌데, 숫자 0을 그대로
-  // 보여주면 아무 근거 없는 최하점처럼 읽히는 "이상한 결론"이 된다. 문구(readinessSubtitle)가
-  // "데이터가 부족해..."로 이유를 대신 설명한다.
-  const hasComparablePassers = isDemo || (recMeta?.similarPasserCount ?? 0) > 0;
-  const hasReadiness = (recMeta != null && hasComparablePassers) || isDemo;
-  const readinessScore = recMeta?.matchScore ?? READINESS;
-  const readinessSubtitle = recMeta?.comparisonMessage ?? (isDemo ? `유사 합격자 ${PASSER_COUNT}명 기준` : "");
+  // 위치·갭 요약은 실 API 응답(recMeta.specPosition)에서만 나온다.
+  // 예시 화면에서만 목업(DEMO_SPEC_POSITION)을 쓰고, 로그인 사용자는 응답이 없으면(로딩·실패)
+  // 수치를 감춘다 — 값이 없을 때 목업으로 대체하면 실제 결과인 것처럼 보이기 때문이다.
+  // basis가 NONE이면(표본 미달) 축 percentile도 없으므로 문구(basisMessage)만 보여준다.
+  const position = isDemo ? DEMO_SPEC_POSITION : (recMeta?.specPosition ?? null);
+  const hasPosition = position != null && position.basis !== "NONE";
+  const positionSubtitle = position?.basisMessage ?? "";
   const isFallbackRec = recMeta != null && !recMeta.isAiRecommendation;
 
   return (
@@ -101,35 +79,40 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
           }}
         />
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, opacity: 0.9, marginBottom: 12 }}>
-          <span>✦</span> AI 종합 준비도
+          <span>✦</span> 합격자 분포 속 내 위치
         </div>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 14 }}>
-          <div style={{ fontSize: 46, fontWeight: 800, lineHeight: 1, letterSpacing: "-0.03em" }}>
-            {hasReadiness && !recLoading ? readinessScore : "–"}
-            <span style={{ fontSize: 20, fontWeight: 700 }}>점</span>
+        {/* 예전의 "종합 준비도 N점"은 임의 가중치 합산이라 의미를 설명할 수 없어 없앴다.
+            대신 축별 percentile 위치를 그대로 보여준다 — "학점 상위 28%"는 자체 설명이 된다. */}
+        {hasPosition && !recLoading ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {position!.axes.map((a) => (
+              <span
+                key={a.axis}
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  background: "rgba(255,255,255,0.16)",
+                  padding: "6px 11px",
+                  borderRadius: 999,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {a.label} {percentileLabel(a.percentile)}
+              </span>
+            ))}
+            {position!.gaps.length > 0 && (
+              <span style={{ fontSize: 12.5, fontWeight: 700, background: "rgba(255,255,255,0.16)", padding: "6px 11px", borderRadius: 999, whiteSpace: "nowrap" }}>
+                보완 추천 {position!.gaps.length}개
+              </span>
+            )}
           </div>
-          <div style={{ paddingBottom: 6, flex: 1, minWidth: 0 }}>
-            {/* 상위 N% 랭크는 백엔드가 주지 않아 예시 화면에서만 표시한다. */}
-            {isDemo && <div style={{ fontSize: 13, fontWeight: 700 }}>상위 {READINESS_RANK}</div>}
-            {/* 비교 문구는 폴백 상황("BACKEND 합격자 데이터가 부족해, 직무 구분 없이…")에서
-                꽤 길어진다 — nowrap+maxWidth로 두면 뒷부분이 잘려 문장이 중간에 끊긴다.
-                줄바꿈을 허용하고, 한국어가 어절 중간에서 끊기지 않게 keep-all을 쓴다. */}
-            <div style={{ fontSize: 12, opacity: 0.85, lineHeight: 1.45, wordBreak: "keep-all", overflowWrap: "anywhere" }}>
-              {recLoading ? "분석 중이에요" : readinessSubtitle}
-            </div>
-          </div>
-        </div>
-        <div style={{ marginTop: 14, height: 7, borderRadius: 999, background: "rgba(255,255,255,0.24)", overflow: "hidden" }}>
-          <div
-            style={{
-              height: "100%",
-              borderRadius: 999,
-              background: "#fff",
-              width: `${hasReadiness && !recLoading ? readinessScore : 0}%`,
-              transformOrigin: "left",
-              animation: "cfGrow .7s cubic-bezier(.2,.8,.2,1) both",
-            }}
-          />
+        ) : (
+          <div style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, letterSpacing: "-0.03em" }}>–</div>
+        )}
+        {/* 비교 문구는 폴백 상황("BACKEND 합격자 데이터가 부족해, 직무 구분 없이…")에서
+            꽤 길어진다 — 줄바꿈을 허용하고, 한국어가 어절 중간에서 끊기지 않게 keep-all을 쓴다. */}
+        <div style={{ marginTop: 10, fontSize: 12, opacity: 0.85, lineHeight: 1.45, wordBreak: "keep-all", overflowWrap: "anywhere" }}>
+          {recLoading ? "분석 중이에요" : positionSubtitle}
         </div>
       </div>
 

@@ -6,8 +6,8 @@ import com.career.recommendation.dto.recommendation.RecommendationResponse;
 import com.career.recommendation.dto.roadmap.RoadmapResponse;
 import com.career.recommendation.dto.roadmap.RoadmapResponse.MatchedActivity;
 import com.career.recommendation.dto.roadmap.RoadmapResponse.TimelineStep;
+import com.career.recommendation.dto.position.SpecPositionResult;
 import com.career.recommendation.entity.Activity;
-import com.career.recommendation.entity.PasserData;
 import com.career.recommendation.entity.TargetJob;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.entity.UserSpec;
@@ -19,7 +19,6 @@ import com.career.recommendation.repository.UserSpecRepository;
 import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.util.PromptDataBuilder;
-import com.career.recommendation.util.SimilarSpecFinder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,7 +52,7 @@ public class RoadmapService {
     private final UserSpecRepository userSpecRepository;
     private final TargetJobRepository targetJobRepository;
     private final ActivityRepository activityRepository;
-    private final SimilarSpecFinder similarSpecFinder;
+    private final SpecPositionService specPositionService;
     private final RecommendationRepository recommendationRepository;
     private final RoadmapCacheRepository roadmapCacheRepository;
     private final RoadmapCacheService roadmapCacheService;
@@ -127,14 +126,11 @@ public class RoadmapService {
         String targetJobStr = promptDataBuilder.buildTargetJobString(targetJob);
         Integer grade       = (userSpec != null) ? userSpec.getGrade() : null;
 
-        // 1. 유사 합격자 케이스 조회 (F-03과 맥락 통일)
+        // 1. 합격자 비교 데이터(직무 요구 프로필 내 위치·갭) 계산 — F-03과 같은 진입점
+        // (SpecPositionService)을 써서 추천과 로드맵이 같은 갭을 보고 말하게 한다.
         String jobType = (targetJob != null) ? targetJob.getJobType() : null;
-        List<PasserData> similarPassers = similarSpecFinder.find(
-                jobType,
-                (userSpec != null) ? userSpec.getGpa() : null,
-                (userSpec != null) ? userSpec.getGpaMax() : null
-        );
-        String similarCasesStr = promptDataBuilder.buildSimilarCasesText(similarPassers);
+        SpecPositionResult position = specPositionService.calculate(userSpec, jobType);
+        String positionContextStr = promptDataBuilder.buildPositionContextText(position);
 
         // 2. F-03 맞춤 추천 결과 조회 (DB 캐시만 참조하여 Gemini 중복 API 호출 방지)
         //
@@ -174,7 +170,7 @@ public class RoadmapService {
 
         // 4. Gemini API 호출 (최대 2회 시도)
         RoadmapResponse response = callGeminiWithRetry(userSpecJson, targetJobStr, grade,
-                similarCasesStr, topRecommendedJson, availableActivitiesJson, activeActivities, today);
+                positionContextStr, topRecommendedJson, availableActivitiesJson, activeActivities, today);
 
         if (response.isAiRoadmap()) {
             roadmapCacheService.save(user, response);
@@ -184,14 +180,14 @@ public class RoadmapService {
     }
 
     private RoadmapResponse callGeminiWithRetry(String userSpecJson, String targetJobStr, Integer grade,
-                                                 String similarCasesStr, String topRecommendedJson,
+                                                 String positionContextStr, String topRecommendedJson,
                                                  String availableActivitiesJson, List<Activity> activeActivities,
                                                  LocalDate today) {
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
                 String rawJson = geminiService.generateRoadmap(
                         userSpecJson, targetJobStr, grade,
-                        similarCasesStr, topRecommendedJson, availableActivitiesJson, today);
+                        positionContextStr, topRecommendedJson, availableActivitiesJson, today);
                 if (rawJson == null || rawJson.isBlank()) {
                     log.warn("Gemini 로드맵 응답 비어있음 (시도 {}회)", attempt);
                 } else {

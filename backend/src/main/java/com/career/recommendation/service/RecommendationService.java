@@ -2,10 +2,10 @@ package com.career.recommendation.service;
 
 import com.career.recommendation.dto.gemini.GeminiRecommendationResult;
 import com.career.recommendation.dto.gemini.GeminiRecommendationResult.GeminiActivity;
+import com.career.recommendation.dto.position.SpecPositionResult;
 import com.career.recommendation.dto.recommendation.RecommendationResponse;
 import com.career.recommendation.dto.recommendation.RecommendationResponse.ActivityRecommendation;
 import com.career.recommendation.entity.Activity;
-import com.career.recommendation.entity.PasserData;
 import com.career.recommendation.entity.Recommendation;
 import com.career.recommendation.entity.TargetJob;
 import com.career.recommendation.entity.User;
@@ -14,10 +14,8 @@ import com.career.recommendation.repository.ActivityRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
-import com.career.recommendation.util.MatchScoreCalculator;
 import com.career.recommendation.util.PromptDataBuilder;
-import com.career.recommendation.dto.recommendation.MatchScoreResult;
-import com.career.recommendation.util.SimilarSpecFinder;
+import com.career.recommendation.util.SpecPositionCalculator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,11 +29,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /**
  * BE-1 담당 — F-03 활동 추천 비즈니스 로직.
+ *
+ * 비교 계산: 직무 요구 프로필(JobSpecProfileService) 안에서의 percentile 위치·갭
+ * (SpecPositionCalculator). 예전의 "유사 합격자 Top 5 검색 + 가중 총점" 체계를 대체했다.
  *
  * 캐시 전략: 유저당 1건, 스펙 변경 시 즉시 갱신 (하루 최대 3회).
  * Gemini 실패 처리: 1회 재시도(2초 백오프) → 2회 연속 실패 시 Fallback 데이터 반환 + isAiRecommendation=false.
@@ -51,9 +51,7 @@ public class RecommendationService {
     private final RecommendationRepository recommendationRepository;
     private final RecommendationCacheService recommendationCacheService;
     private final ActivityRepository activityRepository;
-    private final GlobalCertPoolService globalCertPoolService;
-    private final SimilarSpecFinder similarSpecFinder;
-    private final MatchScoreCalculator matchScoreCalculator;
+    private final SpecPositionService specPositionService;
     private final GeminiService geminiService;
     private final PromptDataBuilder promptDataBuilder;
     private final ObjectMapper objectMapper;
@@ -64,8 +62,7 @@ public class RecommendationService {
     /**
      * 현재 로그인한 유저의 맞춤 추천 활동 목록을 반환한다.
      * 유효한 캐시가 있으면 DB에서 즉시 반환한다.
-     */
-    /**
+     *
      * 트랜잭션 없이 전체 흐름을 오케스트레이션한다.
      * DB 조회는 각 리포지토리 메서드의 기본 트랜잭션에 의존하고,
      * Gemini API 호출은 트랜잭션 바깥에서 수행하여 DB 커넥션을 점유하지 않는다.
@@ -89,10 +86,13 @@ public class RecommendationService {
             cachedResponse = deserialize(cached.getResultJson());
             boolean isSpecChanged = isSpecModifiedSince(userSpec, targetJob, cached.getCreatedAt());
             boolean hasUsableActivities = hasUsableCachedActivities(cachedResponse, today);
+            // v8 이하(구 점수 체계 — matchScore·compareRows) 캐시는 specPosition이 없어
+            // 전부 legacy로 잡힌다. 버전만으로도 충분하지만 specPosition null 체크를 함께 둬,
+            // 버전 필드만 살아있고 본문이 깨진 캐시도 재생성 대상이 되게 한다.
             boolean isLegacyCache = cachedResponse == null
-                    || cachedResponse.getSampleComparisonData() == null
+                    || cachedResponse.getSpecPosition() == null
                     || cachedResponse.getScoreFormulaVersion() == null
-                    || cachedResponse.getScoreFormulaVersion() < MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION;
+                    || cachedResponse.getScoreFormulaVersion() < SpecPositionCalculator.CURRENT_SCORE_FORMULA_VERSION;
 
             // ⚠️ isLegacyCache는 예전엔 이 하루 제한 체크를 건너뛰고 무조건 needsNewAiCall=true였다
             // ("한 번만 재생성하니 괜찮다"는 의도). 그런데 폴백 응답은 저장되지 않으므로
@@ -131,27 +131,20 @@ public class RecommendationService {
 
         if (!needsNewAiCall && cachedResponse != null) {
             // ⚠️ 재생성이 필요했는데(스펙 변경·legacy·만료 활동) 하루 한도에 막혀 캐시를 주는
-            // 경우, 예전엔 캐시를 "통째로" 반환해 matchScore·compareRows까지 옛 스펙 기준
-            // 값이 그대로 나갔다. 프로필에는 새 스펙이 보이는데(user_specs는 즉시 저장됨)
-            // 비교 탭 "나" 막대는 옛 학점을 보여줘, 사용자가 "수정이 안 된다"고 인지했다
-            // (2026-08-11 실제 제보). 점수·비교표·미인식 자격증은 Gemini와 무관한 로컬
-            // 계산(MatchScoreCalculator)이므로, 하루 한도는 Gemini 호출(활동 목록 재생성)에만
-            // 적용하고 이 부분은 현재 스펙으로 새로 계산해서 준다. dailyLimitReached
-            // 플래그로 FE가 "활동 목록은 내일 갱신" 안내를 띄울 수 있게 한다.
+            // 경우, 위치·갭은 Gemini와 무관한 로컬 계산이므로 현재 스펙으로 새로 계산해서 준다.
+            // 캐시를 통째로 반환하면 프로필에는 새 스펙이 보이는데(user_specs는 즉시 저장됨)
+            // 비교 탭 "나" 값은 옛 스펙을 보여줘, 사용자가 "수정이 안 된다"고 인지한다
+            // (2026-08-11 실제 제보). 하루 한도는 Gemini 호출(활동 목록 재생성)에만 적용한다.
+            // dailyLimitReached 플래그로 FE가 "활동 목록은 내일 갱신" 안내를 띄울 수 있게 한다.
             if (wantsRefresh) {
-                return rebuildComparisonFromCurrentSpec(cachedResponse, userSpec, targetJob);
+                return rebuildPositionFromCurrentSpec(cachedResponse, userSpec, targetJob);
             }
             return cachedResponse;
         }
 
-        // 3. 유사 합격자 검색 (SimilarSpecFinder)
+        // 3. 직무 요구 프로필 조회(캐시됨) 및 위치·갭 계산 — 로드맵과 같은 진입점을 쓴다.
         String jobType = (targetJob != null) ? targetJob.getJobType() : null;
-        List<PasserData> similarPassers = similarSpecFinder.find(
-                jobType,
-                (userSpec != null) ? userSpec.getGpa() : null,
-                (userSpec != null) ? userSpec.getGpaMax() : null
-        );
-        String comparisonMessage = similarSpecFinder.buildComparisonMessage(similarPassers, jobType);
+        SpecPositionResult position = specPositionService.calculate(userSpec, jobType);
 
         // 4. 현재 신청 가능한 DB 활동 조회 (RAG 패턴 — Gemini에 선택지 제공)
         List<Activity> activeActivities = activityRepository.findRecommendableActivities(
@@ -160,24 +153,15 @@ public class RecommendationService {
         );
         String availableActivitiesJson = promptDataBuilder.buildAvailableActivitiesJson(activeActivities);
 
-        // 5. Gemini API 호출 (최대 2회 시도)
+        // 5. Gemini API 호출 (최대 2회 시도) — 프롬프트에도 화면과 같은 위치·갭 데이터를 준다.
         String userSpecJson = promptDataBuilder.serializeSpecForRecommendation(userSpec);
         String targetJobStr = promptDataBuilder.buildTargetJobString(targetJob);
-        String similarCasesStr = promptDataBuilder.buildSimilarCasesText(similarPassers);
-
-        // 자격증 2층 인식(MatchScoreCalculator)에 쓸 전역 자격증 풀.
-        // GlobalCertPoolService가 Caffeine 캐시로 1시간 유지하므로 매 요청마다 DB 전체 스캔하지 않는다.
-        Set<String> globalCertPool = globalCertPoolService.getGlobalCertPool();
-
-        // 자격증 가중치를 유도할 목표 직무 합격자 전원의 자격증(직무별로 캐시됨).
-        // 직무가 없으면 빈 목록을 받아 MatchScoreCalculator가 기존 큐레이션 표로 폴백하게 한다.
-        List<String[]> jobPasserCertRows = globalCertPoolService.getJobPasserCertRows(jobType);
+        String positionContext = promptDataBuilder.buildPositionContextText(position);
 
         RecommendationResponse response = callGeminiWithRetry(
-                userSpecJson, targetJobStr, similarCasesStr, availableActivitiesJson,
-                userSpec, similarPassers, comparisonMessage, activeActivities,
-                targetJob != null ? targetJob.getJobType() : "미설정", similarPassers.size(),
-                globalCertPool, jobPasserCertRows, today
+                userSpecJson, targetJobStr, positionContext, availableActivitiesJson,
+                position, activeActivities,
+                jobType != null ? jobType : "미설정", today
         );
 
         // 6. 결과 캐싱 (일일 제한 카운트 증가) — 별도 Bean에서 호출
@@ -189,34 +173,21 @@ public class RecommendationService {
     }
 
     /**
-     * 캐시된 활동 목록은 유지하되, 점수·비교표·미인식 자격증 등 로컬에서 결정적으로 계산되는
-     * 부분만 현재 스펙 기준으로 다시 계산해 돌려준다. 하루 갱신 한도에 막혀 Gemini 재호출은
-     * 못 하는 상황에서, 최소한 사용자가 방금 바꾼 스펙이 점수에는 즉시 반영되게 하기 위한
-     * 경로다. toBuilder 결과는 반환 전용이며 캐시에 저장하지 않는다(저장하면 dailyLimitReached가
+     * 캐시된 활동 목록은 유지하되, 위치·갭 등 로컬에서 결정적으로 계산되는 부분만 현재 스펙
+     * 기준으로 다시 계산해 돌려준다. 하루 갱신 한도에 막혀 Gemini 재호출은 못 하는 상황에서,
+     * 최소한 사용자가 방금 바꾼 스펙이 비교 탭에는 즉시 반영되게 하기 위한 경로다.
+     * toBuilder 결과는 반환 전용이며 캐시에 저장하지 않는다(저장하면 dailyLimitReached가
      * 캐시에 박제됨 — DTO 주석 참고).
      */
-    private RecommendationResponse rebuildComparisonFromCurrentSpec(
+    private RecommendationResponse rebuildPositionFromCurrentSpec(
             RecommendationResponse cachedResponse, UserSpec userSpec, TargetJob targetJob) {
         String jobType = (targetJob != null) ? targetJob.getJobType() : null;
-        List<PasserData> similarPassers = similarSpecFinder.find(
-                jobType,
-                (userSpec != null) ? userSpec.getGpa() : null,
-                (userSpec != null) ? userSpec.getGpaMax() : null
-        );
-        Set<String> globalCertPool = globalCertPoolService.getGlobalCertPool();
-        List<String[]> jobPasserCertRows = globalCertPoolService.getJobPasserCertRows(jobType);
-        MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers, globalCertPool, jobPasserCertRows);
+        SpecPositionResult position = specPositionService.calculate(userSpec, jobType);
 
         return cachedResponse.toBuilder()
-                .matchScore(matchResult.getTotalScore())
-                .compareRows(matchResult.getCompareRows())
-                .unrecognizedCertifications(matchResult.getUnrecognizedCertifications())
-                .recognizedCertificationCount(matchResult.getRecognizedCertificationCount())
-                .comparisonMessage(similarSpecFinder.buildComparisonMessage(similarPassers, jobType))
+                .specPosition(position)
                 .targetJobName(jobType != null ? jobType : "미설정")
-                .similarPasserCount(similarPassers.size())
-                .sampleComparisonData(containsSampleOrUnclassifiedData(similarPassers))
-                .scoreFormulaVersion(MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION)
+                .scoreFormulaVersion(SpecPositionCalculator.CURRENT_SCORE_FORMULA_VERSION)
                 .dailyLimitReached(true)
                 .build();
     }
@@ -245,19 +216,17 @@ public class RecommendationService {
      * Gemini API를 호출하고 JSON 파싱을 시도한다. 실패 시 1회 재시도 후 Fallback 반환.
      */
     private RecommendationResponse callGeminiWithRetry(
-            String userSpecJson, String targetJobStr, String similarCasesStr, String availableActivitiesJson,
-            UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage,
-            List<Activity> activeActivities, String targetJobName, int similarPasserCount,
-            Set<String> globalCertPool, List<String[]> jobPasserCertRows, LocalDate today) {
+            String userSpecJson, String targetJobStr, String positionContext, String availableActivitiesJson,
+            SpecPositionResult position, List<Activity> activeActivities,
+            String targetJobName, LocalDate today) {
 
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
                 String rawJson = geminiService.generateRecommendation(
-                        userSpecJson, targetJobStr, similarCasesStr, availableActivitiesJson, today);
+                        userSpecJson, targetJobStr, positionContext, availableActivitiesJson, today);
                 if (rawJson != null && !rawJson.isBlank()) {
                     RecommendationResponse res = parseGeminiResponse(
-                            rawJson, userSpec, similarPassers, comparisonMessage, activeActivities,
-                            targetJobName, similarPasserCount, globalCertPool, jobPasserCertRows);
+                            rawJson, position, activeActivities, targetJobName);
                     if (res != null) return res;
                 }
             } catch (Exception e) {
@@ -270,7 +239,7 @@ public class RecommendationService {
 
         // 최종 실패 시 Fallback 반환
         log.error("Gemini 추천 생성 모두 실패. DB 활동 기반 기본 추천 반환.");
-        return buildFallbackResponse(activeActivities, userSpec, similarPassers, comparisonMessage, targetJobName, similarPasserCount, globalCertPool, jobPasserCertRows);
+        return buildFallbackResponse(activeActivities, position, targetJobName);
     }
 
     /**
@@ -280,14 +249,12 @@ public class RecommendationService {
      * 곧바로 isAiRecommendation()을 호출하므로, null을 주면 추천 API 전체가 NPE로 500이 된다.
      * 추천 가능한 활동이 0건인 상황(전 활동 마감·비활성화, 크롤링 중단 등)은 장애가 아니라
      * 정상적으로 발생할 수 있는 상태이므로, 활동 목록만 비운 응답을 만든다.
-     * 점수·비교표·미인식 자격증 고지는 활동 유무와 무관하게 계산되므로 그대로 내려보낸다
+     * 위치·갭(specPosition)은 활동 유무와 무관하게 계산되므로 그대로 내려보낸다
      * (화면은 활동 0건을 "아직 추천할 활동이 없어요"로 이미 처리한다).
      */
-    private RecommendationResponse buildFallbackResponse(List<Activity> activeActivities, UserSpec userSpec, List<PasserData> similarPassers, String comparisonMessage, String targetJobName, int similarPasserCount, Set<String> globalCertPool, List<String[]> jobPasserCertRows) {
+    private RecommendationResponse buildFallbackResponse(List<Activity> activeActivities,
+                                                         SpecPositionResult position, String targetJobName) {
         List<Activity> safeActivities = (activeActivities != null) ? activeActivities : List.of();
-
-        MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers, globalCertPool, jobPasserCertRows);
-        boolean sampleComparisonData = containsSampleOrUnclassifiedData(similarPassers);
 
         List<ActivityRecommendation> recs = new ArrayList<>();
         int count = Math.min(3, safeActivities.size());
@@ -297,8 +264,8 @@ public class RecommendationService {
                     .id(a.getId())
                     .type(a.getType())
                     .name(a.getName())
-                    .reason(a.getDescription() != null && !a.getDescription().isBlank() 
-                            ? "[AI 응답 지연 임시 추천] " + a.getDescription() 
+                    .reason(a.getDescription() != null && !a.getDescription().isBlank()
+                            ? "[AI 응답 지연 임시 추천] " + a.getDescription()
                             : "[AI 응답 지연 임시 추천] 사용자의 목표 직무 및 학점 스펙 기반 DB 맞춤 추천 활동입니다.")
                     .deadline(a.getDeadline())
                     .build());
@@ -306,28 +273,21 @@ public class RecommendationService {
 
         return RecommendationResponse.builder()
                 .activities(recs)
-                .matchScore(matchResult.getTotalScore())
-                .compareRows(matchResult.getCompareRows())
-                .unrecognizedCertifications(matchResult.getUnrecognizedCertifications())
-                .recognizedCertificationCount(matchResult.getRecognizedCertificationCount())
+                .specPosition(position)
                 .targetJobName(targetJobName)
-                .similarPasserCount(similarPasserCount)
-                .comparisonMessage(comparisonMessage)
                 .aiRecommendation(false)
-                .sampleComparisonData(sampleComparisonData)
-                .scoreFormulaVersion(MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION)
+                .scoreFormulaVersion(SpecPositionCalculator.CURRENT_SCORE_FORMULA_VERSION)
                 .build();
     }
 
     /**
      * Gemini 응답 JSON을 RecommendationResponse DTO로 변환한다.
      * 타입 안전한 GeminiRecommendationResult DTO로 파싱하고,
-     * DB에 실재하는 활동만 포함하며, matchScore를 주입한다.
+     * DB에 실재하는 활동만 포함하며, specPosition을 주입한다.
      */
     private RecommendationResponse parseGeminiResponse(
-            String rawJson, UserSpec userSpec, List<PasserData> similarPassers,
-            String comparisonMessage, List<Activity> activeActivities,
-            String targetJobName, int similarPasserCount, Set<String> globalCertPool, List<String[]> jobPasserCertRows) throws Exception {
+            String rawJson, SpecPositionResult position,
+            List<Activity> activeActivities, String targetJobName) throws Exception {
 
         // DB 활동을 UUID → Activity Map으로 변환 (빠른 검증용)
         Map<UUID, Activity> activityMap = new HashMap<>();
@@ -335,13 +295,9 @@ public class RecommendationService {
             activityMap.put(a.getId(), a);
         }
 
-        // 타입 안전한 DTO로 파싱 (개선 #5)
         GeminiRecommendationResult geminiResult = objectMapper.readValue(rawJson, GeminiRecommendationResult.class);
 
         if (geminiResult.getActivities() == null || geminiResult.getActivities().isEmpty()) return null;
-
-        MatchScoreResult matchResult = matchScoreCalculator.calculate(userSpec, similarPassers, globalCertPool, jobPasserCertRows);
-        boolean sampleComparisonData = containsSampleOrUnclassifiedData(similarPassers);
 
         List<ActivityRecommendation> result = new ArrayList<>();
         for (GeminiActivity a : geminiResult.getActivities()) {
@@ -375,24 +331,11 @@ public class RecommendationService {
 
         return RecommendationResponse.builder()
                 .activities(result)
-                .matchScore(matchResult.getTotalScore())
-                .compareRows(matchResult.getCompareRows())
-                .unrecognizedCertifications(matchResult.getUnrecognizedCertifications())
-                .recognizedCertificationCount(matchResult.getRecognizedCertificationCount())
+                .specPosition(position)
                 .targetJobName(targetJobName)
-                .similarPasserCount(similarPasserCount)
-                .comparisonMessage(comparisonMessage)
                 .aiRecommendation(true)
-                .sampleComparisonData(sampleComparisonData)
-                .scoreFormulaVersion(MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION)
+                .scoreFormulaVersion(SpecPositionCalculator.CURRENT_SCORE_FORMULA_VERSION)
                 .build();
-    }
-
-    private boolean containsSampleOrUnclassifiedData(List<PasserData> similarPassers) {
-        return similarPassers != null && similarPassers.stream()
-                .anyMatch(passer -> passer.getDataOrigin() == null
-                        || "DEMO".equalsIgnoreCase(passer.getDataOrigin())
-                        || "UNKNOWN".equalsIgnoreCase(passer.getDataOrigin()));
     }
 
     private RecommendationResponse deserialize(String json) {

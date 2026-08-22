@@ -9,7 +9,6 @@ import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
 import com.career.recommendation.util.PromptDataBuilder;
-import com.career.recommendation.util.SimilarSpecFinder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,7 +45,7 @@ class RoadmapServiceEmptyStepsTest {
     @Mock private UserSpecRepository userSpecRepository;
     @Mock private TargetJobRepository targetJobRepository;
     @Mock private ActivityRepository activityRepository;
-    @Mock private SimilarSpecFinder similarSpecFinder;
+    @Mock private SpecPositionService specPositionService;
     @Mock private RecommendationRepository recommendationRepository;
     @Mock private RoadmapCacheRepository roadmapCacheRepository;
     @Mock private RoadmapCacheService roadmapCacheService;
@@ -67,12 +66,11 @@ class RoadmapServiceEmptyStepsTest {
         when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
         when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
         when(recommendationRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
-        when(similarSpecFinder.find(any(), any(), any())).thenReturn(List.of());
         when(activityRepository.findRecommendableActivities(any(), any())).thenReturn(List.of());
 
         when(promptDataBuilder.serializeSpecForRoadmap(any())).thenReturn("{}");
         when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
-        when(promptDataBuilder.buildSimilarCasesText(any())).thenReturn("");
+        when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
         when(promptDataBuilder.buildAvailableActivitiesJson(any())).thenReturn("[]");
 
         // 형태만 있고 알맹이는 없는 응답 — period/priority/activity/reason/activityIds 전부 없음.
@@ -114,12 +112,11 @@ class RoadmapServiceEmptyStepsTest {
         when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
         when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
         when(recommendationRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
-        when(similarSpecFinder.find(any(), any(), any())).thenReturn(List.of());
         when(activityRepository.findRecommendableActivities(any(), any())).thenReturn(List.of());
 
         when(promptDataBuilder.serializeSpecForRoadmap(any())).thenReturn("{}");
         when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
-        when(promptDataBuilder.buildSimilarCasesText(any())).thenReturn("");
+        when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
         when(promptDataBuilder.buildAvailableActivitiesJson(any())).thenReturn("[]");
 
         // priority만 빠지고 나머지(period·activity·reason)는 전부 정상인, 실제로 흔히
@@ -150,12 +147,11 @@ class RoadmapServiceEmptyStepsTest {
         when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
         when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
         when(recommendationRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
-        when(similarSpecFinder.find(any(), any(), any())).thenReturn(List.of());
         when(activityRepository.findRecommendableActivities(any(), any())).thenReturn(List.of());
 
         when(promptDataBuilder.serializeSpecForRoadmap(any())).thenReturn("{}");
         when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
-        when(promptDataBuilder.buildSimilarCasesText(any())).thenReturn("");
+        when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
         when(promptDataBuilder.buildAvailableActivitiesJson(any())).thenReturn("[]");
 
         when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any()))
@@ -222,7 +218,6 @@ class RoadmapServiceEmptyStepsTest {
         when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
         when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
         when(recommendationRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
-        when(similarSpecFinder.find(any(), any(), any())).thenReturn(List.of());
 
         List<Activity> activities = new java.util.ArrayList<>();
         for (int i = 0; i < 9; i++) {
@@ -238,7 +233,7 @@ class RoadmapServiceEmptyStepsTest {
 
         when(promptDataBuilder.serializeSpecForRoadmap(any())).thenReturn("{}");
         when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
-        when(promptDataBuilder.buildSimilarCasesText(any())).thenReturn("");
+        when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
         when(promptDataBuilder.buildAvailableActivitiesJson(any())).thenReturn("[]");
 
         // Gemini 응답이 계속 비어 있어 폴백 경로로 떨어지게 한다.
