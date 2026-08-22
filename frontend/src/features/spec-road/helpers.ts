@@ -127,7 +127,7 @@ export function activityTypeLabel(type: string): string {
 
 // GET /recommendations 응답을 화면 추천 카드 모델로 변환한다.
 // 백엔드는 개별 활동 점수·기관·태그·bullets를 주지 않으므로 해당 필드는 비워 둔다
-// (Recommendation에서 optional). 점수는 응답 최상단 matchScore 하나로 통일됐다.
+// (Recommendation에서 optional). 위치·갭 요약은 응답 최상단 specPosition 하나로 온다.
 export function fromRecommendationsResponse(res: RecommendationsResponse): Recommendation[] {
   return res.activities.map((a) => ({
     id: a.id,
@@ -140,15 +140,9 @@ export function fromRecommendationsResponse(res: RecommendationsResponse): Recom
 
 export function toRecommendationMeta(res: RecommendationsResponse): RecommendationMeta {
   return {
-    matchScore: res.matchScore,
-    comparisonMessage: res.comparisonMessage,
+    specPosition: res.specPosition ?? null,
     isAiRecommendation: res.aiRecommendation ?? res.isAiRecommendation ?? false,
     targetJobName: res.targetJobName,
-    similarPasserCount: res.similarPasserCount,
-    compareRows: res.compareRows,
-    sampleComparisonData: res.sampleComparisonData ?? false,
-    unrecognizedCertifications: res.unrecognizedCertifications,
-    recognizedCertificationCount: res.recognizedCertificationCount,
     dailyLimitReached: res.dailyLimitReached ?? false,
   };
 }

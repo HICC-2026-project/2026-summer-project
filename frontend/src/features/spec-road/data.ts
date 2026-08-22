@@ -1,4 +1,4 @@
-import type { CompareRow, JobCode, Recommendation, RoadmapMilestone } from "./types";
+import type { JobCode, Recommendation, RoadmapMilestone, SpecPosition } from "./types";
 
 export const PRIMARY = "#2F6FED";
 
@@ -136,12 +136,26 @@ export const ROADMAP: RoadmapMilestone[] = [
   },
 ];
 
-export const COMPARE_ROWS: CompareRow[] = [
-  { label: "학점", weight: "30%", myVal: "3.8", avgVal: "3.6", myPct: 84, avgPct: 80, status: "충족" },
-  { label: "어학 (TOEIC)", weight: "25%", myVal: "850", avgVal: "885", myPct: 86, avgPct: 89, status: "부족" },
-  { label: "자격증", weight: "20%", myVal: "2개", avgVal: "1.4개", myPct: 67, avgPct: 47, status: "충족" },
-  { label: "경험", weight: "25%", myVal: "2건", avgVal: "3.1건", myPct: 40, avgPct: 62, status: "부족" },
-];
+// 비로그인 둘러보기용 위치·갭 예시. 실 API의 specPosition과 같은 모양이라
+// 화면 컴포넌트가 데모/실데이터를 같은 경로로 그린다.
+export const DEMO_SPEC_POSITION: SpecPosition = {
+  basis: "JOB",
+  basisMessage: "BACKEND 합격자 24명의 분포와 비교한 결과입니다.",
+  sampleSize: 24,
+  demoDataIncluded: false,
+  axes: [
+    { axis: "GPA", label: "학점", myValue: "3.80/4.5", medianValue: "3.60/4.5", percentile: 72, coverage: 24 },
+    { axis: "LANGUAGE", label: "어학 성적", myValue: "환산 850", medianValue: "환산 885", percentile: 41, coverage: 21 },
+    { axis: "CERTIFICATION", label: "자격증", myValue: "2개", medianValue: "1.0개", percentile: 78, coverage: 24 },
+    { axis: "EXPERIENCE", label: "경험", myValue: "미입력", medianValue: "3.0개", percentile: null, coverage: 18 },
+  ],
+  gaps: [
+    { name: "정보처리기사", holderRatePercent: 71 },
+    { name: "SQLD", holderRatePercent: 46 },
+  ],
+  matchedCertifications: ["ADsP", "리눅스마스터 2급"],
+  unmatchedCertifications: [],
+};
 
 // 백엔드가 허용하는 직무 코드(TargetJobRequest @Pattern)와 화면 라벨 쌍.
 // 7/14 회의 결정에 따라 기존 "SW 개발"을 프론트엔드·백엔드로 분리했다.
@@ -181,11 +195,6 @@ export const OPIC_GRADES = ["NL", "NM", "NH", "IL", "IM1", "IM2", "IM3", "IH", "
 // (D-day 기준일 상수 TODAY는 제거됐다 — 모듈 로드 시 한 번 고정되는 값이라, 탭을 자정
 // 넘겨 열어두면 "오늘"이 과거에 박제된 채 모든 D-day가 부풀었다. helpers.ts가 호출마다
 // 오늘 자정을 새로 계산한다.)
-export const COMPARE_TARGET = "삼성 청년 SW 아카데미";
-export const PASSER_COUNT = 24;
-export const READINESS = 78;
-export const READINESS_RANK = "18%";
-export const COMPARE_SCORE = 82;
 // 예시 화면(비로그인 미리보기)에서 쓰는 익명 표기.
 // 실명을 넣으면 남의 계정처럼 보이므로 자리표시자를 쓴다.
 export const DEMO_USER_NAME = "○○○";

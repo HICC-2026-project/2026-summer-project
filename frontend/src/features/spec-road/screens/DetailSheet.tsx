@@ -42,17 +42,17 @@ export function DetailSheet({ recommendationId, recommendations, recMeta, onClos
   if (!rec) return null;
 
   // 개별 활동 점수(score)는 목업(둘러보기)에만 있다.
-  // 실 API는 응답 최상단 matchScore(종합 준비도) 하나만 주는데, 그 값을 이 자리에 넣으면
+  // 실 API는 활동별 점수를 주지 않는다(위치·갭 요약뿐). 응답 최상단 값을 이 자리에 넣으면
   // 어떤 활동을 열어도 같은 숫자가 떠서 "이 활동과의 매치도"로 오해하게 된다. 그래서 숨긴다.
   const activityScore = rec.score ?? null;
   const scoreDeg = (activityScore ?? 0) * 3.6;
   // 상세 근거: 목업은 bullets 배열, 실 API는 단일 reason 문자열을 준다.
   const bullets = rec.bullets && rec.bullets.length > 0 ? rec.bullets : [rec.reason];
-  // 비교 안내 문구: 목업은 유사 합격자 수, 실 API는 comparisonMessage.
+  // 비교 안내 문구: 목업은 유사 합격자 수, 실 API는 specPosition의 비교 기준 문구.
   const matchSubtitle =
     rec.passers != null
       ? `유사 합격자 ${rec.passers}명의 스펙과 비교한 결과예요.`
-      : (recMeta?.comparisonMessage ?? "나와 잘 맞는 활동이에요.");
+      : (recMeta?.specPosition?.basisMessage ?? "나와 잘 맞는 활동이에요.");
 
   // 주최·태그·지원 링크는 목업(둘러보기)과 활동 상세 중 있는 쪽을 쓴다.
   const organization = rec.org ?? activityDetail?.organization ?? null;

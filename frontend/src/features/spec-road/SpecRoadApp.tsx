@@ -92,7 +92,7 @@ export function SpecRoadApp() {
   const dataRequested = useRef(false);
 
   // 추천 목록 상태. 로그인 유저는 실 API(GET /recommendations)로 채우고,
-  // 둘러보기(비로그인)는 목업으로 채운다. meta는 응답 최상단 요약(matchScore 등).
+  // 둘러보기(비로그인)는 목업으로 채운다. meta는 응답 최상단 요약(specPosition 등).
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [recMeta, setRecMeta] = useState<RecommendationMeta | null>(null);
   const [recLoading, setRecLoading] = useState(false);

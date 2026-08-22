@@ -78,7 +78,7 @@ export interface Target {
 // 화면에서 쓰는 추천 카드 모델.
 // id·type·name·reason·deadline은 백엔드 GET /recommendations가 항상 주는 값이고,
 // org·score·passers·tags·bullets는 목업(둘러보기)에만 있는 값이라 optional로 둔다.
-// (백엔드는 개별 활동 점수 대신 응답 최상단 matchScore 하나만 반환 — RecommendationMeta 참고)
+// (백엔드는 개별 활동 점수를 주지 않는다 — 위치·갭 요약은 RecommendationMeta.specPosition 참고)
 export interface Recommendation {
   id: string | number;
   type: string;
@@ -102,8 +102,39 @@ export interface ApiRecommendationItem {
   deadline: string;
 }
 
+// specPosition의 축 하나 — 합격자 분포 내 내 위치.
+// percentile이 null이면 "미입력"이다(최하위 0과 다른 상태 — 백엔드가 의도적으로 구분).
+export interface AxisPosition {
+  axis: "GPA" | "LANGUAGE" | "CERTIFICATION" | "EXPERIENCE" | string;
+  label: string;
+  myValue: string;
+  medianValue: string;
+  percentile: number | null;
+  coverage: number;
+}
+
+// 갭: 이 직무 합격자 다수가 보유하지만 나에게 없는 자격증. 보유율 내림차순으로 온다.
+export interface SpecGap {
+  name: string;
+  holderRatePercent: number;
+}
+
+// GET /api/v1/recommendations의 specPosition — 합격자 분포 내 위치·갭 계산 결과.
+// 예전의 matchScore(가중 총점)·compareRows(충족/부족 행)·comparisonMessage·
+// similarPasserCount·unrecognizedCertifications를 전부 이 객체가 대체한다.
+export interface SpecPosition {
+  // JOB(목표 직무 프로필) | OVERALL(전체 합격자 폴백) | NONE(데이터 부족)
+  basis: "JOB" | "OVERALL" | "NONE" | string;
+  basisMessage: string;
+  sampleSize: number;
+  demoDataIncluded?: boolean;
+  axes: AxisPosition[];
+  gaps: SpecGap[];
+  matchedCertifications?: string[];
+  unmatchedCertifications?: string[];
+}
+
 // GET /api/v1/recommendations 전체 응답.
-// matchScore는 개별 활동이 아닌 응답 최상단의 단일 점수(0~100).
 //
 // AI 추천 여부 플래그는 두 이름을 모두 받는다.
 // 백엔드 DTO 필드는 isAiRecommendation이지만 Jackson이 boolean의 is 접두사를 떼고
@@ -111,34 +142,20 @@ export interface ApiRecommendationItem {
 // 백엔드가 @JsonProperty로 이름을 되돌려도 화면이 깨지지 않도록 둘 다 optional로 둔다.
 export interface RecommendationsResponse {
   activities: ApiRecommendationItem[];
-  matchScore: number;
+  specPosition?: SpecPosition;
   targetJobName?: string;
-  similarPasserCount?: number;
-  compareRows?: CompareRow[];
-  sampleComparisonData?: boolean;
-  comparisonMessage: string;
   aiRecommendation?: boolean;
   isAiRecommendation?: boolean;
-  unrecognizedCertifications?: string[];
-  // 백엔드가 인식한 자격증 개수 (canonical 기준 — 비교 탭 자격증 행과 같은 집계).
-  // 홈 카드는 이 값을 그대로 써야 비교 탭과 항상 일치한다. 옛 캐시엔 없어 optional.
-  recognizedCertificationCount?: number;
   // 스펙이 바뀌었지만 하루 갱신 한도(3회)에 막혀 캐시된 활동 목록을 반환한 경우 true.
-  // 점수·비교표는 새 스펙 기준으로 재계산돼 오지만 활동 목록은 어제 것일 수 있다.
+  // 위치·갭은 새 스펙 기준으로 재계산돼 오지만 활동 목록은 어제 것일 수 있다.
   dailyLimitReached?: boolean;
 }
 
 // 추천 목록과 함께 화면 상단에 표시할 요약 정보(응답 최상단 필드에서 추출).
 export interface RecommendationMeta {
-  matchScore: number;
-  comparisonMessage: string;
+  specPosition: SpecPosition | null;
   isAiRecommendation: boolean;
   targetJobName?: string;
-  similarPasserCount?: number;
-  compareRows?: CompareRow[];
-  sampleComparisonData: boolean;
-  unrecognizedCertifications?: string[];
-  recognizedCertificationCount?: number;
   dailyLimitReached: boolean;
 }
 
@@ -195,14 +212,4 @@ export interface ActivityDetailResponse {
   deadline: string;
   tags: string[] | null;
   url: string | null;
-}
-
-export interface CompareRow {
-  label: string;
-  weight: string;
-  myVal: string;
-  avgVal: string;
-  myPct: number;
-  avgPct: number;
-  status: "충족" | "부족";
 }
