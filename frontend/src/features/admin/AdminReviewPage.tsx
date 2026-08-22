@@ -1,18 +1,20 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { ApiError } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
-import { BADGE, PRIMARY } from "@/features/spec-road/data";
+import { BADGE, JOB_OPTIONS, PRIMARY } from "@/features/spec-road/data";
 import { StateMessage } from "@/features/spec-road/components/StateMessage";
 import {
   fetchProofObjectUrl,
   getAdminReports,
+  getOpsSummary,
   reviewReport,
   type AdminPasserReport,
   type PageResponse,
   type ReviewAction,
+  type OpsSummary,
   type ReviewStatus,
 } from "./api";
 
@@ -124,6 +126,7 @@ export function AdminReviewPage() {
       </header>
 
       <main style={{ maxWidth: 1080, margin: "0 auto", padding: "20px 24px 60px" }}>
+        {!error && <OpsStrip reloadKey={reloadKey} />}
         <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
           {STATUS_TABS.map((t) => {
             const active = t.key === status;
@@ -316,5 +319,49 @@ function PageButton({ label, disabled, onClick }: { label: string; disabled: boo
     >
       {label}
     </button>
+  );
+}
+
+/** 운영 요약 띠 — 검수할 게 있는지, 어느 직무가 표본 부족인지, Gemini가 살아 있는지를 목록 위에서 한눈에. */
+function OpsStrip({ reloadKey }: { reloadKey: number }) {
+  const [ops, setOps] = useState<OpsSummary | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getOpsSummary()
+      .then((s) => {
+        if (!cancelled) setOps(s);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  if (!ops) return null;
+  const failurePct = Math.round(ops.gemini.failureRate * 100);
+  const geminiColor = failurePct >= 30 ? BADGE.bad : failurePct >= 10 ? BADGE.warn : BADGE.ok;
+  const label = (code: string) => JOB_OPTIONS.find((o) => o.code === code)?.label ?? code;
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14, fontSize: 12.5 }}>
+      <Chip color={ops.pendingReports > 0 ? BADGE.warn : BADGE.ok}>검수 대기 {ops.pendingReports}건</Chip>
+      {Object.entries(ops.comparablePassersByJob).map(([code, n]) => (
+        <Chip key={code} color={n < ops.minSampleSize ? BADGE.bad : BADGE.muted}>
+          {label(code)} {n}명{n < ops.minSampleSize ? " · 표본 부족" : ""}
+        </Chip>
+      ))}
+      <Chip color={geminiColor}>
+        Gemini 오늘 {ops.gemini.usedToday}/{ops.gemini.dailyLimit || "∞"} · 실패율 {failurePct}% · 평균 {Math.round(ops.gemini.avgLatencyMs / 100) / 10}s
+      </Chip>
+    </div>
+  );
+}
+
+function Chip({ color, children }: { color: { color: string; bg: string }; children: ReactNode }) {
+  return (
+    <span style={{ color: color.color, background: color.bg, padding: "5px 10px", borderRadius: 999, fontWeight: 700, whiteSpace: "nowrap" }}>
+      {children}
+    </span>
   );
 }

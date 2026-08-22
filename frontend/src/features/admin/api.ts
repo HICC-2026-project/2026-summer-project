@@ -54,3 +54,24 @@ export async function fetchProofObjectUrl(reportId: string): Promise<string | nu
     return null;
   }
 }
+
+// 운영 요약 — 검수 대기 수, 직무별 비교 가능 합격자 수, Gemini 사용량/실패율.
+export interface OpsSummary {
+  pendingReports: number;
+  comparablePassersByJob: Record<string, number>;
+  minSampleSize: number;
+  gemini: {
+    usedToday: number;
+    dailyLimit: number;
+    success: number;
+    failure: number;
+    failureRate: number;
+    avgLatencyMs: number;
+    maxLatencyMs: number;
+    lastFailureEpochMs: number | null;
+  };
+}
+
+export function getOpsSummary(): Promise<OpsSummary> {
+  return apiFetch<OpsSummary>("/api/v1/admin/ops/summary");
+}
