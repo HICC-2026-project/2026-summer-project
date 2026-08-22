@@ -233,13 +233,18 @@ DB_PASSWORD=...
 FRONTEND_REDIRECT_URI=...
 CORS_ALLOWED_ORIGINS=...
 PASSER_PROOF_STORAGE_PATH=...
+ADMIN_PROVIDER_IDS=KAKAO:<회원번호>,...   # 제보 검수 관리자. 로그인 시 역할 동기화
+GEMINI_DAILY_LIMIT=500                    # Gemini 서비스 전역 일일 호출 상한
+AI_DAILY_ATTEMPTS_PER_USER=3              # 사용자별 하루 Gemini 호출 시도 상한(추천·로드맵 각각)
+GEMINI_API_KEY_IN_HEADER=true             # x-goog-api-key 헤더 사용(false면 ?key= 쿼리)
+PASSER_PROOF_RETENTION_DAYS=30            # 검수 완료 후 증빙 보관 일수
 ```
 
 ## 9. 현재 운영 범위와 주의사항
 
 - 합격자 데모 데이터는 발표와 기능 검증을 위해 만든 가상 데이터입니다.
 - 사용자 제보 데이터는 검수 전 추천과 비교에 사용하지 않습니다.
-- 합격자 제보의 관리자 승인·반려 화면과 전용 검수 API는 아직 구현되지 않았습니다.
-- 증빙 이미지는 현재 로컬 파일 시스템에 저장되며 컨테이너 재배포 시 보존이 보장되지 않습니다.
-- Gemini 실패 시 서비스 중단 대신 DB 활동 기반 기본 추천과 기본 로드맵을 반환합니다.
-- 실제 운영 전 HTTPS, 운영용 JWT 비밀키, 비공개 증빙 저장소와 관리자 검수 기능을 적용해야 합니다.
+- 합격자 제보 검수는 `/admin` 화면과 `/api/v1/admin/passers/reports` API로 한다. 관리자는 `ADMIN_PROVIDER_IDS`로 지정하며 재로그인 시 반영된다.
+- 증빙 이미지는 현재 로컬 파일 시스템에 저장되며 컨테이너 재배포 시 보존이 보장되지 않습니다. 검수 완료 후 `PASSER_PROOF_RETENTION_DAYS`가 지나면 자동 삭제된다.
+- Gemini 실패·일일 상한 도달 시 서비스 중단 대신 갭 키워드·직무 태그로 순위를 매긴 DB 활동 폴백 추천과 기본 로드맵을 반환한다. 상태는 `GET /api/v1/admin/ops/summary`에서 본다.
+- 실제 운영 전 HTTPS, 운영용 JWT 비밀키, 비공개 증빙 저장소(S3)를 적용해야 한다. 배포는 `/actuator/health` 실패 시 이전 커밋으로 자동 롤백된다.
