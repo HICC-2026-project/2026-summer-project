@@ -31,6 +31,7 @@ class ProofRetentionSchedulerTest {
                 .reviewedAt(LocalDateTime.now().minusDays(40)).isVerified(true).build();
         LocalDateTime before = LocalDateTime.now().minusDays(30);
         when(passerDataRepository.findReviewedWithProofBefore(before)).thenReturn(List.of(report));
+        when(proofStorageService.deleteQuietly("old.png")).thenReturn(true);
 
         int purged = scheduler.purgeReviewedBefore(before);
 
@@ -42,6 +43,19 @@ class ProofRetentionSchedulerTest {
         assertThat(report.getProofContentType()).isNull();
         assertThat(report.getProofFileSize()).isNull();
         assertThat(report.getIsVerified()).isTrue();
+    }
+
+    @Test
+    void 파일_삭제에_실패하면_메타를_비우지_않아_고아_파일이_생기지_않는다() {
+        PasserData report = PasserData.builder().id(UUID.randomUUID()).proofStoredName("stuck.png")
+                .reviewedAt(LocalDateTime.now().minusDays(40)).build();
+        when(passerDataRepository.findReviewedWithProofBefore(any())).thenReturn(List.of(report));
+        when(proofStorageService.deleteQuietly("stuck.png")).thenReturn(false);
+
+        int purged = scheduler.purgeReviewedBefore(LocalDateTime.now());
+
+        assertThat(purged).isZero();
+        assertThat(report.getProofStoredName()).isEqualTo("stuck.png");
     }
 
     @Test

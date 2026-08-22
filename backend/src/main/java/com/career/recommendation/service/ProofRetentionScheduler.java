@@ -47,7 +47,10 @@ public class ProofRetentionScheduler {
         List<PasserData> expired = passerDataRepository.findReviewedWithProofBefore(before);
         int purged = 0;
         for (PasserData report : expired) {
-            proofStorageService.deleteQuietly(report.getProofStoredName());
+            if (!proofStorageService.deleteQuietly(report.getProofStoredName())) {
+                log.warn("증빙 파일 삭제 실패 — 다음 실행에서 재시도: reportId={}", report.getId());
+                continue;
+            }
             report.setProofStoredName(null);
             report.setProofOriginalName(null);
             report.setProofContentType(null);

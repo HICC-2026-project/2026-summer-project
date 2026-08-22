@@ -59,17 +59,23 @@ public class LocalProofStorageService {
         }
     }
 
-    public void deleteQuietly(String storedName) {
+    /**
+     * 파일을 지운다. 예외를 던지지 않는다 — DB 저장 실패 뒤의 보상 동작에서 원래 예외를 가리지 않기 위함.
+     * @return 파일이 지워졌거나 원래 없었으면 true, IO 오류/경로 이상으로 남아 있으면 false
+     *         (ProofRetentionScheduler는 false면 DB 메타를 비우지 않아 고아 파일이 생기지 않게 한다)
+     */
+    public boolean deleteQuietly(String storedName) {
         if (storedName == null || storedName.isBlank()) {
-            return;
+            return true;
         }
 
         try {
             Path target = storageRoot.resolve(storedName).normalize();
             ensureInsideStorageRoot(target);
             Files.deleteIfExists(target);
-        } catch (IOException | RuntimeException ignored) {
-            // DB 저장 실패 뒤 정리하는 보상 동작이다. 원래 예외를 가리지 않도록 무시한다.
+            return true;
+        } catch (IOException | RuntimeException e) {
+            return false;
         }
     }
 
