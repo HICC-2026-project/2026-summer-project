@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -27,6 +28,8 @@ public class GeminiDailyQuota {
     private final int dailyLimit;
     private final AtomicReference<LocalDate> day = new AtomicReference<>();
     private final AtomicInteger used = new AtomicInteger();
+    /** 상한 도달 경고를 하루 한 번만 남기기 위한 플래그. 날짜가 바뀌면 리셋. */
+    private final AtomicBoolean limitLogged = new AtomicBoolean();
 
     public GeminiDailyQuota(@Value("${gemini.api.daily-limit:500}") int dailyLimit) {
         this.dailyLimit = dailyLimit;
@@ -38,15 +41,15 @@ public class GeminiDailyQuota {
             return true;
         }
         rollDayIfNeeded(LocalDate.now(ServiceTime.ZONE_ID));
-        int next = used.incrementAndGet();
-        if (next > dailyLimit) {
-            used.decrementAndGet();
-            if (next == dailyLimit + 1) {
-                log.warn("Gemini 일일 호출 상한({})에 도달 — 이후 요청은 폴백 추천으로 처리합니다.", dailyLimit);
-            }
-            return false;
+        // 증가 후 되돌리는 방식은 경합 시 카운터가 잠깐 상한을 넘고 경고가 여러 번 찍힌다 — CAS 한 번으로 "상한 미만일 때만 +1".
+        int before = used.getAndUpdate(n -> n < dailyLimit ? n + 1 : n);
+        if (before < dailyLimit) {
+            return true;
         }
-        return true;
+        if (limitLogged.compareAndSet(false, true)) {
+            log.warn("Gemini 일일 호출 상한({})에 도달 — 이후 요청은 폴백 추천으로 처리합니다.", dailyLimit);
+        }
+        return false;
     }
 
     public int usedToday() {
@@ -58,6 +61,7 @@ public class GeminiDailyQuota {
         LocalDate current = day.get();
         if (!today.equals(current) && day.compareAndSet(current, today)) {
             used.set(0);
+            limitLogged.set(false);
         }
     }
 }
