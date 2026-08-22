@@ -95,7 +95,7 @@ public class ActivityController {
             job = JobType.from(jobType).orElseThrow(() -> new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "jobType은 " + Arrays.toString(JobType.values()) + " 중 하나여야 합니다."));
         }
-        if (keyword != null && !keyword.isBlank() && (keyword.trim().length() < 2 || keyword.length() > 50)) {
+        if (keyword != null && !keyword.isBlank() && (keyword.trim().length() < 2 || keyword.trim().length() > 50)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "keyword는 2~50자여야 합니다.");
         }
         ActivityService.ActivityFilter filter = new ActivityService.ActivityFilter(type, job, deadlineAfter, keyword);

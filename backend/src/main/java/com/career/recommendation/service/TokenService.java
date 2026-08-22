@@ -35,7 +35,11 @@ public class TokenService {
         return new TokenPair(accessToken, refreshToken);
     }
 
-    @Transactional
+    // ⚠️ noRollbackFor가 없으면 InvalidTokenException(RuntimeException)에 트랜잭션이 롤백돼, 재사용 감지 시의
+    // 전체 세션 폐기와 만료 토큰 삭제가 DB에 남지 않는다 — 예외는 클라이언트에 401을 주기 위한 것이지
+    // 방어 동작을 취소하라는 뜻이 아니다. (클래스 레벨 @Transactional 테스트는 테스트 트랜잭션에 합류해
+    // 이 롤백을 보지 못하므로, TokenServiceReuseTest는 트랜잭션 없이 실제 커밋으로 검증한다.)
+    @Transactional(noRollbackFor = InvalidTokenException.class)
     public TokenPair reissue(String refreshToken) {
         if (!jwtTokenProvider.validateToken(refreshToken) || !jwtTokenProvider.isRefreshToken(refreshToken)) {
             // refresh_tokens 테이블 조회(DB 존재 여부)가 이미 액세스 토큰을 걸러내긴 하지만
