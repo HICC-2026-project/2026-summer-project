@@ -112,4 +112,26 @@ public interface PasserDataRepository extends JpaRepository<PasserData, UUID> {
               AND p.jobType = :jobType
             """)
     List<String[]> findCertificationArraysByJobType(@Param("jobType") String jobType);
+
+    /**
+     * 특정 직무의 비교 가능(검증 완료 또는 DEMO) 합격자 전원을 조회한다.
+     * JobSpecProfileService가 직무 요구 프로필(분포·보유율)을 집계하는 데 쓴다.
+     * Top N이 아니라 전원을 보는 이유는 findCertificationArraysByJobType과 같다 —
+     * 프로필은 사용자 스펙과 무관하게 데이터가 바뀔 때만 변하는 집계값이어야 한다.
+     */
+    @Query("""
+            SELECT p
+            FROM PasserData p
+            WHERE (p.isVerified = true OR p.dataOrigin = 'DEMO')
+              AND p.jobType = :jobType
+            """)
+    List<PasserData> findAllComparableByJobType(@Param("jobType") String jobType);
+
+    /** 직무 구분 없는 비교 가능 합격자 전원. 직무 표본 부족 시의 전체 프로필 폴백용. */
+    @Query("""
+            SELECT p
+            FROM PasserData p
+            WHERE (p.isVerified = true OR p.dataOrigin = 'DEMO')
+            """)
+    List<PasserData> findAllComparable();
 }

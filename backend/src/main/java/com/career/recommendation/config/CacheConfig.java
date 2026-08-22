@@ -18,9 +18,11 @@ public class CacheConfig {
 
     @Bean
     public CacheManager cacheManager() {
-        // jobCertRows: 목표 직무별 합격자 자격증 원본(자격증 가중치 유도용). 직무 코드 수(6개)보다
-        // 넉넉하게 잡아 캐시 미스로 인한 재조회가 생기지 않게 한다.
-        CaffeineCacheManager manager = new CaffeineCacheManager("globalCertPool", "jobCertRows");
+        // jobCertRows: 목표 직무별 합격자 자격증 원본(자격증 가중치 유도용).
+        // jobSpecProfile: 직무별 요구 프로필(분포·보유율 집계 — 새 위치·갭 계산 체계).
+        // 직무 코드 수(6개)보다 넉넉하게 잡아 캐시 미스로 인한 재조회가 생기지 않게 한다.
+        CaffeineCacheManager manager = new CaffeineCacheManager(
+                "globalCertPool", "jobCertRows", "jobSpecProfile", "overallSpecProfile");
         manager.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(Duration.ofHours(1))   // 1시간마다 자동 갱신
                 .maximumSize(20));
