@@ -32,7 +32,7 @@ class SpecPositionCalculatorTest {
 
         assertThat(result.getBasis()).isEqualTo("JOB");
         assertThat(result.getSampleSize()).isEqualTo(3);
-        assertThat(result.getBasisMessage()).contains("BACKEND", "3명");
+        assertThat(result.getBasisMessage()).contains("백엔드", "3명");
     }
 
     @Test
@@ -46,7 +46,7 @@ class SpecPositionCalculatorTest {
         SpecPositionResult result = calculator.calculate(user("3.80", 850), job, () -> overall);
 
         assertThat(result.getBasis()).isEqualTo("OVERALL");
-        assertThat(result.getBasisMessage()).contains("BACKEND", "부족", "전체 합격자 3명");
+        assertThat(result.getBasisMessage()).contains("백엔드", "부족", "전체 합격자 3명");
     }
 
     @Test

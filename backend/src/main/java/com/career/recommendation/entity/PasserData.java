@@ -25,7 +25,7 @@ public class PasserData {
     private Activity activity;
 
     @Column(name = "job_type")
-    private String jobType;   // BACKEND | FRONTEND | AI_ML | DATA_ENGINEER | PM | SECURITY
+    private String jobType;   // JobType enum의 name() — 정의는 domain.JobType 한 곳에서만
 
     private Integer year;
 

@@ -41,6 +41,7 @@ public class SecurityConfig {
     private static final String[] PUBLIC_URLS = {
             "/api/v1/auth/**",
             "/api/v1/activities/**",
+            "/api/v1/jobs",
             "/oauth2/**",
             "/login/oauth2/**",
             "/swagger-ui.html",   // 진입 URL — /swagger-ui/** 패턴에 안 걸리므로 별도 등록 필요

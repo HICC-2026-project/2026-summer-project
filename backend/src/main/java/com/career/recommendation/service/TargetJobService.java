@@ -1,5 +1,6 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.domain.JobType;
 import com.career.recommendation.dto.user.TargetJobRequest;
 import com.career.recommendation.dto.user.TargetJobResponse;
 import com.career.recommendation.entity.TargetJob;
@@ -41,6 +42,9 @@ public class TargetJobService {
             TargetJobRequest request
     ) {
         User user = currentUserService.getCurrentUser(authentication);
+        // validator가 공백·소문자를 관대하게 받으므로 DB에는 항상 정규 코드(enum name)로 저장한다.
+        // 그래야 hasChanges 비교와 jobSpecProfile 캐시 키("backend" vs "BACKEND")가 어긋나지 않는다.
+        request.setJobType(JobType.of(request.getJobType()).name());
         TargetJob savedTargetJob = upsert(user, request);
         return TargetJobResponse.from(savedTargetJob);
     }

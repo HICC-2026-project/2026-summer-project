@@ -140,7 +140,7 @@ export const ROADMAP: RoadmapMilestone[] = [
 // 화면 컴포넌트가 데모/실데이터를 같은 경로로 그린다.
 export const DEMO_SPEC_POSITION: SpecPosition = {
   basis: "JOB",
-  basisMessage: "BACKEND 합격자 24명의 분포와 비교한 결과입니다.",
+  basisMessage: "백엔드 합격자 24명의 분포와 비교한 결과입니다.",
   sampleSize: 24,
   demoDataIncluded: false,
   axes: [

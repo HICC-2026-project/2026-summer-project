@@ -54,4 +54,20 @@ class TargetJobRequestValidationTest {
 
         assertThat(validator.validate(request)).isNotEmpty();
     }
+
+    @Test
+    void 소문자_직무코드는_허용한다_서비스가_정규화한다() {
+        TargetJobRequest request = new TargetJobRequest();
+        request.setJobType("backend");
+
+        assertThat(validator.validate(request)).isEmpty();
+    }
+
+    @Test
+    void 레거시_별칭은_거절한다() {
+        TargetJobRequest request = new TargetJobRequest();
+        request.setJobType("BE");
+
+        assertThat(validator.validate(request)).isNotEmpty();
+    }
 }

@@ -1,5 +1,6 @@
 package com.career.recommendation.util;
 
+import com.career.recommendation.domain.JobType;
 import com.career.recommendation.dto.position.JobSpecProfile;
 import com.career.recommendation.dto.position.JobSpecProfile.CertStat;
 import com.career.recommendation.dto.position.SpecPositionResult;
@@ -128,7 +129,7 @@ public class SpecPositionCalculator {
     private String basisMessage(String basis, JobSpecProfile jobProfile, JobSpecProfile used) {
         if (BASIS_JOB.equals(basis)) {
             return String.format("%s 합격자 %d명의 분포와 비교한 결과입니다.",
-                    used.getJobType(), used.getSampleSize());
+                    JobType.labelOf(used.getJobType()), used.getSampleSize());
         }
         // 전체 폴백 — 원인(직무 미설정 vs 직무 데이터 부족)을 구분해 정직하게 말한다.
         // 예전 buildComparisonMessage가 폴백 사실을 숨기고 직무명을 단언하던 문제의 재발 방지.
@@ -138,7 +139,7 @@ public class SpecPositionCalculator {
                     used.getSampleSize());
         }
         return String.format("%s 합격자 데이터가 부족해, 직무 구분 없이 전체 합격자 %d명의 분포와 비교한 결과입니다.",
-                jobType, used.getSampleSize());
+                JobType.labelOf(jobType), used.getSampleSize());
     }
 
     /**

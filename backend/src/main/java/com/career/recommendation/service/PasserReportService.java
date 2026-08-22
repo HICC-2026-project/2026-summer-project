@@ -1,5 +1,6 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.domain.JobType;
 import com.career.recommendation.dto.passer.PasserReportRequest;
 import com.career.recommendation.dto.passer.PasserReportResponse;
 import com.career.recommendation.dto.user.LanguageScoreRequest;
@@ -13,7 +14,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -41,7 +41,7 @@ public class PasserReportService {
 
         PasserData report = PasserData.builder()
                 .activity(null)
-                .jobType(request.getJobType().trim().toUpperCase(Locale.ROOT))
+                .jobType(JobType.of(request.getJobType()).name())
                 .year(request.getYear())
                 .gpa(request.getGpa())
                 .gpaMax(request.getGpaMax())
