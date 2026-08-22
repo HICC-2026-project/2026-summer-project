@@ -85,7 +85,7 @@ public class JobSpecProfileBuilder {
         // DEMO·출처 미상 데이터 포함 여부 — dataOrigin null도 미상으로 본다(기존
         // containsSampleOrUnclassifiedData 판정 계승).
         boolean containsDemoData = valid.stream().anyMatch(p -> p.getDataOrigin() == null
-                || "DEMO".equalsIgnoreCase(p.getDataOrigin())
+                || PasserData.ORIGIN_DEMO.equalsIgnoreCase(p.getDataOrigin())
                 || "UNKNOWN".equalsIgnoreCase(p.getDataOrigin()));
 
         return JobSpecProfile.builder()

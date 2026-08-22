@@ -1,5 +1,6 @@
 package com.career.recommendation.security;
 
+import com.career.recommendation.entity.User;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -23,8 +24,8 @@ import java.util.stream.Collectors;
 @Component
 public class AdminAccountPolicy {
 
-    public static final String ROLE_ADMIN = "ADMIN";
-    public static final String ROLE_USER = "USER";
+    public static final String ROLE_ADMIN = User.ROLE_ADMIN;
+    public static final String ROLE_USER = User.ROLE_USER;
 
     private final Set<String> adminKeys;
 
@@ -41,7 +42,7 @@ public class AdminAccountPolicy {
         }
     }
 
-    public boolean isAdmin(String provider, String providerId) {
+    private boolean isAdmin(String provider, String providerId) {
         if (provider == null || providerId == null) {
             return false;
         }

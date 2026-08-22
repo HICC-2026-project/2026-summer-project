@@ -39,17 +39,20 @@ export interface PasserReportRequest {
 
 export interface PasserReportResponse {
   reportId: string;
-  status: "PENDING";
+  status: ReviewStatus;
   message: string;
 }
 
 // GET /passers/reports/me — 내가 제보한 합격자 데이터의 검수 상태.
+// 합격자 제보 검수 상태 — 백엔드 domain.ReviewStatus와 같은 세 값.
+export type ReviewStatus = "PENDING" | "VERIFIED" | "REJECTED";
+
 export interface MyPasserReport {
   reportId: string;
   jobType: string;
   jobTypeLabel: string;
   year: number;
-  status: "PENDING" | "VERIFIED" | string;
+  status: ReviewStatus;
   createdAt: string;
 }
 
@@ -73,7 +76,7 @@ export interface UserMeResponse {
   email: string | null;
   nickname: string | null;
   provider: string;
-  role?: "USER" | "ADMIN" | string;
+  role?: "USER" | "ADMIN";
   spec: UserSpecResponse | null;
   target: TargetJobResponse | null;
 }

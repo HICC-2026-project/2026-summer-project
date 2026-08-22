@@ -30,7 +30,7 @@ public class AdminPasserReportResponse {
     private List<Map<String, Object>> languageScores;
     private List<String> certifications;
     private Integer experienceCount;
-    /** PENDING | VERIFIED | REJECTED */
+    /** ReviewStatus.name() */
     private String status;
     private Proof proof;
     private LocalDateTime createdAt;
@@ -56,7 +56,7 @@ public class AdminPasserReportResponse {
                 .languageScores(p.getLanguageScores() != null ? p.getLanguageScores() : List.of())
                 .certifications(p.getCertifications() != null ? Arrays.asList(p.getCertifications()) : List.of())
                 .experienceCount(p.getExperienceCount())
-                .status(p.reviewStatus())
+                .status(p.reviewStatus().name())
                 .proof(p.getProofStoredName() == null ? null : Proof.builder()
                         .originalName(p.getProofOriginalName())
                         .contentType(p.getProofContentType())

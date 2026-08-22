@@ -1,5 +1,6 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.util.ServiceTime;
 import com.career.recommendation.dto.activity.ActivityResponse;
 import com.career.recommendation.entity.Activity;
 import com.career.recommendation.exception.ActivityNotFoundException;
@@ -19,7 +20,7 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class ActivityService {
 
-    private static final ZoneId SERVICE_ZONE_ID = ZoneId.of("Asia/Seoul");
+    private static final ZoneId SERVICE_ZONE_ID = ServiceTime.ZONE_ID;
 
     private final ActivityRepository activityRepository;
 

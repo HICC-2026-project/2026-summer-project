@@ -1,5 +1,6 @@
 package com.career.recommendation.controller;
 
+import com.career.recommendation.domain.ReviewStatus;
 import com.career.recommendation.dto.admin.AdminPasserReportResponse;
 import com.career.recommendation.dto.admin.PasserReviewRequest;
 import com.career.recommendation.service.AdminPasserReportService;
@@ -11,7 +12,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -39,19 +41,15 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminPasserReportController {
 
-    private static final int MAX_PAGE_SIZE = 50;
-
     private final AdminPasserReportService adminPasserReportService;
 
-    @Operation(summary = "제보 목록", description = "status=PENDING(기본)|VERIFIED|REJECTED. 사용자 제보(USER_REPORT)만 대상.")
+    @Operation(summary = "제보 목록", description = "status=PENDING(기본)|VERIFIED|REJECTED, page·size 쿼리. 사용자 제보(USER_REPORT)만 대상. 페이지 크기 상한은 spring.data.web.pageable.max-page-size.")
     @GetMapping
     public Page<AdminPasserReportResponse> list(
-            @Parameter(description = "PENDING | VERIFIED | REJECTED") @RequestParam(defaultValue = "PENDING") String status,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @Parameter(description = "PENDING | VERIFIED | REJECTED") @RequestParam(defaultValue = "PENDING") ReviewStatus status,
+            @PageableDefault(size = 20) Pageable pageable
     ) {
-        int boundedSize = Math.max(1, Math.min(size, MAX_PAGE_SIZE));
-        return adminPasserReportService.list(status, PageRequest.of(Math.max(0, page), boundedSize));
+        return adminPasserReportService.list(status, pageable);
     }
 
     @Operation(summary = "제보 상세")

@@ -1,6 +1,7 @@
 "use client";
 
-import { DEMO_SPEC_POSITION, PRIMARY } from "../../data";
+import type { ReactNode } from "react";
+import { BADGE, DEMO_SPEC_POSITION, PRIMARY } from "../../data";
 import type { AxisPosition, RecommendationMeta, SpecPosition } from "../../types";
 import { percentileLabel } from "../../helpers";
 import { StateMessage } from "../../components/StateMessage";
@@ -26,41 +27,7 @@ export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabPr
   // 수치는 basisMessage를 파싱하지 않고 백엔드 명시 필드(jobSampleSize/minSampleSize)로 만든다.
   const needsMoreData = !isDemo && position != null && position.basis !== "JOB";
   const reportCta = needsMoreData && onOpenPasserReport && (
-    <div
-      style={{
-        marginTop: 14,
-        padding: "16px 18px",
-        border: `1px solid color-mix(in srgb, ${PRIMARY} 24%, #E1E0EA)`,
-        borderRadius: 16,
-        background: `color-mix(in srgb, ${PRIMARY} 6%, #fff)`,
-      }}
-    >
-      <div style={{ fontSize: 14, fontWeight: 800, color: "#15141B", marginBottom: 4 }}>
-        {position.targetJobLabel
-          ? `${position.targetJobLabel} 합격자 데이터가 ${position.jobSampleSize ?? 0}명뿐이에요`
-          : "합격자 데이터가 더 필요해요"}
-      </div>
-      <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#61616C", lineHeight: 1.55, wordBreak: "keep-all" }}>
-        {position.minSampleSize ?? 3}명부터 직무별 비교가 가능해요. 합격 경험이 있다면 익명으로 제보해 주세요 — 검수 후 바로 비교에 반영돼요.
-      </p>
-      <button
-        type="button"
-        onClick={onOpenPasserReport}
-        style={{
-          width: "100%",
-          height: 46,
-          border: "none",
-          borderRadius: 13,
-          background: PRIMARY,
-          color: "#fff",
-          fontSize: 14,
-          fontWeight: 700,
-          cursor: "pointer",
-        }}
-      >
-        합격자 스펙 제보하기
-      </button>
-    </div>
+    <ReportCta position={position} onOpenPasserReport={onOpenPasserReport} />
   );
 
   // 미매칭 자격증 고지는 비교 가능 여부와 무관한 정보다. 비교할 합격자가 없어
@@ -86,47 +53,30 @@ export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabPr
     </div>
   );
 
+  // 세 상태(로딩 / 데이터 부족 / 비교 결과)가 같은 헤더·푸터(제보 CTA, 미매칭 고지)를 공유한다.
   // 데이터 로딩 중 (비로그인 아님 & API 아직 안 옴)
   if (!isDemo && !recMeta) {
     return (
-      <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
-        <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 6px", color: "#15141B" }}>합격자 분포 속 내 위치</h1>
-        <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 20px", lineHeight: 1.55 }}>
-          내 스펙이 익명 합격자 분포의 어디쯤인지, 뭘 보완하면 좋을지 보여드려요.
-        </p>
-        <StateMessage
-          title="비교 결과를 준비하고 있어요"
-          description="합격자 분포 데이터를 불러오는 중입니다..."
-        />
-      </div>
+      <Shell>
+        <StateMessage title="비교 결과를 준비하고 있어요" description="합격자 분포 데이터를 불러오는 중입니다..." />
+      </Shell>
     );
   }
 
   // 합격자 데이터 부족 (또는 에러)
   if (!position || position.basis === "NONE") {
     return (
-      <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
-        <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 6px", color: "#15141B" }}>합격자 분포 속 내 위치</h1>
-        <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 20px", lineHeight: 1.55 }}>
-          내 스펙이 익명 합격자 분포의 어디쯤인지, 뭘 보완하면 좋을지 보여드려요.
-        </p>
+      <Shell footer={<>{reportCta}{unmatchedBanner}</>}>
         <StateMessage
           title="비교 가능한 데이터가 부족해요"
           description="비교에 필요한 합격자 데이터가 아직 부족하여 분석 결과를 제공해 드릴 수 없어요."
         />
-        {reportCta}
-        {unmatchedBanner}
-      </div>
+      </Shell>
     );
   }
 
   return (
-    <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
-      <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 6px", color: "#15141B" }}>합격자 분포 속 내 위치</h1>
-      <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 20px", lineHeight: 1.55 }}>
-        내 스펙이 익명 합격자 분포의 어디쯤인지, 뭘 보완하면 좋을지 보여드려요.
-      </p>
-
+    <Shell footer={<>{reportCta}{unmatchedBanner}</>}>
       {position.demoDataIncluded && (
         <div
           style={{
@@ -167,8 +117,7 @@ export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabPr
       <div style={{ background: "#fff", border: "1px solid #EDEDF2", borderRadius: 22, padding: "8px 20px", marginBottom: 14 }}>
         {position.axes.map((a: AxisPosition, i: number) => {
           const hasValue = a.percentile != null;
-          const badgeColor = hasValue ? (a.percentile! >= 50 ? "#12A150" : "#E5484D") : "#9797A1";
-          const badgeBg = hasValue ? (a.percentile! >= 50 ? "#E7F6EE" : "#FCECEC") : "#F1F0F6";
+          const badge = hasValue ? (a.percentile! >= 50 ? BADGE.ok : BADGE.bad) : BADGE.muted;
           const divider = i === position.axes.length - 1 ? "transparent" : "#F1F0F6";
 
           return (
@@ -179,7 +128,7 @@ export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabPr
                   {/* 이 축 데이터를 가진 합격자 수 — 표본이 작으면 사용자가 감안할 수 있게 표기 */}
                   <span style={{ fontSize: 11, fontWeight: 600, color: "#B0B0BA" }}>합격자 {a.coverage}명 기준</span>
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: badgeColor, background: badgeBg, padding: "4px 10px", borderRadius: 999 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: badge.color, background: badge.bg, padding: "4px 10px", borderRadius: 999 }}>
                   {percentileLabel(a.percentile)}
                 </span>
               </div>
@@ -236,7 +185,7 @@ export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabPr
           // 띄우면 자격증이 하나도 없는 사용자에게 "모두 갖췄다"고 말하는 오답이 된다 —
           // 매칭 보유가 하나라도 있을 때만 칭찬하고, 아니면 사실대로 말한다.
           matchedCerts.length > 0 ? (
-            <div style={{ fontSize: 13, color: "#12A150", fontWeight: 700 }}>
+            <div style={{ fontSize: 13, color: BADGE.ok.color, fontWeight: 700 }}>
               합격자 다수가 보유한 자격증을 모두 갖췄어요 👏
             </div>
           ) : (
@@ -259,13 +208,55 @@ export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabPr
         )}
         {matchedCerts.length > 0 && (
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F1F0F6", fontSize: 12.5, color: "#61616C", lineHeight: 1.6 }}>
-            <b style={{ color: "#12A150" }}>이미 보유 ✓</b> {matchedCerts.join(", ")}
+            <b style={{ color: BADGE.ok.color }}>이미 보유 ✓</b> {matchedCerts.join(", ")}
           </div>
         )}
       </div>
+    </Shell>
+  );
+}
 
-      {reportCta}
-      {unmatchedBanner}
+/** 탭 공통 틀: 제목·설명 + 본문 + (선택) 푸터. */
+function Shell({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
+  return (
+    <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
+      <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 6px", color: "#15141B" }}>합격자 분포 속 내 위치</h1>
+      <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 20px", lineHeight: 1.55 }}>
+        내 스펙이 익명 합격자 분포의 어디쯤인지, 뭘 보완하면 좋을지 보여드려요.
+      </p>
+      {children}
+      {footer}
+    </div>
+  );
+}
+
+/** 직무 표본 부족 시 제보 유도. 수치는 백엔드 명시 필드(jobSampleSize/minSampleSize)로만 만든다. */
+function ReportCta({ position, onOpenPasserReport }: { position: SpecPosition; onOpenPasserReport: () => void }) {
+  return (
+    <div
+      style={{
+        marginTop: 14,
+        padding: "16px 18px",
+        border: `1px solid color-mix(in srgb, ${PRIMARY} 24%, #E1E0EA)`,
+        borderRadius: 16,
+        background: `color-mix(in srgb, ${PRIMARY} 6%, #fff)`,
+      }}
+    >
+      <div style={{ fontSize: 14, fontWeight: 800, color: "#15141B", marginBottom: 4 }}>
+        {position.targetJobLabel
+          ? `${position.targetJobLabel} 합격자 데이터가 ${position.jobSampleSize ?? 0}명뿐이에요`
+          : "합격자 데이터가 더 필요해요"}
+      </div>
+      <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#61616C", lineHeight: 1.55, wordBreak: "keep-all" }}>
+        {position.minSampleSize ?? 3}명부터 직무별 비교가 가능해요. 합격 경험이 있다면 익명으로 제보해 주세요 — 검수 후 바로 비교에 반영돼요.
+      </p>
+      <button
+        type="button"
+        onClick={onOpenPasserReport}
+        style={{ width: "100%", height: 46, border: "none", borderRadius: 13, background: PRIMARY, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+      >
+        합격자 스펙 제보하기
+      </button>
     </div>
   );
 }

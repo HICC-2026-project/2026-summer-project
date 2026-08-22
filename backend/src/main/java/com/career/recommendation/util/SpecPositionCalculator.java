@@ -94,7 +94,11 @@ public class SpecPositionCalculator {
         // 목표 직무 식별 정보 — 비교에 쓰였든 아니든 항상 내려준다(FE 제보 유도 CTA용).
         String targetJobType = (jobProfile != null && jobProfile.getJobType() != null && !jobProfile.getJobType().isBlank())
                 ? jobProfile.getJobType() : null;
-        int jobSampleSize = targetJobType != null ? jobProfile.getSampleSize() : 0;
+        SpecPositionResult.SpecPositionResultBuilder base = SpecPositionResult.builder()
+                .targetJobType(targetJobType)
+                .targetJobLabel(JobType.labelOf(targetJobType))
+                .jobSampleSize(targetJobType != null ? jobProfile.getSampleSize() : 0)
+                .minSampleSize(MIN_SAMPLE);
         if (jobProfile != null && jobProfile.getJobType() != null && jobProfile.getSampleSize() >= MIN_SAMPLE) {
             profile = jobProfile;
             basis = BASIS_JOB;
@@ -103,14 +107,10 @@ public class SpecPositionCalculator {
             profile = overallProfile;
             basis = BASIS_OVERALL;
         } else {
-            return SpecPositionResult.builder()
+            return base
                     .basis(BASIS_NONE)
                     .basisMessage("아직 비교할 합격자 데이터가 부족합니다.")
                     .sampleSize(0)
-                    .targetJobType(targetJobType)
-                    .targetJobLabel(JobType.labelOf(targetJobType))
-                    .jobSampleSize(jobSampleSize)
-                    .minSampleSize(MIN_SAMPLE)
                     .demoDataIncluded(false)
                     .axes(List.of())
                     .gaps(List.of())
@@ -122,14 +122,10 @@ public class SpecPositionCalculator {
         Set<String> userCerts = SpecNormalizer.canonicalCerts(
                 userSpec != null ? userSpec.getCertifications() : null);
 
-        return SpecPositionResult.builder()
+        return base
                 .basis(basis)
                 .basisMessage(basisMessage(basis, jobProfile, profile))
                 .sampleSize(profile.getSampleSize())
-                .targetJobType(targetJobType)
-                .targetJobLabel(JobType.labelOf(targetJobType))
-                .jobSampleSize(jobSampleSize)
-                .minSampleSize(MIN_SAMPLE)
                 .demoDataIncluded(profile.isContainsDemoData())
                 .axes(buildAxes(userSpec, userCerts, profile))
                 .gaps(buildGaps(userCerts, profile))

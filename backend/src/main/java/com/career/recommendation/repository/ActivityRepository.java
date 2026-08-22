@@ -4,6 +4,7 @@ import com.career.recommendation.entity.Activity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -71,7 +72,7 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID> {
             Pageable pageable);
 
     /** 마감일이 today 이전인 활성 활동을 비활성화한다(ActivityDeadlineScheduler). 마감일 당일은 유지. */
-    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true)
+    @Modifying(clearAutomatically = true)
     @Query("UPDATE Activity a SET a.isActive = false WHERE a.isActive = true AND a.deadline < :today")
     int deactivateExpired(@Param("today") LocalDate today);
 }

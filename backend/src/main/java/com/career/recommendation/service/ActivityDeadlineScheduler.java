@@ -1,5 +1,6 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.util.ServiceTime;
 import com.career.recommendation.repository.ActivityRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -8,7 +9,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.ZoneId;
 
 /**
  * 마감이 지난 활동을 매일 자정 직후 비활성화한다.
@@ -23,22 +23,14 @@ import java.time.ZoneId;
 @RequiredArgsConstructor
 public class ActivityDeadlineScheduler {
 
-    private static final ZoneId SERVICE_ZONE_ID = ZoneId.of("Asia/Seoul");
-
     private final ActivityRepository activityRepository;
 
-    @Scheduled(cron = "0 5 0 * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 5 0 * * *", zone = ServiceTime.ZONE)
     @Transactional
     public void deactivateExpiredActivities() {
-        int closed = deactivateExpiredBefore(LocalDate.now(SERVICE_ZONE_ID));
+        int closed = activityRepository.deactivateExpired(LocalDate.now(ServiceTime.ZONE_ID));
         if (closed > 0) {
             log.info("마감 지난 활동 {}건을 비활성화했습니다.", closed);
         }
-    }
-
-    /** 테스트·수동 실행용. today보다 이전에 마감된 활성 활동을 닫고 건수를 돌려준다. */
-    @Transactional
-    public int deactivateExpiredBefore(LocalDate today) {
-        return activityRepository.deactivateExpired(today);
     }
 }

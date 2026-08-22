@@ -2,6 +2,7 @@ package com.career.recommendation.service;
 
 import com.career.recommendation.dto.position.SpecPositionResult;
 import com.career.recommendation.dto.recommendation.RecommendationResponse;
+import com.career.recommendation.entity.Activity;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.repository.ActivityRepository;
 import com.career.recommendation.repository.RecommendationRepository;
@@ -18,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -143,10 +145,10 @@ class RecommendationServiceFallbackTest {
                 .matchedCertifications(List.of()).unmatchedCertifications(List.of())
                 .build();
         givenNoActivitiesAndGeminiDown(position);
-        com.career.recommendation.entity.Activity filler = activity("독서 모임", null, java.time.LocalDate.of(2026, 8, 25));
-        com.career.recommendation.entity.Activity sqld = activity("SQLD 자격증 특강", null, java.time.LocalDate.of(2026, 9, 30));
-        com.career.recommendation.entity.Activity toeic = activity("TOEIC 스터디", null, java.time.LocalDate.of(2026, 10, 1));
-        com.career.recommendation.entity.Activity other = activity("교양 특강", null, java.time.LocalDate.of(2026, 8, 26));
+        Activity filler = activity("독서 모임", null, LocalDate.of(2026, 8, 25));
+        Activity sqld = activity("SQLD 자격증 특강", null, LocalDate.of(2026, 9, 30));
+        Activity toeic = activity("TOEIC 스터디", null, LocalDate.of(2026, 10, 1));
+        Activity other = activity("교양 특강", null, LocalDate.of(2026, 8, 26));
         when(activityRepository.findRecommendableActivities(any(), any()))
                 .thenReturn(List.of(filler, sqld, toeic, other));
 
@@ -161,8 +163,8 @@ class RecommendationServiceFallbackTest {
         assertThat(response.getActivities().get(2).getTargetGap()).isNull();
     }
 
-    private com.career.recommendation.entity.Activity activity(String name, String[] tags, java.time.LocalDate deadline) {
-        return com.career.recommendation.entity.Activity.builder()
+    private Activity activity(String name, String[] tags, LocalDate deadline) {
+        return Activity.builder()
                 .id(UUID.randomUUID()).type("EDUCATION").name(name).tags(tags).deadline(deadline).build();
     }
 }

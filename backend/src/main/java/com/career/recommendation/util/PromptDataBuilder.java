@@ -136,7 +136,7 @@ public class PromptDataBuilder {
         }
         // targetGap에 쓸 수 있는 이름을 닫힌 목록으로 준다 — 추천 카드와 비교 탭이 같은 갭 이름을 쓰게 하기 위함.
         // 순서가 곧 우선순위(자격증 갭은 보유율 내림차순, 그 뒤 어학·경험 축).
-        List<String> gapNames = GapMatcher.knownGapNames(position);
+        List<String> gapNames = GapMatcher.names(GapMatcher.knownGaps(position));
         if (!gapNames.isEmpty()) {
             sb.append("targetGap에 쓸 수 있는 갭 이름(우선순위 순): ")
                     .append(String.join(", ", gapNames)).append('\n');

@@ -1,5 +1,6 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.util.ServiceTime;
 import com.career.recommendation.dto.gemini.GeminiRoadmapResult;
 import com.career.recommendation.dto.gemini.GeminiRoadmapResult.GeminiTimelineStep;
 import com.career.recommendation.dto.recommendation.RecommendationResponse;
@@ -61,7 +62,7 @@ public class RoadmapService {
     private final ObjectMapper objectMapper;
 
     private static final int MAX_RECOMMENDABLE_ACTIVITIES = 20;
-    private static final ZoneId SERVICE_ZONE_ID = ZoneId.of("Asia/Seoul");
+    private static final ZoneId SERVICE_ZONE_ID = ServiceTime.ZONE_ID;
     /** 프롬프트가 HIGH/MEDIUM/LOW만 쓰라고 지시하지만 강제되지 않아, Gemini가 임의 문자열을
      * 반환해도 검증 없이 그대로 FE에 전달되고 있었다. FE가 이 값으로 배지를 매핑한다면
      * 미매핑 값에서 빈 배지가 뜬다. */

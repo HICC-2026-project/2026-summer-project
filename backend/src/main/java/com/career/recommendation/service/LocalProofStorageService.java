@@ -3,6 +3,8 @@ package com.career.recommendation.service;
 import com.career.recommendation.exception.InvalidProofFileException;
 import com.career.recommendation.exception.ProofStorageException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -13,6 +15,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -74,15 +77,16 @@ public class LocalProofStorageService {
      * 검수자가 증빙을 열어볼 때 쓴다. 저장 루트 밖 경로·없는 파일은 Optional.empty().
      * 파일이 없을 수 있는 이유: 서버 재배포로 로컬 디스크가 초기화된 경우(E2-4 S3 전환 전까지의 한계).
      */
-    public java.util.Optional<org.springframework.core.io.Resource> load(String storedName) {
+    public Optional<Resource> load(String storedName) {
         if (storedName == null || storedName.isBlank()) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
-        Path target = storageRoot.resolve(storedName).normalize();
-        if (!target.getParent().equals(storageRoot) || !Files.isRegularFile(target)) {
-            return java.util.Optional.empty();
+        try {
+            Path target = resolveForInspection(storedName);
+            return Files.isRegularFile(target) ? Optional.of(new FileSystemResource(target)) : Optional.empty();
+        } catch (InvalidProofFileException outsideRoot) {
+            return Optional.empty();
         }
-        return java.util.Optional.of(new org.springframework.core.io.FileSystemResource(target));
     }
 
     Path resolveForInspection(String storedName) {

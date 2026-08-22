@@ -1,5 +1,6 @@
 package com.career.recommendation.entity;
 
+import com.career.recommendation.domain.ReviewStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -15,6 +16,11 @@ import java.util.UUID;
 @Table(name = "passer_data")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class PasserData {
+
+    /** data_origin 값. 사용자 제보 — 검수 대상. */
+    public static final String ORIGIN_USER_REPORT = "USER_REPORT";
+    /** 발표·검증용 합성 데이터 — 검수 없이 비교 가능 집합에 포함(PasserDataRepository 참고). */
+    public static final String ORIGIN_DEMO = "DEMO";
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -92,11 +98,11 @@ public class PasserData {
     @Column(name = "reject_reason", length = 300)
     private String rejectReason;
 
-    /** PENDING | VERIFIED | REJECTED — isVerified와 reviewedAt으로 파생한다. */
-    public String reviewStatus() {
-        if (Boolean.TRUE.equals(isVerified)) return "VERIFIED";
-        if (reviewedAt != null) return "REJECTED";
-        return "PENDING";
+    /** 검수 상태 — isVerified와 reviewedAt 두 컬럼에서 파생한다. 세 값의 단일 정의는 domain.ReviewStatus. */
+    public ReviewStatus reviewStatus() {
+        if (Boolean.TRUE.equals(isVerified)) return ReviewStatus.VERIFIED;
+        if (reviewedAt != null) return ReviewStatus.REJECTED;
+        return ReviewStatus.PENDING;
     }
 
     @CreationTimestamp

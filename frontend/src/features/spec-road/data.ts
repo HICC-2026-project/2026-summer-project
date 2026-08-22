@@ -2,6 +2,14 @@ import type { JobCode, Recommendation, RoadmapMilestone, SpecPosition } from "./
 
 export const PRIMARY = "#2F6FED";
 
+// 상태 배지 색 — 좋음(반영·상위)·주의(대기)·나쁨(반려·하위). 탭마다 같은 의미엔 같은 색을 쓴다.
+export const BADGE = {
+  ok: { color: "#12A150", bg: "#E7F6EE" },
+  warn: { color: "#79551F", bg: "#FFF9ED" },
+  bad: { color: "#E5484D", bg: "#FCECEC" },
+  muted: { color: "#9797A1", bg: "#F1F0F6" },
+} as const;
+
 export const RECOMMENDATIONS: Recommendation[] = [
   {
     id: 1,

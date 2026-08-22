@@ -1,5 +1,6 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.domain.ReviewAction;
 import com.career.recommendation.dto.admin.AdminPasserReportResponse;
 import com.career.recommendation.dto.admin.PasserReviewRequest;
 import com.career.recommendation.entity.PasserData;
@@ -13,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 
+import java.lang.reflect.Field;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -40,9 +42,9 @@ class AdminPasserReportServiceTest {
     @Test
     void 승인하면_isVerified가_켜지고_프로필_캐시를_비운다() {
         PasserData report = pendingReport();
-        stubFindAndSave(report);
+        stubFind(report);
 
-        AdminPasserReportResponse result = service.review(authentication, report.getId(), request("APPROVE", null));
+        AdminPasserReportResponse result = service.review(authentication, report.getId(), request(ReviewAction.APPROVE, null));
 
         assertThat(report.getIsVerified()).isTrue();
         assertThat(report.getReviewedAt()).isNotNull();
@@ -56,9 +58,9 @@ class AdminPasserReportServiceTest {
     @Test
     void 반려하면_사유를_남기고_데이터는_보존하며_캐시는_건드리지_않는다() {
         PasserData report = pendingReport();
-        stubFindAndSave(report);
+        stubFind(report);
 
-        AdminPasserReportResponse result = service.review(authentication, report.getId(), request("REJECT", "  증빙 불일치 "));
+        AdminPasserReportResponse result = service.review(authentication, report.getId(), request(ReviewAction.REJECT, "  증빙 불일치 "));
 
         assertThat(report.getIsVerified()).isFalse();
         assertThat(report.getReviewedAt()).isNotNull();
@@ -73,9 +75,9 @@ class AdminPasserReportServiceTest {
     void 승인된_제보를_반려로_되돌리면_캐시를_비운다() {
         PasserData report = pendingReport();
         report.setIsVerified(true);
-        stubFindAndSave(report);
+        stubFind(report);
 
-        service.review(authentication, report.getId(), request("REJECT", "재검토 결과 불일치"));
+        service.review(authentication, report.getId(), request(ReviewAction.REJECT, "재검토 결과 불일치"));
 
         assertThat(report.getIsVerified()).isFalse();
         verify(jobSpecProfileService).evictAll();
@@ -88,7 +90,7 @@ class AdminPasserReportServiceTest {
         when(currentUserService.getCurrentUser(authentication)).thenReturn(admin);
         when(passerDataRepository.findById(demo.getId())).thenReturn(Optional.of(demo));
 
-        assertThatThrownBy(() -> service.review(authentication, demo.getId(), request("APPROVE", null)))
+        assertThatThrownBy(() -> service.review(authentication, demo.getId(), request(ReviewAction.APPROVE, null)))
                 .isInstanceOf(PasserReportNotFoundException.class);
         verify(jobSpecProfileService, never()).evictAll();
     }
@@ -97,14 +99,13 @@ class AdminPasserReportServiceTest {
     void 응답에는_제보자_식별자가_없다() {
         // AdminPasserReportResponse에 reporter 필드 자체가 없어야 한다 — 검수에 불필요한 개인 연결 정보.
         assertThat(AdminPasserReportResponse.class.getDeclaredFields())
-                .extracting(java.lang.reflect.Field::getName)
+                .extracting(Field::getName)
                 .doesNotContain("reporter", "reporterId", "reporterUserId");
     }
 
-    private void stubFindAndSave(PasserData report) {
+    private void stubFind(PasserData report) {
         when(currentUserService.getCurrentUser(authentication)).thenReturn(admin);
         when(passerDataRepository.findById(report.getId())).thenReturn(Optional.of(report));
-        when(passerDataRepository.saveAndFlush(any(PasserData.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
     private PasserData pendingReport() {
@@ -117,7 +118,7 @@ class AdminPasserReportServiceTest {
                 .build();
     }
 
-    private PasserReviewRequest request(String action, String reason) {
+    private PasserReviewRequest request(ReviewAction action, String reason) {
         PasserReviewRequest r = new PasserReviewRequest();
         r.setAction(action);
         r.setReason(reason);

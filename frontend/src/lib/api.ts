@@ -82,7 +82,9 @@ async function parseBody<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+// 인증·401 재발급·에러 변환까지 끝낸 Response를 돌려준다. JSON이 아닌 응답(이미지 blob 등)을
+// 받아야 할 때 쓴다 — 이 경로를 안 타면 토큰 만료 시 그 요청만 조용히 실패한다.
+export async function apiFetchRaw(path: string, options?: RequestInit): Promise<Response> {
   const accessToken = typeof window !== "undefined" ? getAccessToken() : null;
 
   let res = await request(path, options, accessToken);
@@ -102,7 +104,11 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
     throw new ApiError(res.status, await extractErrorMessage(res));
   }
 
-  return parseBody<T>(res);
+  return res;
+}
+
+export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  return parseBody<T>(await apiFetchRaw(path, options));
 }
 
 // 백엔드 GlobalExceptionHandler는 { code, message, timestamp } 형태로 응답한다.

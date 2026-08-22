@@ -1,5 +1,6 @@
 package com.career.recommendation.config;
 
+import com.career.recommendation.entity.User;
 import com.career.recommendation.security.CustomOAuth2UserService;
 import com.career.recommendation.security.HttpCookieOAuth2AuthorizationRequestRepository;
 import com.career.recommendation.security.JwtAccessDeniedHandler;
@@ -41,7 +42,7 @@ public class SecurityConfig {
     private static final String[] PUBLIC_URLS = {
             "/api/v1/auth/**",
             "/api/v1/activities/**",
-            "/api/v1/jobs",
+            "/api/v1/jobs/**",
             "/oauth2/**",
             "/login/oauth2/**",
             "/swagger-ui.html",   // 진입 URL — /swagger-ui/** 패턴에 안 걸리므로 별도 등록 필요
@@ -58,7 +59,7 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_URLS).permitAll()
-                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/admin/**").hasRole(User.ROLE_ADMIN)
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex

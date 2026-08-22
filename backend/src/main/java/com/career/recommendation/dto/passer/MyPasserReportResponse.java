@@ -20,7 +20,7 @@ public class MyPasserReportResponse {
     private String jobType;
     private String jobTypeLabel;
     private Integer year;
-    /** PENDING(검수 대기) | VERIFIED(검수 완료·비교에 반영) | REJECTED(반려) */
+    /** ReviewStatus.name() — PENDING | VERIFIED | REJECTED */
     private String status;
     private LocalDateTime createdAt;
 
@@ -30,7 +30,7 @@ public class MyPasserReportResponse {
                 .jobType(data.getJobType())
                 .jobTypeLabel(JobType.labelOf(data.getJobType()))
                 .year(data.getYear())
-                .status(data.reviewStatus())
+                .status(data.reviewStatus().name())
                 .createdAt(data.getCreatedAt())
                 .build();
     }

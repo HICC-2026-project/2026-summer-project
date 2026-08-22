@@ -32,8 +32,7 @@ class JobTypeTest {
     }
 
     @Test
-    void 라벨_조회는_별도_메서드로만_한다() {
-        assertThat(JobType.fromLabel("데이터 엔지니어")).contains(JobType.DATA_ENGINEER);
+    void 코드를_라벨로_바꾼다() {
         assertThat(JobType.labelOf("SECURITY")).isEqualTo("보안");
     }
 

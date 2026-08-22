@@ -1,5 +1,7 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.domain.ReviewAction;
+import com.career.recommendation.domain.ReviewStatus;
 import com.career.recommendation.dto.admin.AdminPasserReportResponse;
 import com.career.recommendation.dto.admin.PasserReviewRequest;
 import com.career.recommendation.entity.PasserData;
@@ -16,7 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -30,22 +31,14 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class AdminPasserReportService {
 
-    private static final String USER_REPORT = "USER_REPORT";
-
     private final PasserDataRepository passerDataRepository;
     private final LocalProofStorageService proofStorageService;
     private final JobSpecProfileService jobSpecProfileService;
     private final CurrentUserService currentUserService;
 
-    public Page<AdminPasserReportResponse> list(String status, Pageable pageable) {
-        String normalized = status == null ? "PENDING" : status.trim().toUpperCase(Locale.ROOT);
-        Page<PasserData> page = switch (normalized) {
-            case "PENDING" -> passerDataRepository.findPendingReports(pageable);
-            case "VERIFIED" -> passerDataRepository.findVerifiedReports(pageable);
-            case "REJECTED" -> passerDataRepository.findRejectedReports(pageable);
-            default -> throw new IllegalArgumentException("status는 PENDING, VERIFIED, REJECTED 중 하나여야 합니다.");
-        };
-        return page.map(AdminPasserReportResponse::from);
+    public Page<AdminPasserReportResponse> list(ReviewStatus status, Pageable pageable) {
+        return passerDataRepository.findReportsByStatus(status.name(), pageable)
+                .map(AdminPasserReportResponse::from);
     }
 
     public AdminPasserReportResponse get(UUID reportId) {
@@ -64,14 +57,14 @@ public class AdminPasserReportService {
         User reviewer = currentUserService.getCurrentUser(authentication);
         PasserData report = find(reportId);
 
-        boolean approve = "APPROVE".equals(request.getAction());
+        boolean approve = request.getAction() == ReviewAction.APPROVE;
         boolean wasVerified = Boolean.TRUE.equals(report.getIsVerified());
 
+        // 관리 엔티티라 트랜잭션 커밋 시 dirty checking으로 UPDATE된다 — 별도 save 불필요.
         report.setIsVerified(approve);
         report.setReviewedAt(LocalDateTime.now());
         report.setReviewedBy(reviewer);
         report.setRejectReason(approve ? null : request.getReason().trim());
-        PasserData saved = passerDataRepository.saveAndFlush(report);
 
         // 비교 가능 집합(isVerified=true)이 바뀌었을 때만 캐시를 비운다 — 최초 승인, 승인↔반려 전환.
         // 이미 반려된 걸 다시 반려하는 건 분포에 영향이 없다.
@@ -79,12 +72,12 @@ public class AdminPasserReportService {
             jobSpecProfileService.evictAll();
         }
         log.info("합격자 제보 검수: id={}, action={}, reviewer={}", reportId, request.getAction(), reviewer.getId());
-        return AdminPasserReportResponse.from(saved);
+        return AdminPasserReportResponse.from(report);
     }
 
     private PasserData find(UUID reportId) {
         return passerDataRepository.findById(reportId)
-                .filter(p -> USER_REPORT.equals(p.getDataOrigin()))
+                .filter(p -> PasserData.ORIGIN_USER_REPORT.equals(p.getDataOrigin()))
                 .orElseThrow(() -> new PasserReportNotFoundException(reportId));
     }
 

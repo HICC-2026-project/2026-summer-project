@@ -26,7 +26,6 @@ import java.util.Objects;
 @Transactional(readOnly = true)
 public class PasserReportService {
 
-    private static final String USER_REPORT = "USER_REPORT";
     /** 한 계정의 24시간 제보 상한. */
     private static final int MAX_REPORTS_PER_DAY = 5;
 
@@ -61,7 +60,7 @@ public class PasserReportService {
                 .experienceCount(request.getExperienceCount())
                 .specSummary(null)
                 .isVerified(false)
-                .dataOrigin(USER_REPORT)
+                .dataOrigin(PasserData.ORIGIN_USER_REPORT)
                 .proofOriginalName(storedProof.originalName())
                 .proofStoredName(storedProof.storedName())
                 .proofContentType(storedProof.contentType())

@@ -13,14 +13,12 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 실제 DB에서 bulk UPDATE가 "마감일 당일은 유지, 전날까지는 닫기"를 지키는지 본다. */
+/** ActivityDeadlineScheduler가 매일 부르는 bulk UPDATE가 "마감일 당일은 유지, 전날까지는 닫기"를 지키는지 실제 DB에서 본다. */
 @SpringBootTest
 @ActiveProfiles("local")
 @Transactional
 class ActivityDeadlineSchedulerTest {
 
-    @Autowired
-    private ActivityDeadlineScheduler scheduler;
     @Autowired
     private ActivityRepository activityRepository;
 
@@ -32,7 +30,7 @@ class ActivityDeadlineSchedulerTest {
         Activity noDeadline = save("none-" + UUID.randomUUID(), null, true);
         Activity alreadyClosed = save("closed-" + UUID.randomUUID(), today.minusDays(30), false);
 
-        int closed = scheduler.deactivateExpiredBefore(today);
+        int closed = activityRepository.deactivateExpired(today);
 
         // 이 테스트가 만든 만료 건 1개는 반드시 포함된다(시드에 다른 만료 건이 있으면 더 클 수 있다).
         assertThat(closed).isGreaterThanOrEqualTo(1);

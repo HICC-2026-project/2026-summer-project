@@ -52,8 +52,8 @@ class PromptDataBuilderTest {
                 .basis("JOB")
                 .basisMessage("백엔드 합격자 12명의 분포와 비교한 결과입니다.")
                 .axes(List.of(
-                        axis("학점", "3.80/4.5", "3.60/4.5", 72),
-                        axis("어학 성적", "미입력", "환산 850", null)))
+                        axis("GPA", "학점", "3.80/4.5", "3.60/4.5", 72),
+                        axis("LANGUAGE", "어학 성적", "미입력", "환산 850", null)))
                 .gaps(List.of(
                         SpecPositionResult.SpecGap.builder().name("정보처리기사").holderRatePercent(70).build(),
                         SpecPositionResult.SpecGap.builder().name("SQLD").holderRatePercent(55).build()))
@@ -79,8 +79,8 @@ class PromptDataBuilderTest {
                 .isEqualTo("합격자 비교 데이터 없음");
     }
 
-    private SpecPositionResult.AxisPosition axis(String label, String my, String median, Integer percentile) {
-        return SpecPositionResult.AxisPosition.builder().axis(label).label(label)
+    private SpecPositionResult.AxisPosition axis(String code, String label, String my, String median, Integer percentile) {
+        return SpecPositionResult.AxisPosition.builder().axis(code).label(label)
                 .myValue(my).medianValue(median).percentile(percentile).coverage(12).build();
     }
 }

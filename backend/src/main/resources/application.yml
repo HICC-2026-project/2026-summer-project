@@ -1,4 +1,8 @@
 spring:
+  data:
+    web:
+      pageable:
+        max-page-size: 50   # 관리자 목록 등 Pageable 파라미터의 size 상한
   application:
     name: career-recommendation-service
 

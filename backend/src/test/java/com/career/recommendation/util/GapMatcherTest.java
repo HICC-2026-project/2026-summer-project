@@ -5,6 +5,7 @@ import com.career.recommendation.entity.Activity;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -18,19 +19,19 @@ class GapMatcherTest {
                 .basis("JOB")
                 .gaps(List.of(gap("정보처리기사", 70), gap("SQLD", 55)))
                 .axes(List.of(
-                        axis("학점", 72),          // 상위 — 갭 아님
-                        axis("어학 성적", 30),      // 하위 — 갭
-                        axis("자격증", 40),         // 자격증 축은 개별 갭으로 이미 표현됨
-                        axis("경험", null)))        // 미입력 — 갭
+                        axis("GPA", "학점", 72),              // 상위 — 갭 아님
+                        axis("LANGUAGE", "어학 성적", 30),    // 하위 — 갭
+                        axis("CERTIFICATION", "자격증", 40),  // 자격증 축은 개별 갭으로 이미 표현됨
+                        axis("EXPERIENCE", "경험", null)))    // 미입력 — 갭
                 .build();
 
-        assertThat(GapMatcher.knownGapNames(position))
+        assertThat(GapMatcher.names(GapMatcher.knownGaps(position)))
                 .containsExactly("정보처리기사", "SQLD", "어학 성적", "경험");
     }
 
     @Test
     void Gemini가_준_targetGap은_알려진_이름에_있을_때만_받고_표기_차이는_정규화로_흡수한다() {
-        List<String> known = List.of("정보처리기사", "어학 성적");
+        List<GapMatcher.Gap> known = gaps("정보처리기사", "어학 성적");
 
         assertThat(GapMatcher.normalizeTargetGap("정보처리기사", known)).contains("정보처리기사");
         assertThat(GapMatcher.normalizeTargetGap(" 정보 처리 기사 ", known)).contains("정보처리기사");
@@ -42,7 +43,7 @@ class GapMatcherTest {
 
     @Test
     void 활동_본문에_갭_키워드가_있으면_그_갭으로_매칭한다() {
-        List<String> known = List.of("정보처리기사", "어학 성적", "경험");
+        List<GapMatcher.Gap> known = gaps("정보처리기사", "어학 성적", "경험");
 
         assertThat(GapMatcher.matchGap(activity("정보처리기사 실기 대비반", null, null), known)).contains("정보처리기사");
         assertThat(GapMatcher.matchGap(activity("TOEIC 집중 스터디", null, null), known)).contains("어학 성적");
@@ -53,7 +54,7 @@ class GapMatcherTest {
 
     @Test
     void 폴백_순위는_갭_매칭이_직무_일치보다_앞서고_같은_점수면_마감_임박순이다() {
-        List<String> known = List.of("SQLD");
+        List<GapMatcher.Gap> known = gaps("SQLD");
         Activity jobOnly = activity("백엔드 부트캠프", null, new String[]{"백엔드"});           // 직무 +2, 경험 키워드는 known에 없음
         Activity gapOnly = activity("SQLD 자격증 특강", null, new String[]{"데이터"});            // 갭 +3
         Activity both = activity("백엔드 SQLD 스터디", null, new String[]{"백엔드"});             // +5
@@ -82,8 +83,21 @@ class GapMatcherTest {
         return SpecPositionResult.SpecGap.builder().name(name).holderRatePercent(rate).build();
     }
 
-    private SpecPositionResult.AxisPosition axis(String label, Integer percentile) {
-        return SpecPositionResult.AxisPosition.builder().axis(label).label(label).percentile(percentile).build();
+    private SpecPositionResult.AxisPosition axis(String code, String label, Integer percentile) {
+        return SpecPositionResult.AxisPosition.builder().axis(code).label(label).percentile(percentile).build();
+    }
+
+    /** 테스트용: 이름만으로 갭을 만든다 — 축 갭은 실제 knownGaps가 붙이는 키워드와 같은 것을 쓴다. */
+    private List<GapMatcher.Gap> gaps(String... names) {
+        SpecPositionResult.SpecPositionResultBuilder b = SpecPositionResult.builder();
+        List<SpecPositionResult.SpecGap> certs = new ArrayList<>();
+        List<SpecPositionResult.AxisPosition> axes = new ArrayList<>();
+        for (String n : names) {
+            if (n.equals("어학 성적")) axes.add(axis("LANGUAGE", n, null));
+            else if (n.equals("경험")) axes.add(axis("EXPERIENCE", n, null));
+            else certs.add(gap(n, 50));
+        }
+        return GapMatcher.knownGaps(b.gaps(certs).axes(axes).build());
     }
 
     private Activity activity(String name, String description, String[] tags) {

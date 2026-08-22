@@ -1,10 +1,13 @@
 package com.career.recommendation.repository;
 
 import com.career.recommendation.entity.PasserData;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,33 +24,24 @@ public interface PasserDataRepository extends JpaRepository<PasserData, UUID> {
     boolean existsByReporter_IdAndJobTypeAndYearAndReviewedAtIsNull(UUID reporterId, String jobType, Integer year);
 
     /** 사용자의 일정 시각 이후 제보 수 (일일 제보 상한). */
-    long countByReporter_IdAndCreatedAtAfter(UUID reporterId, java.time.LocalDateTime after);
+    long countByReporter_IdAndCreatedAtAfter(UUID reporterId, LocalDateTime after);
 
-    // --- 검수(관리자) 목록. 사용자 제보(USER_REPORT)만 대상이다 — DEMO·PUBLIC_REVIEW는 검수 개념이 없다. ---
-
-    /** 검수 대기: 아직 승인도 반려도 안 된 사용자 제보. */
+    /**
+     * 검수(관리자) 목록. 사용자 제보(USER_REPORT)만 대상이다 — DEMO·PUBLIC_REVIEW는 검수 개념이 없다.
+     * 상태는 PasserData.reviewStatus()와 같은 규칙으로 두 컬럼에서 판정한다:
+     * PENDING = 미검수, VERIFIED = 승인, REJECTED = 검수했지만 미승인. 최신 건이 먼저.
+     */
     @Query("""
             SELECT p FROM PasserData p
-            WHERE p.dataOrigin = 'USER_REPORT' AND p.reviewedAt IS NULL
-            ORDER BY p.createdAt DESC
+            WHERE p.dataOrigin = 'USER_REPORT'
+              AND (
+                   (:status = 'PENDING'  AND p.reviewedAt IS NULL)
+                OR (:status = 'VERIFIED' AND p.isVerified = true)
+                OR (:status = 'REJECTED' AND p.isVerified = false AND p.reviewedAt IS NOT NULL)
+              )
+            ORDER BY COALESCE(p.reviewedAt, p.createdAt) DESC
             """)
-    org.springframework.data.domain.Page<PasserData> findPendingReports(org.springframework.data.domain.Pageable pageable);
-
-    /** 승인된 사용자 제보. */
-    @Query("""
-            SELECT p FROM PasserData p
-            WHERE p.dataOrigin = 'USER_REPORT' AND p.isVerified = true
-            ORDER BY p.reviewedAt DESC
-            """)
-    org.springframework.data.domain.Page<PasserData> findVerifiedReports(org.springframework.data.domain.Pageable pageable);
-
-    /** 반려된 사용자 제보. */
-    @Query("""
-            SELECT p FROM PasserData p
-            WHERE p.dataOrigin = 'USER_REPORT' AND p.isVerified = false AND p.reviewedAt IS NOT NULL
-            ORDER BY p.reviewedAt DESC
-            """)
-    org.springframework.data.domain.Page<PasserData> findRejectedReports(org.springframework.data.domain.Pageable pageable);
+    Page<PasserData> findReportsByStatus(@Param("status") String status, Pageable pageable);
 
     /**
      * 특정 직무의 비교 가능(검증 완료 또는 DEMO) 합격자 전원을 조회한다.

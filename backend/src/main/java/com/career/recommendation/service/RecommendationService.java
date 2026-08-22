@@ -1,5 +1,6 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.util.ServiceTime;
 import com.career.recommendation.dto.gemini.GeminiRecommendationResult;
 import com.career.recommendation.dto.gemini.GeminiRecommendationResult.GeminiActivity;
 import com.career.recommendation.dto.position.SpecPositionResult;
@@ -58,7 +59,7 @@ public class RecommendationService {
     private final ObjectMapper objectMapper;
 
     private static final int MAX_RECOMMENDABLE_ACTIVITIES = 20;
-    private static final ZoneId SERVICE_ZONE_ID = ZoneId.of("Asia/Seoul");
+    private static final ZoneId SERVICE_ZONE_ID = ServiceTime.ZONE_ID;
 
     /**
      * 현재 로그인한 유저의 맞춤 추천 활동 목록을 반환한다.
@@ -187,7 +188,7 @@ public class RecommendationService {
 
         // 갭이 새 스펙 기준으로 바뀌었으니 카드의 targetGap도 다시 맞춘다 — 사용자가 방금 딴 자격증이
         // 비교 탭에서는 사라졌는데 추천 카드엔 "이 갭을 줄여요"로 남아 있으면 두 화면이 모순된다.
-        List<String> knownGaps = GapMatcher.knownGapNames(position);
+        List<GapMatcher.Gap> knownGaps = GapMatcher.knownGaps(position);
         List<ActivityRecommendation> realigned = cachedResponse.getActivities() == null ? null
                 : cachedResponse.getActivities().stream()
                 .map(a -> a.toBuilder()
@@ -270,7 +271,7 @@ public class RecommendationService {
 
         // 예전엔 목록 앞 3개(마감 임박순)를 그대로 잘라 "왜 이 활동인지"가 없었다.
         // 갭 키워드·목표 직무 태그로 순위를 매기고, 갭이 맞는 활동엔 그 갭을 이유에 적는다.
-        List<String> knownGaps = GapMatcher.knownGapNames(position);
+        List<GapMatcher.Gap> knownGaps = GapMatcher.knownGaps(position);
         List<ActivityRecommendation> recs = new ArrayList<>();
         for (GapMatcher.Ranked r : GapMatcher.rankForFallback(safeActivities, targetJobName, knownGaps, 3)) {
             Activity a = r.activity();
@@ -321,7 +322,7 @@ public class RecommendationService {
         if (geminiResult.getActivities() == null || geminiResult.getActivities().isEmpty()) return null;
 
         // Gemini의 targetGap은 비교 탭의 갭 이름과 같을 때만 받는다 — 지어낸 갭이 추천 카드에 뜨면 두 화면이 어긋난다.
-        List<String> knownGaps = GapMatcher.knownGapNames(position);
+        List<GapMatcher.Gap> knownGaps = GapMatcher.knownGaps(position);
 
         List<ActivityRecommendation> result = new ArrayList<>();
         for (GeminiActivity a : geminiResult.getActivities()) {

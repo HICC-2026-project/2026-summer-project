@@ -3,7 +3,6 @@ package com.career.recommendation.domain;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * 서비스가 지원하는 직무 코드의 단일 정의.
@@ -37,7 +36,7 @@ public enum JobType {
 
     /**
      * 입력 문자열을 직무 코드로 해석한다. 앞뒤 공백과 대소문자는 관대하게 받지만
-     * 그 외(레거시 별칭, 한글 라벨)는 거부한다 — 라벨로 찾고 싶으면 {@link #fromLabel}.
+     * 그 외(레거시 별칭, 한글 라벨)는 거부한다.
      */
     public static Optional<JobType> from(String raw) {
         if (raw == null) {
@@ -68,20 +67,5 @@ public enum JobType {
      */
     public static String labelOf(String code) {
         return from(code).map(JobType::getLabel).orElse(code);
-    }
-
-    public static Optional<JobType> fromLabel(String label) {
-        if (label == null) {
-            return Optional.empty();
-        }
-        String trimmed = label.trim();
-        return Arrays.stream(values())
-                .filter(type -> type.label.equals(trimmed))
-                .findFirst();
-    }
-
-    /** 에러 메시지·Swagger 설명용 "BACKEND, FRONTEND, ..." 문자열. */
-    public static String supportedCodes() {
-        return Arrays.stream(values()).map(Enum::name).collect(Collectors.joining(", "));
     }
 }

@@ -1,5 +1,6 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.util.ServiceTime;
 import com.career.recommendation.dto.roadmap.RoadmapResponse;
 import com.career.recommendation.entity.RoadmapCache;
 import com.career.recommendation.entity.User;
@@ -44,7 +45,7 @@ public class RoadmapCacheService {
             // ⚠️ 알려진 경합: RecommendationCacheService.save()와 동일 — 같은 유저의 동시 요청이
             // 카운트 증가분 하나를 잃을 수 있으나(read-then-write, 락 없음) 서비스가 죽지는
             // 않는다. 원자적 UPSERT 전환은 로컬 DB 검증이 필요해 이번 세션에선 보류한다.
-            java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+            java.time.LocalDate today = java.time.LocalDate.now(ServiceTime.ZONE_ID);
             if (today.equals(rec.getLastUpdatedDate())) {
                 rec.setDailyUpdateCount(rec.getDailyUpdateCount() != null ? rec.getDailyUpdateCount() + 1 : 1);
             } else {

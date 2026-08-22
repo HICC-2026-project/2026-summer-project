@@ -3,9 +3,16 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { getMyPasserReports } from "../../api";
-import { DEMO_USER_NAME, PRIMARY } from "../../data";
+import { BADGE, DEMO_USER_NAME, PRIMARY } from "../../data";
 import { hasMeaningfulLangScore, jobLabel } from "../../helpers";
-import type { MyPasserReport, Spec, Target } from "../../types";
+import type { MyPasserReport, ReviewStatus, Spec, Target } from "../../types";
+
+// 검수 상태 → 배지. 관리자 화면 탭 라벨과 같은 말을 쓴다.
+const REVIEW_BADGE: Record<ReviewStatus, { color: string; bg: string; text: string }> = {
+  PENDING: { ...BADGE.warn, text: "검수 대기" },
+  VERIFIED: { ...BADGE.ok, text: "반영 완료" },
+  REJECTED: { ...BADGE.bad, text: "반려됨" },
+};
 
 interface ProfileTabProps {
   spec: Spec;
@@ -194,11 +201,7 @@ export function ProfileTab({
             <div style={{ marginTop: 16, background: "#fff", border: "1px solid #EDEDF2", borderRadius: 18, padding: "6px 18px" }}>
               <div style={{ fontSize: 12, color: "#9797A1", fontWeight: 600, padding: "12px 0 4px" }}>내 제보 {myReports.length}건</div>
               {myReports.map((r, i) => {
-                const verified = r.status === "VERIFIED";
-                const rejected = r.status === "REJECTED";
-                const badgeColor = verified ? "#12A150" : rejected ? "#E5484D" : "#79551F";
-                const badgeBg = verified ? "#E7F6EE" : rejected ? "#FCECEC" : "#FFF9ED";
-                const badgeText = verified ? "반영 완료" : rejected ? "반려됨" : "검수 대기";
+                const badge = REVIEW_BADGE[r.status] ?? REVIEW_BADGE.PENDING;
                 return (
                   <div key={r.reportId} style={rowStyle(i < myReports.length - 1)}>
                     <div>
@@ -213,14 +216,14 @@ export function ProfileTab({
                       style={{
                         fontSize: 12,
                         fontWeight: 700,
-                        color: badgeColor,
-                        background: badgeBg,
+                        color: badge.color,
+                        background: badge.bg,
                         padding: "4px 10px",
                         borderRadius: 999,
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {badgeText}
+                      {badge.text}
                     </span>
                   </div>
                 );

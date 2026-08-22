@@ -12,6 +12,10 @@ import java.util.UUID;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class User {
 
+    /** role 컬럼 값. 관리자 판정은 AdminAccountPolicy, 인가는 SecurityConfig(hasRole)에서 쓴다. */
+    public static final String ROLE_USER = "USER";
+    public static final String ROLE_ADMIN = "ADMIN";
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -29,7 +33,7 @@ public class User {
 
     @Column(nullable = false)
     @Builder.Default
-    private String role = "USER";
+    private String role = ROLE_USER;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

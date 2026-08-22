@@ -17,7 +17,7 @@ public class PasserReportResponse {
     public static PasserReportResponse pending(PasserData passerData) {
         return PasserReportResponse.builder()
                 .reportId(passerData.getId())
-                .status("PENDING")
+                .status(passerData.reviewStatus().name())
                 .message("합격자 제보가 접수되었습니다. 검수 전에는 추천 데이터로 사용되지 않습니다.")
                 .build();
     }

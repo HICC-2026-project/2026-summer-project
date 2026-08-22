@@ -1,5 +1,6 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.util.ServiceTime;
 import com.career.recommendation.dto.recommendation.RecommendationResponse;
 import com.career.recommendation.entity.Recommendation;
 import com.career.recommendation.entity.User;
@@ -48,7 +49,7 @@ public class RecommendationCacheService {
             // 있다(read-then-write, 락 없음) — 최악의 경우 하루 3회 제한이 4~5회로 느슨해질 뿐,
             // 서비스가 죽지는 않는다. 원자적 UPSERT로 고치려면 로컬 DB로 실제 검증이 필요해
             // 지금 세션에선 보류한다.
-            java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+            java.time.LocalDate today = java.time.LocalDate.now(ServiceTime.ZONE_ID);
             if (today.equals(rec.getLastUpdatedDate())) {
                 rec.setDailyUpdateCount(rec.getDailyUpdateCount() != null ? rec.getDailyUpdateCount() + 1 : 1);
             } else {
