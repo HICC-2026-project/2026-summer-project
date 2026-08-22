@@ -29,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -51,6 +52,7 @@ class RecommendationServiceFallbackTest {
     @Mock private GeminiService geminiService;
     @Mock private PromptDataBuilder promptDataBuilder;
     @Mock private ObjectMapper objectMapper;
+    @Mock private AiDailyAttemptLimiter aiDailyAttemptLimiter;
     @Mock private Authentication authentication;
     @Mock private User user;
 
@@ -60,6 +62,7 @@ class RecommendationServiceFallbackTest {
     private void givenNoActivitiesAndGeminiDown(SpecPositionResult position) {
         UUID userId = UUID.randomUUID();
         when(user.getId()).thenReturn(userId);
+        lenient().when(aiDailyAttemptLimiter.tryAcquire(any(), any())).thenReturn(true);
         when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
 
         when(recommendationRepository.findByUser_Id(userId)).thenReturn(Optional.empty());

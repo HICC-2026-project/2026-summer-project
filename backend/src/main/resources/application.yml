@@ -59,6 +59,8 @@ server:
   port: 8080
 
 app:
+  ai:
+    daily-attempts-per-user: ${AI_DAILY_ATTEMPTS_PER_USER:3}   # 사용자별 하루 Gemini 호출 시도 상한(추천·로드맵 각각). AiDailyAttemptLimiter
   storage:
     passer-proof-directory: ${PASSER_PROOF_STORAGE_PATH:./uploads/passer-proofs}
     proof-retention-days: ${PASSER_PROOF_RETENTION_DAYS:30}   # 검수 완료(승인·반려) 후 증빙 이미지를 보관하는 일수. ProofRetentionScheduler
@@ -81,6 +83,7 @@ gemini:
     key: ${GEMINI_API_KEY:}
     base-url: https://generativelanguage.googleapis.com/v1beta
     model: gemini-2.5-flash
+    key-in-header: ${GEMINI_API_KEY_IN_HEADER:true}   # true: x-goog-api-key 헤더, false: ?key= 쿼리(로그 유출 위험, 비상 복귀용)
     # 서비스 전역 일일 호출 상한(성공·실패 무관한 시도 수). 0 이하면 상한 없음. GeminiDailyQuota 참고.
     daily-limit: ${GEMINI_DAILY_LIMIT:500}
 

@@ -92,6 +92,8 @@ CORS_ALLOWED_ORIGINS=http://localhost:3000,https://*.vercel.app     # 프론트 
 ADMIN_PROVIDER_IDS=KAKAO:<카카오 회원번호>,KAKAO:<…>                 # 제보 검수(관리자) 계정. 로그인 시 역할 동기화. 비우면 검수 API 사용 불가
 GEMINI_DAILY_LIMIT=500                                         # Gemini 서비스 전역 일일 호출 상한(시도 기준). 0이면 무제한
 PASSER_PROOF_RETENTION_DAYS=30                                 # 검수 완료 후 증빙 이미지 보관 일수
+AI_DAILY_ATTEMPTS_PER_USER=3                                   # 사용자별 하루 Gemini 호출 시도 상한(추천·로드맵 각각, 실패 포함)
+GEMINI_API_KEY_IN_HEADER=true                                  # x-goog-api-key 헤더(기본). 문제 시 false로 ?key= 쿼리 복귀
 ```
 
 ## 5. 실행

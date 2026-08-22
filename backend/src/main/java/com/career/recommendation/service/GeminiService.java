@@ -24,6 +24,9 @@ public class GeminiService {
     @Value("${gemini.api.key}")
     private String apiKey;
 
+    @Value("${gemini.api.key-in-header:true}")
+    private boolean keyInHeader;
+
     @Value("${gemini.api.base-url}")
     private String baseUrl;
 
@@ -208,19 +211,18 @@ public class GeminiService {
             return "";
         }
 
-        // ⚠️ 알려진 이슈: API 키가 쿼리스트링(?key=...)에 실린다. URL은 프록시·APM·에러
-        // 스택트레이스(WebClientResponseException 메시지에 요청 URL이 포함되는 경우가 있다)에
-        // 남을 수 있어, 쿼리스트링에 두면 그 로그에 키가 찍힐 위험이 있다. Gemini는
-        // x-goog-api-key 헤더도 지원해서 그쪽으로 옮기는 게 더 안전하지만, 이 세션엔 실제
-        // Gemini API 키로 호출을 검증할 방법이 없어(로컬에 키 없음) 추천·로드맵 핵심 경로를
-        // 검증 없이 바꾸지 않고 보류한다. 나중에 로컬/스테이징에서 실제 호출로 검증한 뒤
-        // 옮기는 걸 권장한다.
-        String uri = String.format("/models/%s:generateContent?key=%s", model, apiKey);
+        // API 키는 x-goog-api-key 헤더로 보낸다(Gemini 공식 지원). 예전엔 쿼리스트링(?key=)에 실어서 프록시·APM·
+        // WebClientResponseException 메시지(요청 URL 포함)에 키가 찍힐 수 있었다. 운영에서 헤더 방식에 문제가 보이면
+        // GEMINI_API_KEY_IN_HEADER=false 로 되돌릴 수 있다 — 두 방식 모두 같은 키로 동작한다.
+        String uri = keyInHeader
+                ? String.format("/models/%s:generateContent", model)
+                : String.format("/models/%s:generateContent?key=%s", model, apiKey);
 
         long startedAt = System.currentTimeMillis();
         try {
             Map<?, ?> response = client.post()
                     .uri(uri)
+                    .headers(h -> { if (keyInHeader) h.set("x-goog-api-key", apiKey); })
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody)
                     .retrieve()
