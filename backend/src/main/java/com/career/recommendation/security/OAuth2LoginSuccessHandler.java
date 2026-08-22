@@ -25,6 +25,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private final UserRepository userRepository;
     private final TokenService tokenService;
+    private final AdminAccountPolicy adminAccountPolicy;
 
     @Value("${app.oauth2.frontend-redirect-uri}")
     private String frontendRedirectUri;
@@ -56,12 +57,16 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
                     if (nickname != null && !nickname.isBlank()) {
                         existing.setNickname(nickname);
                     }
+                    // 관리자 여부는 환경변수(ADMIN_PROVIDER_IDS)로 정해지므로 로그인마다 동기화한다 —
+                    // 목록에서 빠진 계정이 다음 로그인에도 ADMIN으로 남지 않게.
+                    existing.setRole(adminAccountPolicy.resolveRole(existing.getProvider(), existing.getProviderId()));
                     return userRepository.save(existing);
                 })
                 .orElseGet(() -> userRepository.save(User.builder()
                         .provider(oAuth2User.getProvider())
                         .providerId(oAuth2User.getProviderId())
                         .nickname(oAuth2User.getNickname())
+                        .role(adminAccountPolicy.resolveRole(oAuth2User.getProvider(), oAuth2User.getProviderId()))
                         .build()));
     }
 }

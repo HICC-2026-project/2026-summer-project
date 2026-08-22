@@ -100,20 +100,20 @@
 현재: `POST /api/v1/passers/reports` → `is_verified=false`, `data_origin=USER_REPORT`. 검수 전환 경로 없음. `User.role`은 항상 `USER`. `JobSpecProfileService.evictAll()` 류 `@CacheEvict`는 준비돼 있으나 호출자 없음. 증빙은 로컬 FS.
 
 ### E2-1. 관리자 권한 (BE-3)
-- [ ] `User.role`에 `ADMIN` 도입. 부여 방식 결정: (a) `V11` 마이그레이션으로 특정 providerId 지정 (b) 환경변수 `ADMIN_PROVIDER_IDS` 로 기동 시 승격 → **(b) 권장** (시드에 개인 식별자 안 남김)
-- [ ] `JwtTokenProvider` 클레임에 role 포함 여부 확인, `JwtAuthenticationFilter`가 `ROLE_ADMIN` 권한을 세팅하는지 확인
-- [ ] `SecurityConfig`: `/api/v1/admin/**` → `hasRole("ADMIN")`
-- [ ] 403 응답 포맷 `GlobalExceptionHandler`/`JwtAccessDeniedHandler` 일관성 테스트
+- [x] `AdminAccountPolicy` — 환경변수 `ADMIN_PROVIDER_IDS`(`KAKAO:id,...`)로 관리자 지정, 로그인 시 역할 동기화(승격·강등 모두)
+- [x] JWT role 클레임·`ROLE_` 권한 세팅은 이미 있었음 — 추가 작업 없음
+- [x] `SecurityConfig`: `/api/v1/admin/**` → `hasRole("ADMIN")`
+- [x] `JwtAuthenticationFilterTest`: USER → 403 `ACCESS_DENIED`, ADMIN → 200
 
 ### E2-2. 검수 API (BE-3)
-- [ ] `GET /api/v1/admin/passers/reports?status=PENDING&page=` — 미검수 목록 (증빙 메타 포함)
-- [ ] `GET /api/v1/admin/passers/reports/{id}/proof` — 증빙 이미지 스트리밍 (관리자만)
-- [ ] `PATCH /api/v1/admin/passers/reports/{id}` — `{action: APPROVE|REJECT, reason?}`
+- [x] `GET /api/v1/admin/passers/reports?status=PENDING|VERIFIED|REJECTED&page&size` + `GET /{id}` 상세
+- [x] `GET /api/v1/admin/passers/reports/{id}/proof` — inline 스트리밍, no-store
+- [x] `PATCH /api/v1/admin/passers/reports/{id}` — `{action: APPROVE|REJECT, reason?}` (REJECT는 사유 필수)
   - APPROVE: `is_verified=true`, 검수자/시각 기록 → `JobSpecProfileService` 캐시 무효화 호출
   - REJECT: `is_verified=false` 유지 + `rejected_at`, `reject_reason` (삭제하지 않음)
-- [ ] `V11__passer_review_columns.sql` — `reviewed_at`, `reviewed_by`, `reject_reason`
+- [x] `V21__add_passer_data_review_columns.sql` — `reviewed_at`, `reviewed_by_user_id`, `reject_reason` + 대기 목록 부분 인덱스
 - [ ] 승인 시 증빙 파일 보존/삭제 정책 결정 (개인정보 최소 보관: 승인 후 N일 뒤 삭제 권장)
-- [ ] 컨트롤러 검증 테스트 + 서비스 테스트(승인 → 캐시 evict 호출 검증)
+- [x] `AdminPasserReportServiceTest` 5건(승인 evict·반려 no-evict·승인→반려 evict·DEMO 제외·응답에 제보자 없음), `PasserReviewRequestValidationTest` 3건
 
 ### E2-3. 제보 품질 (BE-2)
 - [ ] 제보 시 `SpecNormalizer`로 자격증 문자열 정규화 저장 (현재 집계 시 정규화인지 확인)

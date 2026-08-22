@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -77,5 +78,33 @@ class JwtAuthenticationFilterTest {
 
         mockMvc.perform(get(PROTECTED_PATH).header("Authorization", "Bearer " + refreshToken))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void 일반_USER_토큰으로_관리자_경로에_접근하면_403_ACCESS_DENIED() throws Exception {
+        User user = userRepository.save(User.builder()
+                .nickname("user")
+                .provider("KAKAO")
+                .providerId("provider-id-user-" + System.nanoTime())
+                .build());
+        String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole());
+
+        mockMvc.perform(get("/api/v1/admin/passers/reports").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    void ADMIN_토큰으로는_관리자_경로가_열린다() throws Exception {
+        User admin = userRepository.save(User.builder()
+                .nickname("admin")
+                .provider("KAKAO")
+                .providerId("provider-id-admin-" + System.nanoTime())
+                .role("ADMIN")
+                .build());
+        String accessToken = jwtTokenProvider.createAccessToken(admin.getId(), admin.getRole());
+
+        mockMvc.perform(get("/api/v1/admin/passers/reports").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk());
     }
 }

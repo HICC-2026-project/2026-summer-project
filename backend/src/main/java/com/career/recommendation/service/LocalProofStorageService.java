@@ -70,6 +70,21 @@ public class LocalProofStorageService {
         }
     }
 
+    /**
+     * 검수자가 증빙을 열어볼 때 쓴다. 저장 루트 밖 경로·없는 파일은 Optional.empty().
+     * 파일이 없을 수 있는 이유: 서버 재배포로 로컬 디스크가 초기화된 경우(E2-4 S3 전환 전까지의 한계).
+     */
+    public java.util.Optional<org.springframework.core.io.Resource> load(String storedName) {
+        if (storedName == null || storedName.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        Path target = storageRoot.resolve(storedName).normalize();
+        if (!target.getParent().equals(storageRoot) || !Files.isRegularFile(target)) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(new org.springframework.core.io.FileSystemResource(target));
+    }
+
     Path resolveForInspection(String storedName) {
         Path target = storageRoot.resolve(storedName).normalize();
         ensureInsideStorageRoot(target);

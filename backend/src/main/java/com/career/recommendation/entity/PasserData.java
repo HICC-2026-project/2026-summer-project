@@ -79,6 +79,26 @@ public class PasserData {
     @Column(name = "proof_file_size")
     private Long proofFileSize;
 
+    // --- 검수 이력 (V21) ---
+    /** 검수 시각. null이면 아직 검수 전(PENDING). 승인·반려 모두 채운다. */
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reviewed_by_user_id")
+    private User reviewedBy;
+
+    /** 반려 사유. 승인이면 null. */
+    @Column(name = "reject_reason", length = 300)
+    private String rejectReason;
+
+    /** PENDING | VERIFIED | REJECTED — isVerified와 reviewedAt으로 파생한다. */
+    public String reviewStatus() {
+        if (Boolean.TRUE.equals(isVerified)) return "VERIFIED";
+        if (reviewedAt != null) return "REJECTED";
+        return "PENDING";
+    }
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

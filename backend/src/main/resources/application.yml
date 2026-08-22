@@ -57,6 +57,9 @@ server:
 app:
   storage:
     passer-proof-directory: ${PASSER_PROOF_STORAGE_PATH:./uploads/passer-proofs}
+  admin:
+    # 검수(관리자) 계정. "KAKAO:카카오회원번호" 콤마 구분. 로그인 시 역할이 동기화된다.
+    provider-ids: ${ADMIN_PROVIDER_IDS:}
   oauth2:
     frontend-redirect-uri: ${FRONTEND_REDIRECT_URI:http://localhost:3000/oauth/callback}
   cors:

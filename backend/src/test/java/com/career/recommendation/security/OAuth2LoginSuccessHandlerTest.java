@@ -44,7 +44,7 @@ class OAuth2LoginSuccessHandlerTest {
     private OAuth2LoginSuccessHandler handler;
 
     private void init() {
-        handler = new OAuth2LoginSuccessHandler(userRepository, tokenService);
+        handler = new OAuth2LoginSuccessHandler(userRepository, tokenService, new AdminAccountPolicy("KAKAO:admin-777"));
         ReflectionTestUtils.setField(handler, "frontendRedirectUri", "https://example.com/oauth/callback");
     }
 
@@ -167,5 +167,36 @@ class OAuth2LoginSuccessHandlerTest {
         }
 
         verify(tokenService, never()).issueTokens(any());
+    }
+
+    @Test
+    void ADMIN_PROVIDER_IDS에_있는_계정은_로그인_시_ADMIN으로_동기화된다() throws Exception {
+        init();
+        CustomOAuth2User principal = oAuth2User("admin-777", "관리자");
+        when(authentication.getPrincipal()).thenReturn(principal);
+        // 예전에 USER였던 기존 계정 — 환경변수에 추가되면 다음 로그인에 ADMIN이 된다.
+        User existing = User.builder().provider("KAKAO").providerId("admin-777").nickname("관리자").role("USER").build();
+        when(userRepository.findByProviderAndProviderId("KAKAO", "admin-777")).thenReturn(Optional.of(existing));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(tokenService.issueTokens(any())).thenReturn(new TokenService.TokenPair("a", "r"));
+
+        handler.onAuthenticationSuccess(request, response, authentication);
+
+        assertThat(existing.getRole()).isEqualTo("ADMIN");
+    }
+
+    @Test
+    void 목록에_없는_계정은_로그인_시_USER로_되돌아간다() throws Exception {
+        init();
+        CustomOAuth2User principal = oAuth2User("kakao-1", "유저");
+        when(authentication.getPrincipal()).thenReturn(principal);
+        User existing = User.builder().provider("KAKAO").providerId("kakao-1").nickname("유저").role("ADMIN").build();
+        when(userRepository.findByProviderAndProviderId("KAKAO", "kakao-1")).thenReturn(Optional.of(existing));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(tokenService.issueTokens(any())).thenReturn(new TokenService.TokenPair("a", "r"));
+
+        handler.onAuthenticationSuccess(request, response, authentication);
+
+        assertThat(existing.getRole()).isEqualTo("USER");
     }
 }

@@ -17,6 +17,32 @@ public interface PasserDataRepository extends JpaRepository<PasserData, UUID> {
     /** 본인이 제보한 합격자 데이터(최신순). 제보 상태 확인용. */
     List<PasserData> findAllByReporter_IdOrderByCreatedAtDesc(UUID reporterId);
 
+    // --- 검수(관리자) 목록. 사용자 제보(USER_REPORT)만 대상이다 — DEMO·PUBLIC_REVIEW는 검수 개념이 없다. ---
+
+    /** 검수 대기: 아직 승인도 반려도 안 된 사용자 제보. */
+    @Query("""
+            SELECT p FROM PasserData p
+            WHERE p.dataOrigin = 'USER_REPORT' AND p.reviewedAt IS NULL
+            ORDER BY p.createdAt DESC
+            """)
+    org.springframework.data.domain.Page<PasserData> findPendingReports(org.springframework.data.domain.Pageable pageable);
+
+    /** 승인된 사용자 제보. */
+    @Query("""
+            SELECT p FROM PasserData p
+            WHERE p.dataOrigin = 'USER_REPORT' AND p.isVerified = true
+            ORDER BY p.reviewedAt DESC
+            """)
+    org.springframework.data.domain.Page<PasserData> findVerifiedReports(org.springframework.data.domain.Pageable pageable);
+
+    /** 반려된 사용자 제보. */
+    @Query("""
+            SELECT p FROM PasserData p
+            WHERE p.dataOrigin = 'USER_REPORT' AND p.isVerified = false AND p.reviewedAt IS NOT NULL
+            ORDER BY p.reviewedAt DESC
+            """)
+    org.springframework.data.domain.Page<PasserData> findRejectedReports(org.springframework.data.domain.Pageable pageable);
+
     /**
      * 특정 직무의 비교 가능(검증 완료 또는 DEMO) 합격자 전원을 조회한다.
      * JobSpecProfileService가 직무 요구 프로필(분포·보유율)을 집계하는 데 쓴다.
