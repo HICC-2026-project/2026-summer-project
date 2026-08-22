@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, KAKAO_LOGIN_URL } from "@/lib/api";
 import { clearTokens, getAccessToken, onSessionExpired } from "@/lib/auth";
-import { getMe, getRecommendations, getRoadmap, postLogout, postPasserReport, putSpec, putTarget } from "./api";
+import { deleteMe, getMe, getRecommendations, getRoadmap, postLogout, postPasserReport, putSpec, putTarget } from "./api";
 import { RECOMMENDATIONS, ROADMAP } from "./data";
 import {
   fromLanguageScoresPayload,
@@ -475,6 +475,18 @@ export function SpecRoadApp() {
               void postLogout().catch(() => {});
               clearTokens();
               resetToLogin();
+            }}
+            onWithdraw={() => {
+              // 되돌릴 수 없는 동작이라 브라우저 확인창을 한 번 거친다.
+              if (!window.confirm("정말 탈퇴할까요? 스펙·목표·추천 기록이 모두 삭제되며 되돌릴 수 없어요.\n(제보한 합격자 데이터는 익명으로 남아요)")) return;
+              deleteMe()
+                .then(() => {
+                  clearTokens();
+                  resetToLogin();
+                })
+                .catch(() => {
+                  window.alert("탈퇴 처리에 실패했어요. 잠시 후 다시 시도해 주세요.");
+                });
             }}
           />
         )}

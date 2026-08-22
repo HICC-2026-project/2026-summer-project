@@ -18,6 +18,8 @@ interface ProfileTabProps {
   onEditSpec: () => void;
   onOpenPasserReport: () => void;
   onLogout: () => void;
+  /** 회원 탈퇴. 예시 화면에서는 없다. */
+  onWithdraw?: () => void;
 }
 
 function rowStyle(hasBorder: boolean): CSSProperties {
@@ -39,6 +41,7 @@ export function ProfileTab({
   onEditSpec,
   onOpenPasserReport,
   onLogout,
+  onWithdraw,
 }: ProfileTabProps) {
   const displayName = nickname ?? DEMO_USER_NAME;
   const targetSummary = `${target.size} ${jobLabel(target.job)}`;
@@ -239,6 +242,20 @@ export function ProfileTab({
           {isDemo ? "처음 화면으로" : "로그아웃"}
         </a>
       </p>
+      {!isDemo && onWithdraw && (
+        <p style={{ textAlign: "center", fontSize: 11.5, color: "#C9C7D6", margin: "10px 0 0" }}>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              onWithdraw();
+            }}
+            style={{ color: "#C9C7D6" }}
+          >
+            회원 탈퇴
+          </a>
+        </p>
+      )}
     </div>
   );
 }

@@ -95,3 +95,8 @@ export function postPasserReport(request: PasserReportRequest, proof: File): Pro
 export function getMyPasserReports(): Promise<MyPasserReport[]> {
   return apiFetch<MyPasserReport[]>("/api/v1/passers/reports/me");
 }
+
+// 회원 탈퇴. 서버가 스펙·목표·추천·로드맵·리프레시 토큰을 함께 지운다(제보한 합격자 데이터는 익명으로 남음).
+export function deleteMe(): Promise<void> {
+  return apiFetch<void>("/api/v1/users/me", { method: "DELETE" });
+}

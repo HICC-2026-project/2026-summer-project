@@ -234,7 +234,7 @@
 
 ## E8. 인증·계정 — 담당 BE-3, 규모 S~M
 
-- [ ] 회원 탈퇴 `DELETE /api/v1/users/me` — spec/target/recommendation/roadmap/refresh token/github profile cascade, 제보 데이터는 익명 유지
+- [x] 회원 탈퇴 `DELETE /api/v1/users/me` — V22로 recommendations·roadmap_caches FK CASCADE 추가, 제보는 reporter NULL로 익명 유지. DB 테스트 + 프로필 탭 탈퇴 링크(confirm)
 - [ ] 구글 로그인 (FE에 "곧 지원 예정" 문구 존재, `User.provider`에 GOOGLE 예약됨)
 - [ ] 리프레시 토큰 회전 시 재사용 감지(탈취 대응) 테스트
 - [ ] 닉네임 변경 API
