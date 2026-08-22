@@ -19,6 +19,7 @@
     <description>Spec Road — AI-based career recommendation service</description>
 
     <properties>
+        <test.excludedGroups>demo</test.excludedGroups>
         <java.version>17</java.version>
         <jjwt.version>0.12.5</jjwt.version>
     </properties>
@@ -141,6 +142,25 @@
                     </excludes>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- @Tag("demo") 테스트(점수 체계 비교 데모 등 콘솔 출력용)는 기본/CI에서 제외한다.
+                         실행: ./mvnw test -Pdemo -Dtest=OldVsNewScoreComparisonDemo -->
+                    <excludedGroups>${test.excludedGroups}</excludedGroups>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- 데모 태그 테스트까지 실행: ./mvnw test -Pdemo -->
+        <profile>
+            <id>demo</id>
+            <properties>
+                <test.excludedGroups></test.excludedGroups>
+            </properties>
+        </profile>
+    </profiles>
 </project>

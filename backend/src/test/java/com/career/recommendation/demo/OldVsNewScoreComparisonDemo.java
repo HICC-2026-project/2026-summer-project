@@ -9,6 +9,7 @@ import com.career.recommendation.entity.UserSpec;
 import com.career.recommendation.util.JobSpecProfileBuilder;
 import com.career.recommendation.util.SpecNormalizer;
 import com.career.recommendation.util.SpecPositionCalculator;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -33,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 가중 평균 + 결측 축 재정규화 + 학점 바닥값)을 그대로 옮겨 담고 있다.
  * (직무 유도 자격증 가중치·2/3층 인식은 데모 단순화를 위해 큐레이션 표 폴백 경로만 재현.)
  */
+@Tag("demo")
 class OldVsNewScoreComparisonDemo {
 
     // ── 옛 공식(v8)의 축소 재현 ────────────────────────────────────────────────

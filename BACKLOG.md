@@ -214,7 +214,7 @@
 ## E6. 활동 데이터 품질·검색 — 담당 BE-2, 규모 M
 
 - [ ] `GET /activities` 필터 확장: `jobType`(tags 기반), `deadlineAfter`, 키워드 검색(`name/organization ILIKE`)
-- [ ] 마감 지난 활동 자동 비활성화 스케줄러 (`deadline < today` → `is_active=false`)
+- [x] `ActivityDeadlineScheduler` — 매일 00:05 KST `deadline < today` → `is_active=false` (당일 마감 유지), DB 테스트
 - [ ] 크롤러 재수집 파이프라인 문서화 + 증분 시드 생성 (기존 데이터 중복 방지 키 `url`)
 - [ ] `targetSpec` JSON 스키마 고정 및 검증 테스트
 
@@ -227,7 +227,7 @@
 - [ ] `backend-deploy.yml` 헬스체크 후 롤백 단계
 - [ ] 구조화 로깅 + Gemini 호출 실패율/지연 메트릭 (Actuator + 간단 대시보드 또는 CloudWatch)
 - [ ] Gemini 일일 호출 상한 전역 가드 (현재 사용자별 `dailyUpdateCount`만 존재)
-- [ ] `OldVsNewScoreComparisonDemo`를 `@Tag("demo")`로 분리해 CI에서 제외
+- [x] `OldVsNewScoreComparisonDemo` `@Tag("demo")` + surefire `excludedGroups` — `./mvnw test -Pdemo`로만 실행
 - [ ] 증빙 파일 로컬 경로 백업/정리 크론 (E2-4 전까지)
 
 ---
