@@ -24,6 +24,14 @@ public class PasserData {
     @JoinColumn(name = "activity_id")
     private Activity activity;
 
+    /**
+     * 제보자. USER_REPORT에만 있고 DEMO·PUBLIC_REVIEW·탈퇴 사용자 제보는 null.
+     * 본인 제보 조회·중복 제한용 내부 정보 — 비교·추천 응답 DTO에 절대 싣지 않는다.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reporter_user_id")
+    private User reporter;
+
     @Column(name = "job_type")
     private String jobType;   // JobType enum의 name() — 정의는 domain.JobType 한 곳에서만
 

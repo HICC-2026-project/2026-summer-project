@@ -77,6 +77,7 @@ class PasserReportServiceTest {
         PasserData saved = captor.getValue();
         assertThat(saved.getActivity()).isNull();
         assertThat(saved.getJobType()).isEqualTo("BACKEND");
+        assertThat(saved.getReporter()).isSameAs(user);
         assertThat(saved.getGpa()).isEqualByComparingTo("3.8");
         assertThat(saved.getLanguageScores()).containsExactly(
                 Map.of("type", "TOEIC", "score", 850, "maxScore", 990)
@@ -92,6 +93,27 @@ class PasserReportServiceTest {
 
         assertThat(response.getReportId()).isEqualTo(reportId);
         assertThat(response.getStatus()).isEqualTo("PENDING");
+    }
+
+    @Test
+    void 내_제보_목록은_검수_여부를_PENDING_VERIFIED로_돌려준다() {
+        User user = User.builder().id(UUID.randomUUID()).provider("KAKAO").providerId("p").build();
+        PasserData pending = PasserData.builder().id(UUID.randomUUID()).jobType("BACKEND").year(2026)
+                .isVerified(false).reporter(user).build();
+        PasserData verified = PasserData.builder().id(UUID.randomUUID()).jobType("SECURITY").year(2025)
+                .isVerified(true).reporter(user).build();
+
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+        when(passerDataRepository.findAllByReporter_IdOrderByCreatedAtDesc(user.getId()))
+                .thenReturn(List.of(pending, verified));
+
+        var result = passerReportService.findMyReports(authentication);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getStatus()).isEqualTo("PENDING");
+        assertThat(result.get(0).getJobTypeLabel()).isEqualTo("백엔드");
+        assertThat(result.get(1).getStatus()).isEqualTo("VERIFIED");
+        assertThat(result.get(1).getJobTypeLabel()).isEqualTo("보안");
     }
 
     private PasserReportRequest validRequest() {

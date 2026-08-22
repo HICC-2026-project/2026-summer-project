@@ -43,6 +43,16 @@ export interface PasserReportResponse {
   message: string;
 }
 
+// GET /passers/reports/me — 내가 제보한 합격자 데이터의 검수 상태.
+export interface MyPasserReport {
+  reportId: string;
+  jobType: string;
+  jobTypeLabel: string;
+  year: number;
+  status: "PENDING" | "VERIFIED" | string;
+  createdAt: string;
+}
+
 // GET /users/me response shape.
 export interface UserSpecResponse {
   gpa: number | null;
@@ -127,6 +137,13 @@ export interface SpecPosition {
   basis: "JOB" | "OVERALL" | "NONE" | string;
   basisMessage: string;
   sampleSize: number;
+  // 목표 직무 코드·라벨(미설정이면 null)과 그 직무의 실제 합격자 수.
+  // basis가 OVERALL/NONE일 때 "백엔드 합격자 1명 (3명부터 비교 가능)"으로 부족한 정도를
+  // 보여주고 제보를 유도한다 — basisMessage를 파싱하지 않도록 백엔드가 명시 필드로 준다.
+  targetJobType?: string | null;
+  targetJobLabel?: string | null;
+  jobSampleSize?: number;
+  minSampleSize?: number;
   demoDataIncluded?: boolean;
   axes: AxisPosition[];
   gaps: SpecGap[];

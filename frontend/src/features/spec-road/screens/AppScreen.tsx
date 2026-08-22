@@ -73,7 +73,7 @@ export function AppScreen({
             roadmapLimitReached={roadmapLimitReached}
           />
         )}
-        {tab === "compare" && <CompareTab isDemo={isDemo} recMeta={recMeta} />}
+        {tab === "compare" && <CompareTab isDemo={isDemo} recMeta={recMeta} onOpenPasserReport={onOpenPasserReport} />}
         {tab === "profile" && (
           <ProfileTab
             spec={spec}

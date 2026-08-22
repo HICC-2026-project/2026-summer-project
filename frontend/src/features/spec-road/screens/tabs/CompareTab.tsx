@@ -9,15 +9,59 @@ interface CompareTabProps {
   /** 비로그인 예시 화면 여부. 아래 수치는 전부 예시값이라 로그인 사용자에게는 보여주지 않는다. */
   isDemo: boolean;
   recMeta?: RecommendationMeta | null;
+  /** 합격자 제보 화면으로 이동. 예시 화면에서는 저장할 계정이 없어 호출하지 않는다. */
+  onOpenPasserReport?: () => void;
 }
 
-export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
+export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabProps) {
   const position: SpecPosition | null = isDemo ? DEMO_SPEC_POSITION : (recMeta?.specPosition ?? null);
   const unmatchedCerts = position?.unmatchedCertifications ?? [];
   const matchedCerts = position?.matchedCertifications ?? [];
   // OVERALL(전체 합격자 폴백) 기준일 때 "이 직무 합격자"라고 쓰면 바로 위 basisMessage
   // ("직무 구분 없이 전체 합격자와 비교")와 화면 안에서 모순된다 — 기준에 맞는 명칭을 쓴다.
   const basisNoun = position?.basis === "JOB" ? "이 직무 합격자" : "비교 기준 합격자";
+
+  // 제보 유도 — 직무 표본이 부족해 폴백(OVERALL)을 탔거나 아예 비교 불가(NONE)일 때만.
+  // 이 서비스의 데이터는 사용자 제보로만 쌓이므로, 표본이 부족한 바로 그 화면이 제보의 입구여야 한다.
+  // 수치는 basisMessage를 파싱하지 않고 백엔드 명시 필드(jobSampleSize/minSampleSize)로 만든다.
+  const needsMoreData = !isDemo && position != null && position.basis !== "JOB";
+  const reportCta = needsMoreData && onOpenPasserReport && (
+    <div
+      style={{
+        marginTop: 14,
+        padding: "16px 18px",
+        border: `1px solid color-mix(in srgb, ${PRIMARY} 24%, #E1E0EA)`,
+        borderRadius: 16,
+        background: `color-mix(in srgb, ${PRIMARY} 6%, #fff)`,
+      }}
+    >
+      <div style={{ fontSize: 14, fontWeight: 800, color: "#15141B", marginBottom: 4 }}>
+        {position.targetJobLabel
+          ? `${position.targetJobLabel} 합격자 데이터가 ${position.jobSampleSize ?? 0}명뿐이에요`
+          : "합격자 데이터가 더 필요해요"}
+      </div>
+      <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#61616C", lineHeight: 1.55, wordBreak: "keep-all" }}>
+        {position.minSampleSize ?? 3}명부터 직무별 비교가 가능해요. 합격 경험이 있다면 익명으로 제보해 주세요 — 검수 후 바로 비교에 반영돼요.
+      </p>
+      <button
+        type="button"
+        onClick={onOpenPasserReport}
+        style={{
+          width: "100%",
+          height: 46,
+          border: "none",
+          borderRadius: 13,
+          background: PRIMARY,
+          color: "#fff",
+          fontSize: 14,
+          fontWeight: 700,
+          cursor: "pointer",
+        }}
+      >
+        합격자 스펙 제보하기
+      </button>
+    </div>
+  );
 
   // 미매칭 자격증 고지는 비교 가능 여부와 무관한 정보다. 비교할 합격자가 없어
   // 아래에서 조기 반환하는 경우에도 이 안내만은 보여준다 — 백엔드도 같은 이유로
@@ -68,8 +112,9 @@ export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
         </p>
         <StateMessage
           title="비교 가능한 데이터가 부족해요"
-          description="비교에 필요한 합격자 데이터가 아직 부족하여 분석 결과를 제공해 드릴 수 없어요. 더 많은 데이터가 모일 때까지 기다려 주세요!"
+          description="비교에 필요한 합격자 데이터가 아직 부족하여 분석 결과를 제공해 드릴 수 없어요."
         />
+        {reportCta}
         {unmatchedBanner}
       </div>
     );
@@ -219,6 +264,7 @@ export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
         )}
       </div>
 
+      {reportCta}
       {unmatchedBanner}
     </div>
   );

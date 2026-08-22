@@ -47,6 +47,11 @@ class SpecPositionCalculatorTest {
 
         assertThat(result.getBasis()).isEqualTo("OVERALL");
         assertThat(result.getBasisMessage()).contains("백엔드", "부족", "전체 합격자 3명");
+        // FE가 문구를 파싱하지 않고 "백엔드 합격자 1명 (3명부터 비교 가능) → 제보하기"를 만들 수 있게 명시 필드로 내려준다.
+        assertThat(result.getTargetJobType()).isEqualTo("BACKEND");
+        assertThat(result.getTargetJobLabel()).isEqualTo("백엔드");
+        assertThat(result.getJobSampleSize()).isEqualTo(1);
+        assertThat(result.getMinSampleSize()).isEqualTo(3);
     }
 
     @Test
@@ -59,6 +64,9 @@ class SpecPositionCalculatorTest {
 
         assertThat(result.getBasis()).isEqualTo("OVERALL");
         assertThat(result.getBasisMessage()).contains("목표 직무 미설정");
+        assertThat(result.getTargetJobType()).isNull();
+        assertThat(result.getTargetJobLabel()).isNull();
+        assertThat(result.getJobSampleSize()).isZero();
     }
 
     @Test
@@ -72,6 +80,8 @@ class SpecPositionCalculatorTest {
         assertThat(result.getAxes()).isEmpty();
         assertThat(result.getGaps()).isEmpty();
         assertThat(result.getSampleSize()).isZero();
+        assertThat(result.getTargetJobType()).isEqualTo("BACKEND");
+        assertThat(result.getJobSampleSize()).isEqualTo(1);
     }
 
     // --- percentile 위치 ---

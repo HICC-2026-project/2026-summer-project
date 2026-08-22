@@ -3,6 +3,7 @@ import { getRefreshToken } from "@/lib/auth";
 import { toLanguageScoresPayload } from "./helpers";
 import type {
   ActivityDetailResponse,
+  MyPasserReport,
   PasserReportRequest,
   PasserReportResponse,
   RecommendationsResponse,
@@ -88,4 +89,9 @@ export function postPasserReport(request: PasserReportRequest, proof: File): Pro
     method: "POST",
     body: formData,
   });
+}
+
+// 내 제보 목록(최신순). 검수 전(PENDING)인지 반영됐는지(VERIFIED) 확인용.
+export function getMyPasserReports(): Promise<MyPasserReport[]> {
+  return apiFetch<MyPasserReport[]>("/api/v1/passers/reports/me");
 }

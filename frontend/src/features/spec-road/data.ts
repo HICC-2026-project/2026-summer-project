@@ -142,6 +142,10 @@ export const DEMO_SPEC_POSITION: SpecPosition = {
   basis: "JOB",
   basisMessage: "백엔드 합격자 24명의 분포와 비교한 결과입니다.",
   sampleSize: 24,
+  targetJobType: "BACKEND",
+  targetJobLabel: "백엔드",
+  jobSampleSize: 24,
+  minSampleSize: 3,
   demoDataIncluded: false,
   axes: [
     { axis: "GPA", label: "학점", myValue: "3.80/4.5", medianValue: "3.60/4.5", percentile: 72, coverage: 24 },

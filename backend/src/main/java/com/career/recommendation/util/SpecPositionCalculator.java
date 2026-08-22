@@ -91,6 +91,10 @@ public class SpecPositionCalculator {
         JobSpecProfile profile;
         String basis;
         JobSpecProfile overallProfile = null;
+        // 목표 직무 식별 정보 — 비교에 쓰였든 아니든 항상 내려준다(FE 제보 유도 CTA용).
+        String targetJobType = (jobProfile != null && jobProfile.getJobType() != null && !jobProfile.getJobType().isBlank())
+                ? jobProfile.getJobType() : null;
+        int jobSampleSize = targetJobType != null ? jobProfile.getSampleSize() : 0;
         if (jobProfile != null && jobProfile.getJobType() != null && jobProfile.getSampleSize() >= MIN_SAMPLE) {
             profile = jobProfile;
             basis = BASIS_JOB;
@@ -103,6 +107,10 @@ public class SpecPositionCalculator {
                     .basis(BASIS_NONE)
                     .basisMessage("아직 비교할 합격자 데이터가 부족합니다.")
                     .sampleSize(0)
+                    .targetJobType(targetJobType)
+                    .targetJobLabel(JobType.labelOf(targetJobType))
+                    .jobSampleSize(jobSampleSize)
+                    .minSampleSize(MIN_SAMPLE)
                     .demoDataIncluded(false)
                     .axes(List.of())
                     .gaps(List.of())
@@ -118,6 +126,10 @@ public class SpecPositionCalculator {
                 .basis(basis)
                 .basisMessage(basisMessage(basis, jobProfile, profile))
                 .sampleSize(profile.getSampleSize())
+                .targetJobType(targetJobType)
+                .targetJobLabel(JobType.labelOf(targetJobType))
+                .jobSampleSize(jobSampleSize)
+                .minSampleSize(MIN_SAMPLE)
                 .demoDataIncluded(profile.isContainsDemoData())
                 .axes(buildAxes(userSpec, userCerts, profile))
                 .gaps(buildGaps(userCerts, profile))

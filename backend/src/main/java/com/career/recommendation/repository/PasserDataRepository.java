@@ -14,6 +14,9 @@ public interface PasserDataRepository extends JpaRepository<PasserData, UUID> {
 
     List<PasserData> findByIsVerifiedTrue();
 
+    /** 본인이 제보한 합격자 데이터(최신순). 제보 상태 확인용. */
+    List<PasserData> findAllByReporter_IdOrderByCreatedAtDesc(UUID reporterId);
+
     /**
      * 특정 직무의 비교 가능(검증 완료 또는 DEMO) 합격자 전원을 조회한다.
      * JobSpecProfileService가 직무 요구 프로필(분포·보유율)을 집계하는 데 쓴다.

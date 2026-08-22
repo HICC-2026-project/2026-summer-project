@@ -32,6 +32,23 @@ public class SpecPositionResult {
     /** 비교에 쓴 프로필의 합격자 수. basis가 NONE이면 0. */
     private Integer sampleSize;
 
+    /**
+     * 사용자의 목표 직무 코드(JobType.name())·한글 라벨. 직무 미설정이면 null.
+     * FE가 basisMessage를 파싱하지 않고 "백엔드 합격자 제보하기" 같은 CTA를 만들 수 있게 명시한다.
+     */
+    private String targetJobType;
+    private String targetJobLabel;
+
+    /**
+     * 목표 직무 프로필의 실제 합격자 수 — 비교에 쓰였는지와 무관하게 항상 채운다.
+     * basis가 OVERALL/NONE일 때 "백엔드 합격자 1명 (3명부터 비교 가능)"처럼 부족한 정도를
+     * 보여주고 제보를 유도하는 데 쓴다. 직무 미설정이면 0.
+     */
+    private Integer jobSampleSize;
+
+    /** 직무 프로필로 비교하기 위한 최소 표본 수(SpecPositionCalculator.MIN_SAMPLE). */
+    private Integer minSampleSize;
+
     /** 비교에 쓴 프로필에 합성 DEMO(또는 출처 미상) 데이터가 포함되었는지. FE 고지용. */
     private Boolean demoDataIncluded;
 

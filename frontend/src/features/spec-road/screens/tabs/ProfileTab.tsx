@@ -1,9 +1,10 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { getMyPasserReports } from "../../api";
 import { DEMO_USER_NAME, PRIMARY } from "../../data";
 import { hasMeaningfulLangScore, jobLabel } from "../../helpers";
-import type { Spec, Target } from "../../types";
+import type { MyPasserReport, Spec, Target } from "../../types";
 
 interface ProfileTabProps {
   spec: Spec;
@@ -41,6 +42,22 @@ export function ProfileTab({
   // 0점 입력은 미입력으로 취급한다 — "TOEIC 0"이 프로필에 보이면 없는 성적이 있는 것처럼 보인다.
   const langEntries = Object.entries(spec.langScores).filter(([type, score]) => hasMeaningfulLangScore(type, score));
   const langLabel = langEntries.length ? langEntries.map(([type, score]) => `${type} ${score}`).join(", ") : "없음";
+
+  // 내 제보 검수 상태. 제보 직후엔 "검수 대기"만 보이므로, 사용자가 "반영됐나?"를 여기서 확인한다.
+  // 실패는 조용히 비운다 — 프로필 화면의 본 기능이 아니라서 오류 카드까지 띄우지 않는다.
+  const [myReports, setMyReports] = useState<MyPasserReport[]>([]);
+  useEffect(() => {
+    if (isDemo) return;
+    let cancelled = false;
+    getMyPasserReports()
+      .then((list) => {
+        if (!cancelled) setMyReports(list);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isDemo]);
 
   return (
     <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
@@ -144,6 +161,40 @@ export function ProfileTab({
           <p style={{ margin: "9px 8px 0", fontSize: 11.5, color: "#9797A1", lineHeight: 1.5, textAlign: "center" }}>
             제보 내용은 익명으로 저장되며, 검수 완료 후 비교 데이터에 반영됩니다.
           </p>
+
+          {myReports.length > 0 && (
+            <div style={{ marginTop: 16, background: "#fff", border: "1px solid #EDEDF2", borderRadius: 18, padding: "6px 18px" }}>
+              <div style={{ fontSize: 12, color: "#9797A1", fontWeight: 600, padding: "12px 0 4px" }}>내 제보 {myReports.length}건</div>
+              {myReports.map((r, i) => {
+                const verified = r.status === "VERIFIED";
+                return (
+                  <div key={r.reportId} style={rowStyle(i < myReports.length - 1)}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#15141B" }}>
+                        {r.jobTypeLabel} · {r.year}년 합격
+                      </div>
+                      <div style={{ fontSize: 11.5, color: "#9797A1", marginTop: 2 }}>
+                        {r.createdAt.slice(0, 10)} 제보
+                      </div>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: verified ? "#12A150" : "#79551F",
+                        background: verified ? "#E7F6EE" : "#FFF9ED",
+                        padding: "4px 10px",
+                        borderRadius: 999,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {verified ? "반영 완료" : "검수 대기"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
 

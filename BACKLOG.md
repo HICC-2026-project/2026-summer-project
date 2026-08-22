@@ -194,10 +194,10 @@
 
 현재: `CompareTab`에 "데이터가 부족해요" 빈 상태는 있으나 제보 화면으로의 동선 없음. 백엔드는 폴백(전체 프로필) 여부를 문구로 내려줌.
 
-- [ ] `SpecPositionResult`에 `jobSampleSize`, `fallbackUsed` 명시 필드 확인/추가 (FE가 문구 파싱하지 않도록)
-- [ ] `CompareTab` 빈 상태·폴백 상태에 "합격자 제보하기" CTA → `PasserReportScreen`
-- [ ] 홈 카드에도 직무 표본 수 표시 ("백엔드 합격자 N명 기준")
-- [ ] 제보 완료 후 "검수 후 반영" 안내 + 본인 제보 상태 조회 `GET /api/v1/passers/reports/me` (BE-3, S)
+- [x] `SpecPositionResult`에 `targetJobType/targetJobLabel/jobSampleSize/minSampleSize` 명시 필드 추가
+- [x] `CompareTab` NONE·OVERALL 상태에 "○○ 합격자 데이터가 N명뿐" 카드 + 제보 CTA
+- [x] 홈 카드 칩 "백엔드 합격자 N명 기준"
+- [x] `GET /api/v1/passers/reports/me` (V20 `reporter_user_id`) + 프로필 탭 "내 제보 N건 · 검수 대기/반영 완료"
 
 ---
 

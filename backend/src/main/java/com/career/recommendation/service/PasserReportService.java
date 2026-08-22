@@ -1,10 +1,12 @@
 package com.career.recommendation.service;
 
 import com.career.recommendation.domain.JobType;
+import com.career.recommendation.dto.passer.MyPasserReportResponse;
 import com.career.recommendation.dto.passer.PasserReportRequest;
 import com.career.recommendation.dto.passer.PasserReportResponse;
 import com.career.recommendation.dto.user.LanguageScoreRequest;
 import com.career.recommendation.entity.PasserData;
+import com.career.recommendation.entity.User;
 import com.career.recommendation.repository.PasserDataRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -35,12 +37,13 @@ public class PasserReportService {
             MultipartFile proof
     ) {
         // JWT만 유효한 것이 아니라 현재 DB에 존재하는 로그인 사용자인지도 확인한다.
-        currentUserService.getCurrentUser(authentication);
+        User reporter = currentUserService.getCurrentUser(authentication);
 
         LocalProofStorageService.StoredProof storedProof = localProofStorageService.store(proof);
 
         PasserData report = PasserData.builder()
                 .activity(null)
+                .reporter(reporter)
                 .jobType(JobType.of(request.getJobType()).name())
                 .year(request.getYear())
                 .gpa(request.getGpa())
@@ -66,6 +69,14 @@ public class PasserReportService {
             localProofStorageService.deleteQuietly(storedProof.storedName());
             throw exception;
         }
+    }
+
+    /** 본인이 제보한 목록(최신순). 검수 여부만 확인하는 용도. */
+    public List<MyPasserReportResponse> findMyReports(Authentication authentication) {
+        User me = currentUserService.getCurrentUser(authentication);
+        return passerDataRepository.findAllByReporter_IdOrderByCreatedAtDesc(me.getId()).stream()
+                .map(MyPasserReportResponse::from)
+                .toList();
     }
 
     private List<Map<String, Object>> convertLanguageScores(

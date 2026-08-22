@@ -105,6 +105,10 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
                 보완 추천 {position!.gaps.length}개
               </span>
             )}
+            {/* 표본 수 — 몇 명과 비교한 결과인지 카드 안에서 바로 읽히게 한다. */}
+            <span style={{ fontSize: 12.5, fontWeight: 600, background: "rgba(255,255,255,0.10)", padding: "6px 11px", borderRadius: 999, whiteSpace: "nowrap", opacity: 0.9 }}>
+              {position!.basis === "JOB" && position!.targetJobLabel ? `${position!.targetJobLabel} 합격자` : "전체 합격자"} {position!.sampleSize}명 기준
+            </span>
           </div>
         ) : (
           <div style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, letterSpacing: "-0.03em" }}>–</div>
