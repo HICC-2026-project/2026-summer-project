@@ -13,6 +13,7 @@ interface AppScreenProps {
   spec: Spec;
   target: Target;
   nickname: string | null;
+  isAdmin?: boolean;
   recommendations: Recommendation[];
   recMeta: RecommendationMeta | null;
   recLoading: boolean;
@@ -34,6 +35,7 @@ export function AppScreen({
   spec,
   target,
   nickname,
+  isAdmin = false,
   recommendations,
   recMeta,
   recLoading,
@@ -79,6 +81,7 @@ export function AppScreen({
             spec={spec}
             target={target}
             nickname={nickname}
+            isAdmin={isAdmin}
             isDemo={isDemo}
             onEditSpec={onEditSpec}
             onOpenPasserReport={onOpenPasserReport}

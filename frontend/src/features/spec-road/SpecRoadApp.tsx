@@ -81,6 +81,8 @@ export function SpecRoadApp() {
   const [spec, setSpec] = useState<Spec>(INITIAL_SPEC);
   const [target, setTarget] = useState<Target>(INITIAL_TARGET);
   const [nickname, setNickname] = useState<string | null>(null);
+  // 관리자 여부 — 프로필 탭에 검수 화면 링크를 보여줄지만 결정한다(권한 판정은 서버).
+  const [isAdmin, setIsAdmin] = useState(false);
   // 저장된 직전 결과가 다른 계정 것과 섞이지 않도록 사용자 식별자를 함께 보관한다.
   const [userId, setUserId] = useState<string | null>(null);
   // 비로그인 예시 화면 여부. 저장할 계정이 없으므로 프로필에서 수정 대신 로그인을 유도한다.
@@ -111,6 +113,7 @@ export function SpecRoadApp() {
     clearLastResult();
     setUserId(null);
     setNickname(null);
+    setIsAdmin(false);
     setDetailId(null);
     setRecommendations([]);
     setRecMeta(null);
@@ -258,6 +261,7 @@ export function SpecRoadApp() {
       .then((me) => {
         setNickname(me.nickname);
         setUserId(me.id);
+        setIsAdmin(me.role === "ADMIN");
 
         if (me.spec) {
           setSpec({
@@ -442,6 +446,7 @@ export function SpecRoadApp() {
             spec={spec}
             target={target}
             nickname={nickname}
+            isAdmin={isAdmin}
             recommendations={isDemo ? RECOMMENDATIONS : recommendations}
             recMeta={isDemo ? null : recMeta}
             recLoading={isDemo ? false : recLoading}

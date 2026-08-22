@@ -17,6 +17,12 @@ public interface PasserDataRepository extends JpaRepository<PasserData, UUID> {
     /** 본인이 제보한 합격자 데이터(최신순). 제보 상태 확인용. */
     List<PasserData> findAllByReporter_IdOrderByCreatedAtDesc(UUID reporterId);
 
+    /** 같은 사용자가 같은 직무·연도로 아직 검수되지 않은 제보를 이미 올렸는지 (중복 제보 차단). */
+    boolean existsByReporter_IdAndJobTypeAndYearAndReviewedAtIsNull(UUID reporterId, String jobType, Integer year);
+
+    /** 사용자의 일정 시각 이후 제보 수 (일일 제보 상한). */
+    long countByReporter_IdAndCreatedAtAfter(UUID reporterId, java.time.LocalDateTime after);
+
     // --- 검수(관리자) 목록. 사용자 제보(USER_REPORT)만 대상이다 — DEMO·PUBLIC_REVIEW는 검수 개념이 없다. ---
 
     /** 검수 대기: 아직 승인도 반려도 안 된 사용자 제보. */

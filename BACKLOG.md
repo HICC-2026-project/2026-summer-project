@@ -116,9 +116,9 @@
 - [x] `AdminPasserReportServiceTest` 5건(승인 evict·반려 no-evict·승인→반려 evict·DEMO 제외·응답에 제보자 없음), `PasserReviewRequestValidationTest` 3건
 
 ### E2-3. 제보 품질 (BE-2)
-- [ ] 제보 시 `SpecNormalizer`로 자격증 문자열 정규화 저장 (현재 집계 시 정규화인지 확인)
-- [ ] 동일 사용자 중복 제보 제한 (활동+직무 기준 1일 1회 등)
-- [ ] `specSummary`에 개인정보 패턴(이메일/전화/학교명) 차단 검증 추가
+- [x] 자격증: 저장은 원문(검수자 대조용), 집계 시 `SpecNormalizer.canonicalCerts`로 정규화됨 — 변경 불필요
+- [x] 중복 제한: 같은 직무·연도 검수 대기 건 존재 시 409, 24h 5건 상한. 파일 저장 전에 검사
+- [x] `specSummary`는 제보 요청에 없음(항상 null) — 해당 없음
 
 ### E2-4. 증빙 저장소 전환 (BE-3)
 - [ ] `ProofStorageService` 인터페이스 분리 (현재 `LocalProofStorageService` 단일 구현)
@@ -127,8 +127,8 @@
 - [ ] 배포 워크플로우에 버킷/리전 환경변수 추가
 
 ### E2-5. 관리자 화면 (FE, 최소)
-- [ ] `/admin` 라우트 — role 체크, 미검수 목록, 증빙 미리보기, 승인/반려 버튼
-- [ ] 로컬 캐시 불필요. 간단한 테이블 UI로 충분
+- [x] `/admin` 라우트(`features/admin`) — 상태 탭·목록·증빙 미리보기(blob)·승인/반려. 프로필 탭에 ADMIN만 링크. `/users/me`에 `role` 추가
+- [x] 테이블 UI, 403은 "권한 없음" 안내로 표시
 
 ---
 

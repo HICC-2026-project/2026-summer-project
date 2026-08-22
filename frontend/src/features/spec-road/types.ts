@@ -73,6 +73,7 @@ export interface UserMeResponse {
   email: string | null;
   nickname: string | null;
   provider: string;
+  role?: "USER" | "ADMIN" | string;
   spec: UserSpecResponse | null;
   target: TargetJobResponse | null;
 }

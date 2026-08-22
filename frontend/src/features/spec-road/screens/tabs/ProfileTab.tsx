@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
+import Link from "next/link";
 import { getMyPasserReports } from "../../api";
 import { DEMO_USER_NAME, PRIMARY } from "../../data";
 import { hasMeaningfulLangScore, jobLabel } from "../../helpers";
@@ -10,6 +11,8 @@ interface ProfileTabProps {
   spec: Spec;
   target: Target;
   nickname: string | null;
+  /** 관리자(검수자) 계정이면 검수 화면 링크를 보여준다. */
+  isAdmin?: boolean;
   /** 비로그인 예시 화면 여부. 저장할 계정이 없어 수정 대신 로그인을 유도한다. */
   isDemo: boolean;
   onEditSpec: () => void;
@@ -31,6 +34,7 @@ export function ProfileTab({
   spec,
   target,
   nickname,
+  isAdmin = false,
   isDemo,
   onEditSpec,
   onOpenPasserReport,
@@ -162,11 +166,36 @@ export function ProfileTab({
             제보 내용은 익명으로 저장되며, 검수 완료 후 비교 데이터에 반영됩니다.
           </p>
 
+          {isAdmin && (
+            <Link
+              href="/admin"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginTop: 12,
+                height: 46,
+                border: "1px dashed #C9C7D6",
+                borderRadius: 14,
+                color: "#4A4954",
+                fontSize: 13.5,
+                fontWeight: 700,
+                textDecoration: "none",
+              }}
+            >
+              🛠 제보 검수 화면 (관리자)
+            </Link>
+          )}
+
           {myReports.length > 0 && (
             <div style={{ marginTop: 16, background: "#fff", border: "1px solid #EDEDF2", borderRadius: 18, padding: "6px 18px" }}>
               <div style={{ fontSize: 12, color: "#9797A1", fontWeight: 600, padding: "12px 0 4px" }}>내 제보 {myReports.length}건</div>
               {myReports.map((r, i) => {
                 const verified = r.status === "VERIFIED";
+                const rejected = r.status === "REJECTED";
+                const badgeColor = verified ? "#12A150" : rejected ? "#E5484D" : "#79551F";
+                const badgeBg = verified ? "#E7F6EE" : rejected ? "#FCECEC" : "#FFF9ED";
+                const badgeText = verified ? "반영 완료" : rejected ? "반려됨" : "검수 대기";
                 return (
                   <div key={r.reportId} style={rowStyle(i < myReports.length - 1)}>
                     <div>
@@ -181,14 +210,14 @@ export function ProfileTab({
                       style={{
                         fontSize: 12,
                         fontWeight: 700,
-                        color: verified ? "#12A150" : "#79551F",
-                        background: verified ? "#E7F6EE" : "#FFF9ED",
+                        color: badgeColor,
+                        background: badgeBg,
                         padding: "4px 10px",
                         borderRadius: 999,
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {verified ? "반영 완료" : "검수 대기"}
+                      {badgeText}
                     </span>
                   </div>
                 );
