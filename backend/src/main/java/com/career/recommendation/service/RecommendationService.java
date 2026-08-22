@@ -152,7 +152,7 @@ public class RecommendationService {
                 : buildFallbackResponse(activeActivities, position, jobType != null ? jobType : "미설정")
                         .toBuilder().dailyLimitReached(true).build();
 
-        // 6. 결과 캐싱 (일일 제한 카운트 증가) — 별도 Bean에서 호출
+        // 6. 결과 캐싱 — 별도 Bean에서 호출. (daily_update_count는 통계용으로만 남아 있고 하루 게이트는 AiDailyAttemptLimiter가 맡는다)
         if (response.isAiRecommendation()) {
             recommendationCacheService.save(user, response);
         }
