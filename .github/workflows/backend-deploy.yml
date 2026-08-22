@@ -47,18 +47,25 @@ jobs:
           ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" 'bash -se' <<'REMOTE'
           set -euo pipefail
           cd ~/2026-summer-project
+          # 롤백 지점: 지금 떠 있는 컨테이너가 빌드된 커밋. 새 빌드가 부팅에 실패하면 여기로 되돌린다.
+          git rev-parse HEAD > /tmp/spec-road-prev-commit
+          echo "이전 커밋: $(cat /tmp/spec-road-prev-commit)"
+          # 직전 배포가 롤백으로 끝났으면 detached HEAD 상태다 — main으로 돌아와야 pull이 된다.
+          git checkout -q main
           git pull --ff-only
           cd backend
           docker compose -f docker-compose.prod.yml up -d --build
           REMOTE
 
       - name: 부팅 확인
+        id: health
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
           # 앱이 실제로 응답할 때까지 기다린다. 3분 안에 못 뜨면 배포 실패로 처리한다.
+          # /actuator/health는 DB 연결(Flyway 포함)까지 UP이어야 200을 준다 — /api-docs보다 정확한 신호.
           for i in $(seq 1 18); do
-            code=$(curl -s -o /dev/null -m 10 -w "%{http_code}" "http://$EC2_HOST:8080/api-docs" || true)
+            code=$(curl -s -o /dev/null -m 10 -w "%{http_code}" "http://$EC2_HOST:8080/actuator/health" || true)
             if [ "$code" = "200" ]; then
               echo "배포 성공 — 앱이 정상 응답합니다."
               exit 0
@@ -66,7 +73,7 @@ jobs:
             echo "대기 중... ($i/18, 응답 코드: $code)"
             sleep 10
           done
-          echo "앱이 3분 안에 응답하지 않았습니다. EC2 로그를 확인하세요."
+          echo "앱이 3분 안에 응답하지 않았습니다. 이전 커밋으로 롤백합니다."
           exit 1
 
       - name: 실패 시 로그 출력
@@ -76,4 +83,32 @@ jobs:
           EC2_USER: ${{ secrets.EC2_USER }}
         run: |
           ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" \
-            'docker logs spec-road-api --tail 50' || true
+            'docker logs spec-road-api --tail 80' || true
+
+      # 새 빌드가 헬스체크를 통과하지 못했을 때만 롤백한다(SSH·pull 단계 실패는 컨테이너가 바뀌지 않았으므로 제외).
+      # git checkout으로 이전 커밋을 받아 다시 빌드·기동하고, 그것까지 실패하면 사람이 봐야 한다.
+      - name: 헬스체크 실패 시 이전 커밋으로 롤백
+        if: failure() && steps.health.outcome == 'failure'
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          cd ~/2026-summer-project
+          prev=$(cat /tmp/spec-road-prev-commit)
+          echo "롤백 대상 커밋: $prev"
+          git checkout --detach "$prev"
+          cd backend
+          docker compose -f docker-compose.prod.yml up -d --build
+          for i in $(seq 1 18); do
+            code=$(curl -s -o /dev/null -m 10 -w "%{http_code}" "http://localhost:8080/actuator/health" || true)
+            if [ "$code" = "200" ]; then
+              echo "롤백 완료 — 이전 커밋($prev)이 정상 응답합니다. main은 그대로이므로 원인 수정 후 다시 배포하세요."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "롤백한 이전 커밋도 응답하지 않습니다. 수동 확인이 필요합니다."
+          exit 1
+          REMOTE

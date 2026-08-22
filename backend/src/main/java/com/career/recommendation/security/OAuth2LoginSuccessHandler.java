@@ -54,7 +54,8 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
                     // 기존 닉네임이 조용히 지워지므로(로그인만 했는데 프로필이 비는 현상),
                     // 값이 실제로 있을 때만 갱신한다.
                     String nickname = oAuth2User.getNickname();
-                    if (nickname != null && !nickname.isBlank()) {
+                    // 앱에서 직접 바꾼 닉네임(nicknameOverridden)은 카카오 값으로 되돌리지 않는다.
+                    if (nickname != null && !nickname.isBlank() && !existing.isNicknameOverridden()) {
                         existing.setNickname(nickname);
                     }
                     // 관리자 여부는 환경변수(ADMIN_PROVIDER_IDS)로 정해지므로 로그인마다 동기화한다 —

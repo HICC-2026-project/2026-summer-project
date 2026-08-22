@@ -44,6 +44,18 @@ public interface PasserDataRepository extends JpaRepository<PasserData, UUID> {
     Page<PasserData> findReportsByStatus(@Param("status") String status, Pageable pageable);
 
     /**
+     * 증빙 보관 기한이 지난 제보. 검수가 끝난(승인·반려) 제보의 증빙은 더 볼 일이 없으므로
+     * reviewedAt 기준 일정 기간 뒤 파일을 지운다(ProofRetentionScheduler). 미검수(PENDING)는 대상이 아니다.
+     */
+    @Query("""
+            SELECT p FROM PasserData p
+            WHERE p.proofStoredName IS NOT NULL
+              AND p.reviewedAt IS NOT NULL
+              AND p.reviewedAt < :before
+            """)
+    List<PasserData> findReviewedWithProofBefore(@Param("before") LocalDateTime before);
+
+    /**
      * 특정 직무의 비교 가능(검증 완료 또는 DEMO) 합격자 전원을 조회한다.
      * JobSpecProfileService가 직무 요구 프로필(분포·보유율)을 집계하는 데 쓴다.
      *

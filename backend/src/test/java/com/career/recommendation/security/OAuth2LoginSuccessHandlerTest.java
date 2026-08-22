@@ -170,6 +170,22 @@ class OAuth2LoginSuccessHandlerTest {
     }
 
     @Test
+    void 앱에서_바꾼_닉네임은_카카오_재로그인이_덮어쓰지_않는다() throws Exception {
+        init();
+        CustomOAuth2User principal = oAuth2User("kakao-nick", "카카오닉");
+        when(authentication.getPrincipal()).thenReturn(principal);
+        User existing = User.builder().provider("KAKAO").providerId("kakao-nick")
+                .nickname("내가정한닉").nicknameOverridden(true).build();
+        when(userRepository.findByProviderAndProviderId("KAKAO", "kakao-nick")).thenReturn(Optional.of(existing));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(tokenService.issueTokens(any())).thenReturn(new TokenService.TokenPair("a", "r"));
+
+        handler.onAuthenticationSuccess(request, response, authentication);
+
+        assertThat(existing.getNickname()).isEqualTo("내가정한닉");
+    }
+
+    @Test
     void ADMIN_PROVIDER_IDS에_있는_계정은_로그인_시_ADMIN으로_동기화된다() throws Exception {
         init();
         CustomOAuth2User principal = oAuth2User("admin-777", "관리자");

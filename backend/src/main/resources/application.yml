@@ -61,6 +61,7 @@ server:
 app:
   storage:
     passer-proof-directory: ${PASSER_PROOF_STORAGE_PATH:./uploads/passer-proofs}
+    proof-retention-days: ${PASSER_PROOF_RETENTION_DAYS:30}   # 검수 완료(승인·반려) 후 증빙 이미지를 보관하는 일수. ProofRetentionScheduler
   admin:
     # 검수(관리자) 계정. "KAKAO:카카오회원번호" 콤마 구분. 로그인 시 역할이 동기화된다.
     provider-ids: ${ADMIN_PROVIDER_IDS:}
@@ -82,6 +83,15 @@ gemini:
     model: gemini-2.5-flash
     # 서비스 전역 일일 호출 상한(성공·실패 무관한 시도 수). 0 이하면 상한 없음. GeminiDailyQuota 참고.
     daily-limit: ${GEMINI_DAILY_LIMIT:500}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health   # 배포 헬스체크 전용. 그 외 엔드포인트는 노출하지 않는다
+  endpoint:
+    health:
+      show-details: never   # 인증 없이 열리므로 DB 상태 등 내부 정보는 숨긴다
 
 springdoc:
   api-docs:

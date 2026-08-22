@@ -25,6 +25,11 @@ public class User {
 
     private String nickname;
 
+    /** 앱에서 직접 바꾼 닉네임이면 true — 카카오 로그인이 덮어쓰지 않는다(V23). */
+    @Column(name = "nickname_overridden", nullable = false)
+    @Builder.Default
+    private boolean nicknameOverridden = false;
+
     @Column(nullable = false)
     private String provider;       // KAKAO | GOOGLE
 

@@ -224,11 +224,11 @@
 
 - [x] 프론트 CI: `.github/workflows/frontend-ci.yml` — Node 22, tsc/lint/build, `frontend/**` 경로 트리거
 - [ ] 탄력적 IP 고정, 카카오 리다이렉트 URI 운영값 반영 (메모리상 미완)
-- [ ] `backend-deploy.yml` 헬스체크 후 롤백 단계
+- [x] `backend-deploy.yml` — `/actuator/health`로 부팅 판정, 실패 시 이전 커밋으로 자동 롤백(detached HEAD 복귀 포함)
 - [ ] 구조화 로깅 + Gemini 호출 실패율/지연 메트릭 (Actuator + 간단 대시보드 또는 CloudWatch)
 - [x] `GeminiDailyQuota` — 전역 일일 시도 상한(`GEMINI_DAILY_LIMIT`, 기본 500), 초과 시 폴백
 - [x] `OldVsNewScoreComparisonDemo` `@Tag("demo")` + surefire `excludedGroups` — `./mvnw test -Pdemo`로만 실행
-- [ ] 증빙 파일 로컬 경로 백업/정리 크론 (E2-4 전까지)
+- [x] `ProofRetentionScheduler` — 검수 완료 후 `PASSER_PROOF_RETENTION_DAYS`(30) 지난 증빙 파일 삭제·메타 비움
 
 ---
 
@@ -237,7 +237,7 @@
 - [x] 회원 탈퇴 `DELETE /api/v1/users/me` — V22로 recommendations·roadmap_caches FK CASCADE 추가, 제보는 reporter NULL로 익명 유지. DB 테스트 + 프로필 탭 탈퇴 링크(confirm)
 - [ ] 구글 로그인 (FE에 "곧 지원 예정" 문구 존재, `User.provider`에 GOOGLE 예약됨)
 - [x] 리프레시 토큰 재사용 감지 — 교체된 토큰 재제시 시 그 사용자 세션 전부 폐기 + 테스트
-- [ ] 닉네임 변경 API
+- [x] `PATCH /users/me/nickname` + `nickname_overridden`(V23)로 카카오 재로그인 덮어쓰기 방지
 
 ---
 
@@ -328,7 +328,7 @@
 ## E9. 품질·테스트 — 전원, 규모 S
 
 - [x] `SpecPositionServiceCacheTest` — Caffeine 실제 올린 슬라이스 테스트 5건 (캐시 적중·폴백 지연 조회·null 키·evictAll)
-- [ ] 추천·로드맵 E2E 시나리오 테스트: 스펙 저장 → 추천 → 로드맵이 같은 갭을 참조
+- [x] `RecommendationRoadmapSameGapTest` — 실제 DB 위에서 두 서비스가 Gemini에 넘기는 갭 컨텍스트 동일 검증
 - [ ] 프론트 컴포넌트 테스트 최소 세트 (CompareTab 막대/미입력 렌더링)
 - [x] PROJECT.md 추천·로드맵·제보/검수 흐름 v9 현행화
 

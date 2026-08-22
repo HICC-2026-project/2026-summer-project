@@ -1,5 +1,6 @@
 package com.career.recommendation.controller;
 
+import com.career.recommendation.dto.user.NicknameRequest;
 import com.career.recommendation.dto.user.TargetJobRequest;
 import com.career.recommendation.dto.user.TargetJobResponse;
 import com.career.recommendation.dto.user.UserMeResponse;
@@ -54,6 +55,16 @@ public class UserController {
             @Valid @RequestBody TargetJobRequest request
     ) {
         return targetJobService.saveOrUpdateMyTarget(authentication, request);
+    }
+
+    @Operation(summary = "닉네임 변경",
+            description = "앱에서 바꾼 닉네임은 이후 카카오 로그인 시 카카오 프로필 닉네임으로 덮어써지지 않는다.")
+    @PatchMapping("/me/nickname")
+    public UserMeResponse updateNickname(
+            Authentication authentication,
+            @Valid @RequestBody NicknameRequest request
+    ) {
+        return userService.updateNickname(authentication, request.getNickname());
     }
 
     @Operation(summary = "회원 탈퇴",

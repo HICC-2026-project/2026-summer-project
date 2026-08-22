@@ -57,6 +57,15 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void 헬스체크는_토큰_없이_200이고_내부_상세는_숨긴다() throws Exception {
+        // backend-deploy.yml이 이 경로로 부팅을 판정한다. show-details=never라 DB 상태 같은 내부 정보는 노출되지 않는다.
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.components").doesNotExist());
+    }
+
+    @Test
     void public_경로는_토큰_없이도_접근된다() throws Exception {
         mockMvc.perform(get("/api/v1/auth/refresh"))
                 .andExpect(status().is(org.springframework.http.HttpStatus.METHOD_NOT_ALLOWED.value()));

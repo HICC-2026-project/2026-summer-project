@@ -92,6 +92,12 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Actuator — /actuator/health 배포 헬스체크 전용 (backend-deploy.yml) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- Cache (Caffeine) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -48,6 +48,7 @@ public class SecurityConfig {
             "/swagger-ui.html",   // 진입 URL — /swagger-ui/** 패턴에 안 걸리므로 별도 등록 필요
             "/swagger-ui/**",
             "/api-docs/**",
+            "/actuator/health",   // 배포 헬스체크(backend-deploy.yml)
             "/error"
     };
 

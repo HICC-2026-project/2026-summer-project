@@ -39,6 +39,19 @@ public class UserService {
      * 함께 지워지고, 합격자 제보(passer_data)는 reporter만 NULL이 돼 익명 데이터로 남는다(V20).
      * 저장된 제보 증빙 파일은 데이터와 함께 보존한다 — 검수 증거라서 제보자 탈퇴와 무관하다.
      */
+    /**
+     * 닉네임 변경. 카카오가 준 닉네임은 첫 로그인 때 복사되고 이후 로그인마다 덮어쓰므로
+     * (OAuth2LoginSuccessHandler.upsertUser), 여기서 바꾼 값도 다음 카카오 로그인 때 카카오 닉네임으로 되돌아간다.
+     * 그래서 nickname_overridden 플래그를 함께 켜 두고, 핸들러는 플래그가 켜진 사용자의 닉네임을 덮어쓰지 않는다.
+     */
+    @Transactional
+    public UserMeResponse updateNickname(Authentication authentication, String nickname) {
+        User user = currentUserService.getCurrentUser(authentication);
+        user.setNickname(nickname.trim());
+        user.setNicknameOverridden(true);
+        return getMe(authentication);
+    }
+
     @Transactional
     public void deleteMe(Authentication authentication) {
         User user = currentUserService.getCurrentUser(authentication);
