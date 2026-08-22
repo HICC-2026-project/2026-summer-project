@@ -49,8 +49,7 @@ class RecommendationServiceLegacyCacheTest {
     @Mock private RecommendationRepository recommendationRepository;
     @Mock private RecommendationCacheService recommendationCacheService;
     @Mock private GeminiService geminiService;
-    @Mock private JobSpecProfileService jobSpecProfileService;
-    @Mock private SpecPositionCalculator specPositionCalculator;
+    @Mock private SpecPositionService specPositionService;
     @Mock private Authentication authentication;
     @Mock private User user;
 
@@ -95,9 +94,7 @@ class RecommendationServiceLegacyCacheTest {
                 .axes(List.of())
                 .gaps(List.of())
                 .build();
-        when(jobSpecProfileService.getJobProfile(any())).thenReturn(null);
-        when(jobSpecProfileService.getOverallProfile()).thenReturn(null);
-        when(specPositionCalculator.calculate(any(), any(), any())).thenReturn(freshPosition);
+        when(specPositionService.calculate(any(), any())).thenReturn(freshPosition);
 
         RecommendationResponse response = recommendationService.getRecommendations(authentication);
 

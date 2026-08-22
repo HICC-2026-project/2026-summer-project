@@ -2,7 +2,6 @@ package com.career.recommendation.service;
 
 import com.career.recommendation.dto.gemini.GeminiRecommendationResult;
 import com.career.recommendation.dto.gemini.GeminiRecommendationResult.GeminiActivity;
-import com.career.recommendation.dto.position.JobSpecProfile;
 import com.career.recommendation.dto.position.SpecPositionResult;
 import com.career.recommendation.dto.recommendation.RecommendationResponse;
 import com.career.recommendation.dto.recommendation.RecommendationResponse.ActivityRecommendation;
@@ -52,8 +51,7 @@ public class RecommendationService {
     private final RecommendationRepository recommendationRepository;
     private final RecommendationCacheService recommendationCacheService;
     private final ActivityRepository activityRepository;
-    private final JobSpecProfileService jobSpecProfileService;
-    private final SpecPositionCalculator specPositionCalculator;
+    private final SpecPositionService specPositionService;
     private final GeminiService geminiService;
     private final PromptDataBuilder promptDataBuilder;
     private final ObjectMapper objectMapper;
@@ -144,9 +142,9 @@ public class RecommendationService {
             return cachedResponse;
         }
 
-        // 3. 직무 요구 프로필 조회(캐시됨) 및 위치·갭 계산
+        // 3. 직무 요구 프로필 조회(캐시됨) 및 위치·갭 계산 — 로드맵과 같은 진입점을 쓴다.
         String jobType = (targetJob != null) ? targetJob.getJobType() : null;
-        SpecPositionResult position = calculatePosition(userSpec, jobType);
+        SpecPositionResult position = specPositionService.calculate(userSpec, jobType);
 
         // 4. 현재 신청 가능한 DB 활동 조회 (RAG 패턴 — Gemini에 선택지 제공)
         List<Activity> activeActivities = activityRepository.findRecommendableActivities(
@@ -174,13 +172,6 @@ public class RecommendationService {
         return response;
     }
 
-    /** 직무 프로필(표본 미달 시 전체 프로필 폴백은 계산기가 판단)을 얻어 위치·갭을 계산한다. */
-    private SpecPositionResult calculatePosition(UserSpec userSpec, String jobType) {
-        JobSpecProfile jobProfile = jobSpecProfileService.getJobProfile(jobType);
-        JobSpecProfile overallProfile = jobSpecProfileService.getOverallProfile();
-        return specPositionCalculator.calculate(userSpec, jobProfile, overallProfile);
-    }
-
     /**
      * 캐시된 활동 목록은 유지하되, 위치·갭 등 로컬에서 결정적으로 계산되는 부분만 현재 스펙
      * 기준으로 다시 계산해 돌려준다. 하루 갱신 한도에 막혀 Gemini 재호출은 못 하는 상황에서,
@@ -191,7 +182,7 @@ public class RecommendationService {
     private RecommendationResponse rebuildPositionFromCurrentSpec(
             RecommendationResponse cachedResponse, UserSpec userSpec, TargetJob targetJob) {
         String jobType = (targetJob != null) ? targetJob.getJobType() : null;
-        SpecPositionResult position = calculatePosition(userSpec, jobType);
+        SpecPositionResult position = specPositionService.calculate(userSpec, jobType);
 
         return cachedResponse.toBuilder()
                 .specPosition(position)

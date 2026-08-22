@@ -76,17 +76,25 @@ public class SpecPositionCalculator {
     private static final double EPS = 1e-9;
 
     /**
-     * @param jobProfile     목표 직무 프로필 (직무 미설정이면 빈 프로필)
-     * @param overallProfile 전체 합격자 프로필 (직무 표본 미달 시 폴백)
+     * @param jobProfile             목표 직무 프로필 (직무 미설정이면 빈 프로필)
+     * @param overallProfileSupplier 전체 합격자 프로필(직무 표본 미달 시 폴백)의 Supplier.
+     *                               프로필 자체가 아니라 Supplier를 받는 이유: 직무 프로필이
+     *                               표본을 충족하면 폴백을 아예 조회하지 않기 위함이다 —
+     *                               전체 프로필은 캐시 미스 때 합격자 테이블 전체 스캔이라,
+     *                               쓰지도 않을 폴백을 매 요청마다 계산하는 낭비를 막는다
+     *                               (호출부는 jobSpecProfileService::getOverallProfile을 넘긴다).
      */
     public SpecPositionResult calculate(UserSpec userSpec,
-                                        JobSpecProfile jobProfile, JobSpecProfile overallProfile) {
+                                        JobSpecProfile jobProfile,
+                                        java.util.function.Supplier<JobSpecProfile> overallProfileSupplier) {
         JobSpecProfile profile;
         String basis;
+        JobSpecProfile overallProfile = null;
         if (jobProfile != null && jobProfile.getJobType() != null && jobProfile.getSampleSize() >= MIN_SAMPLE) {
             profile = jobProfile;
             basis = BASIS_JOB;
-        } else if (overallProfile != null && overallProfile.getSampleSize() >= MIN_SAMPLE) {
+        } else if ((overallProfile = overallProfileSupplier != null ? overallProfileSupplier.get() : null) != null
+                && overallProfile.getSampleSize() >= MIN_SAMPLE) {
             profile = overallProfile;
             basis = BASIS_OVERALL;
         } else {

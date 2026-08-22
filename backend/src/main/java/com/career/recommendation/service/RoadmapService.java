@@ -19,7 +19,6 @@ import com.career.recommendation.repository.UserSpecRepository;
 import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.util.PromptDataBuilder;
-import com.career.recommendation.util.SpecPositionCalculator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,8 +52,7 @@ public class RoadmapService {
     private final UserSpecRepository userSpecRepository;
     private final TargetJobRepository targetJobRepository;
     private final ActivityRepository activityRepository;
-    private final JobSpecProfileService jobSpecProfileService;
-    private final SpecPositionCalculator specPositionCalculator;
+    private final SpecPositionService specPositionService;
     private final RecommendationRepository recommendationRepository;
     private final RoadmapCacheRepository roadmapCacheRepository;
     private final RoadmapCacheService roadmapCacheService;
@@ -128,13 +126,10 @@ public class RoadmapService {
         String targetJobStr = promptDataBuilder.buildTargetJobString(targetJob);
         Integer grade       = (userSpec != null) ? userSpec.getGrade() : null;
 
-        // 1. 합격자 비교 데이터(직무 요구 프로필 내 위치·갭) 계산 — F-03과 같은 데이터를
-        // 프롬프트에 줘서 추천과 로드맵이 같은 갭을 보고 말하게 한다.
+        // 1. 합격자 비교 데이터(직무 요구 프로필 내 위치·갭) 계산 — F-03과 같은 진입점
+        // (SpecPositionService)을 써서 추천과 로드맵이 같은 갭을 보고 말하게 한다.
         String jobType = (targetJob != null) ? targetJob.getJobType() : null;
-        SpecPositionResult position = specPositionCalculator.calculate(
-                userSpec,
-                jobSpecProfileService.getJobProfile(jobType),
-                jobSpecProfileService.getOverallProfile());
+        SpecPositionResult position = specPositionService.calculate(userSpec, jobType);
         String positionContextStr = promptDataBuilder.buildPositionContextText(position);
 
         // 2. F-03 맞춤 추천 결과 조회 (DB 캐시만 참조하여 Gemini 중복 API 호출 방지)

@@ -28,7 +28,7 @@ class SpecPositionCalculatorTest {
         JobSpecProfile overall = profile(null,
                 passer("2.00", 500), passer("2.50", 550), passer("3.00", 600));
 
-        SpecPositionResult result = calculator.calculate(user("3.80", 850), job, overall);
+        SpecPositionResult result = calculator.calculate(user("3.80", 850), job, () -> overall);
 
         assertThat(result.getBasis()).isEqualTo("JOB");
         assertThat(result.getSampleSize()).isEqualTo(3);
@@ -43,7 +43,7 @@ class SpecPositionCalculatorTest {
         JobSpecProfile overall = profile(null,
                 passer("3.00", 700), passer("3.50", 800), passer("4.00", 900));
 
-        SpecPositionResult result = calculator.calculate(user("3.80", 850), job, overall);
+        SpecPositionResult result = calculator.calculate(user("3.80", 850), job, () -> overall);
 
         assertThat(result.getBasis()).isEqualTo("OVERALL");
         assertThat(result.getBasisMessage()).contains("BACKEND", "부족", "전체 합격자 3명");
@@ -55,7 +55,7 @@ class SpecPositionCalculatorTest {
         JobSpecProfile overall = profile(null,
                 passer("3.00", 700), passer("3.50", 800), passer("4.00", 900));
 
-        SpecPositionResult result = calculator.calculate(user("3.80", 850), emptyJob, overall);
+        SpecPositionResult result = calculator.calculate(user("3.80", 850), emptyJob, () -> overall);
 
         assertThat(result.getBasis()).isEqualTo("OVERALL");
         assertThat(result.getBasisMessage()).contains("목표 직무 미설정");
@@ -66,7 +66,7 @@ class SpecPositionCalculatorTest {
         JobSpecProfile job = profile("BACKEND", passer("3.50", 800));
         JobSpecProfile overall = profile(null, passer("3.00", 700), passer("3.50", 800));
 
-        SpecPositionResult result = calculator.calculate(user("3.80", 850), job, overall);
+        SpecPositionResult result = calculator.calculate(user("3.80", 850), job, () -> overall);
 
         assertThat(result.getBasis()).isEqualTo("NONE");
         assertThat(result.getAxes()).isEmpty();
@@ -82,7 +82,7 @@ class SpecPositionCalculatorTest {
         JobSpecProfile job = profile("BACKEND",
                 passer("3.00", 700), passer("3.50", 800), passer("4.00", 900));
 
-        SpecPositionResult result = calculator.calculate(user("3.50", 800), job, null);
+        SpecPositionResult result = calculator.calculate(user("3.50", 800), job, () -> null);
 
         AxisPosition gpa = axis(result, "GPA");
         assertThat(gpa.getPercentile()).isEqualTo(50);
@@ -94,8 +94,8 @@ class SpecPositionCalculatorTest {
         JobSpecProfile job = profile("BACKEND",
                 passer("3.00", 700), passer("3.50", 800), passer("4.00", 900));
 
-        SpecPositionResult top = calculator.calculate(user("4.40", 990), job, null);
-        SpecPositionResult bottom = calculator.calculate(user("2.00", 400), job, null);
+        SpecPositionResult top = calculator.calculate(user("4.40", 990), job, () -> null);
+        SpecPositionResult bottom = calculator.calculate(user("2.00", 400), job, () -> null);
 
         assertThat(axis(top, "GPA").getPercentile()).isEqualTo(100);
         assertThat(axis(bottom, "GPA").getPercentile()).isZero();
@@ -108,7 +108,7 @@ class SpecPositionCalculatorTest {
                 passer("3.00", 700), passer("3.50", 800), passer("4.00", 900));
         UserSpec noSpec = UserSpec.builder().certifications(new String[]{}).build();
 
-        SpecPositionResult result = calculator.calculate(noSpec, job, null);
+        SpecPositionResult result = calculator.calculate(noSpec, job, () -> null);
 
         AxisPosition gpa = axis(result, "GPA");
         assertThat(gpa.getPercentile()).isNull();
@@ -127,7 +127,7 @@ class SpecPositionCalculatorTest {
                 .gpa(new BigDecimal("4.00")).gpaMax(new BigDecimal("4.50")).build();
         JobSpecProfile job = profileOf("BACKEND", List.of(noLang1, noLang2, noLang3));
 
-        SpecPositionResult result = calculator.calculate(user("3.80", 850), job, null);
+        SpecPositionResult result = calculator.calculate(user("3.80", 850), job, () -> null);
 
         assertThat(result.getAxes()).extracting(AxisPosition::getAxis)
                 .contains("GPA")
@@ -143,11 +143,11 @@ class SpecPositionCalculatorTest {
         UserSpec junkUser = user("3.50", 800, "완전정크자격증", "이상한문자열");
         UserSpec certUser = user("3.50", 800, "정보처리기사 필기"); // 표기 변형도 매칭
 
-        assertThat(axis(calculator.calculate(junkUser, job, null), "CERTIFICATION").getMyValue())
+        assertThat(axis(calculator.calculate(junkUser, job, () -> null), "CERTIFICATION").getMyValue())
                 .isEqualTo("0개");
-        assertThat(axis(calculator.calculate(certUser, job, null), "CERTIFICATION").getMyValue())
+        assertThat(axis(calculator.calculate(certUser, job, () -> null), "CERTIFICATION").getMyValue())
                 .isEqualTo("1개");
-        assertThat(calculator.calculate(junkUser, job, null).getUnmatchedCertifications())
+        assertThat(calculator.calculate(junkUser, job, () -> null).getUnmatchedCertifications())
                 .containsExactly("완전정크자격증", "이상한문자열");
     }
 
@@ -156,7 +156,7 @@ class SpecPositionCalculatorTest {
         JobSpecProfile job = profileOf("BACKEND", List.of(
                 passerWithExp("3.00", 2), passerWithExp("3.50", 3), passerWithExp("4.00", 5)));
 
-        SpecPositionResult result = calculator.calculate(user("3.50", 800), job, null);
+        SpecPositionResult result = calculator.calculate(user("3.50", 800), job, () -> null);
 
         AxisPosition exp = axis(result, "EXPERIENCE");
         assertThat(exp.getMyValue()).isEqualTo("미입력");
@@ -175,7 +175,7 @@ class SpecPositionCalculatorTest {
                 passer("4.00", 900, "ADsP"));
 
         // 사용자는 SQLD 보유(별칭 표기) → 갭은 정보처리기사(75%), ADsP(25%)만.
-        SpecPositionResult result = calculator.calculate(user("3.50", 800, "SQL개발자"), job, null);
+        SpecPositionResult result = calculator.calculate(user("3.50", 800, "SQL개발자"), job, () -> null);
 
         assertThat(result.getGaps()).extracting(SpecGap::getName)
                 .containsExactly("정보처리기사", "ADsP");
@@ -190,7 +190,7 @@ class SpecPositionCalculatorTest {
                 passer("3.00", 700, "웹디자인기능사"), passer("3.10", 710), passer("3.20", 720),
                 passer("3.30", 730), passer("3.40", 740), passer("3.50", 750));
 
-        SpecPositionResult result = calculator.calculate(user("3.50", 800), job, null);
+        SpecPositionResult result = calculator.calculate(user("3.50", 800), job, () -> null);
 
         assertThat(result.getGaps()).isEmpty();
     }

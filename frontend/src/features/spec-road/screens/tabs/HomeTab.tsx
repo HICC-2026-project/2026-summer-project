@@ -2,7 +2,7 @@
 
 import { DEMO_SPEC_POSITION, DEMO_USER_NAME, PRIMARY } from "../../data";
 import { StateMessage } from "../../components/StateMessage";
-import { dday, ddayColor, hasMeaningfulLangScore, jobLabel } from "../../helpers";
+import { dday, ddayColor, hasMeaningfulLangScore, jobLabel, percentileLabel } from "../../helpers";
 import type { Recommendation, RecommendationMeta, Spec, Target } from "../../types";
 
 interface HomeTabProps {
@@ -97,12 +97,7 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
                   whiteSpace: "nowrap",
                 }}
               >
-                {a.label}{" "}
-                {a.percentile == null
-                  ? "미입력"
-                  : a.percentile >= 100
-                    ? "최상위"
-                    : `상위 ${100 - a.percentile}%`}
+                {a.label} {percentileLabel(a.percentile)}
               </span>
             ))}
             {position!.gaps.length > 0 && (

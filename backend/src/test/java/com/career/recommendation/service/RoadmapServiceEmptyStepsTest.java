@@ -9,7 +9,6 @@ import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
 import com.career.recommendation.util.PromptDataBuilder;
-import com.career.recommendation.util.SpecPositionCalculator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,8 +45,7 @@ class RoadmapServiceEmptyStepsTest {
     @Mock private UserSpecRepository userSpecRepository;
     @Mock private TargetJobRepository targetJobRepository;
     @Mock private ActivityRepository activityRepository;
-    @Mock private JobSpecProfileService jobSpecProfileService;
-    @Mock private SpecPositionCalculator specPositionCalculator;
+    @Mock private SpecPositionService specPositionService;
     @Mock private RecommendationRepository recommendationRepository;
     @Mock private RoadmapCacheRepository roadmapCacheRepository;
     @Mock private RoadmapCacheService roadmapCacheService;

@@ -2,6 +2,7 @@
 
 import { DEMO_SPEC_POSITION, PRIMARY } from "../../data";
 import type { AxisPosition, RecommendationMeta, SpecPosition } from "../../types";
+import { percentileLabel } from "../../helpers";
 import { StateMessage } from "../../components/StateMessage";
 
 interface CompareTabProps {
@@ -10,18 +11,13 @@ interface CompareTabProps {
   recMeta?: RecommendationMeta | null;
 }
 
-// percentile을 사람이 읽는 표기로 바꾼다. 62 → "상위 38%".
-// null은 "미입력" — 최하위(0)와 다른 상태라 숫자로 그리면 안 된다(백엔드가 의도적으로 구분).
-function percentileBadge(percentile: number | null): string {
-  if (percentile == null) return "미입력";
-  if (percentile >= 100) return "최상위";
-  return `상위 ${100 - percentile}%`;
-}
-
 export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
   const position: SpecPosition | null = isDemo ? DEMO_SPEC_POSITION : (recMeta?.specPosition ?? null);
   const unmatchedCerts = position?.unmatchedCertifications ?? [];
   const matchedCerts = position?.matchedCertifications ?? [];
+  // OVERALL(전체 합격자 폴백) 기준일 때 "이 직무 합격자"라고 쓰면 바로 위 basisMessage
+  // ("직무 구분 없이 전체 합격자와 비교")와 화면 안에서 모순된다 — 기준에 맞는 명칭을 쓴다.
+  const basisNoun = position?.basis === "JOB" ? "이 직무 합격자" : "비교 기준 합격자";
 
   // 미매칭 자격증 고지는 비교 가능 여부와 무관한 정보다. 비교할 합격자가 없어
   // 아래에서 조기 반환하는 경우에도 이 안내만은 보여준다 — 백엔드도 같은 이유로
@@ -42,7 +38,7 @@ export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
       <b style={{ color: "#15141B" }}>비교에 반영되지 않은 자격증이 있어요: </b>
       {unmatchedCerts.join(", ")}
       <br />
-      이 직무 합격자 데이터에 없는 자격증이에요. 오타라면 정확한 명칭으로 다시 입력해 주세요.
+      {basisNoun} 데이터에 없는 자격증이에요. 오타라면 정확한 명칭으로 다시 입력해 주세요.
     </div>
   );
 
@@ -139,7 +135,7 @@ export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
                   <span style={{ fontSize: 11, fontWeight: 600, color: "#B0B0BA" }}>합격자 {a.coverage}명 기준</span>
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 700, color: badgeColor, background: badgeBg, padding: "4px 10px", borderRadius: 999 }}>
-                  {percentileBadge(a.percentile)}
+                  {percentileLabel(a.percentile)}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 7 }}>
@@ -187,12 +183,22 @@ export function CompareTab({ isDemo, recMeta }: CompareTabProps) {
       <div style={{ background: "#fff", border: "1px solid #EDEDF2", borderRadius: 22, padding: "18px 20px" }}>
         <div style={{ fontSize: 14.5, fontWeight: 800, color: "#15141B", marginBottom: 4 }}>지금 메우면 좋은 갭</div>
         <p style={{ fontSize: 12.5, color: "#61616C", margin: "0 0 12px", lineHeight: 1.5 }}>
-          이 직무 합격자 다수가 보유했지만 아직 나에게 없는 자격증이에요.
+          {basisNoun} 다수가 보유했지만 아직 나에게 없는 자격증이에요.
         </p>
         {position.gaps.length === 0 ? (
-          <div style={{ fontSize: 13, color: "#12A150", fontWeight: 700 }}>
-            합격자 다수가 보유한 자격증을 모두 갖췄어요 👏
-          </div>
+          // 갭이 비는 데는 두 가지 이유가 있다: (a) 다수 보유 자격증을 사용자가 전부 가짐,
+          // (b) 애초에 보유율 기준(20%)을 넘는 자격증이 집계되지 않음. (b)에서 칭찬 문구를
+          // 띄우면 자격증이 하나도 없는 사용자에게 "모두 갖췄다"고 말하는 오답이 된다 —
+          // 매칭 보유가 하나라도 있을 때만 칭찬하고, 아니면 사실대로 말한다.
+          matchedCerts.length > 0 ? (
+            <div style={{ fontSize: 13, color: "#12A150", fontWeight: 700 }}>
+              합격자 다수가 보유한 자격증을 모두 갖췄어요 👏
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: "#61616C" }}>
+              아직 이 비교 기준에서 집계된 주요 자격증이 없어요. 합격자 데이터가 쌓이면 여기에 갭이 표시돼요.
+            </div>
+          )
         ) : (
           position.gaps.map((g, i) => (
             <div key={g.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid #F1F0F6" }}>

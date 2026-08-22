@@ -9,6 +9,7 @@ import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
 import com.career.recommendation.util.PromptDataBuilder;
 import com.career.recommendation.util.SpecPositionCalculator;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,8 +45,7 @@ class RecommendationServiceFallbackTest {
     @Mock private RecommendationRepository recommendationRepository;
     @Mock private RecommendationCacheService recommendationCacheService;
     @Mock private ActivityRepository activityRepository;
-    @Mock private JobSpecProfileService jobSpecProfileService;
-    @Mock private SpecPositionCalculator specPositionCalculator;
+    @Mock private SpecPositionService specPositionService;
     @Mock private GeminiService geminiService;
     @Mock private PromptDataBuilder promptDataBuilder;
     @Mock private ObjectMapper objectMapper;
@@ -64,9 +64,7 @@ class RecommendationServiceFallbackTest {
         when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
         when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
 
-        when(jobSpecProfileService.getJobProfile(any())).thenReturn(null);
-        when(jobSpecProfileService.getOverallProfile()).thenReturn(null);
-        when(specPositionCalculator.calculate(any(), any(), any())).thenReturn(position);
+        when(specPositionService.calculate(any(), any())).thenReturn(position);
 
         // 핵심 조건: 추천 가능한 활동이 한 건도 없다.
         when(activityRepository.findRecommendableActivities(any(), any())).thenReturn(List.of());

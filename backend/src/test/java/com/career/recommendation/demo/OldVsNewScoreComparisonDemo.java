@@ -178,8 +178,8 @@ class OldVsNewScoreComparisonDemo {
         assertThat(axisPercentile(highGpaOnly, profile, "GPA")).isGreaterThanOrEqualTo(95);
 
         // 3) 정크 입력 중립성은 두 체계 모두 지킨다(v3 불변식 계승) — 점수/위치가 A와 동일.
-        SpecPositionResult posA = positionCalculator.calculate(average, profile, null);
-        SpecPositionResult posD = positionCalculator.calculate(withJunk, profile, null);
+        SpecPositionResult posA = positionCalculator.calculate(average, profile, () -> null);
+        SpecPositionResult posD = positionCalculator.calculate(withJunk, profile, () -> null);
         assertThat(axisPercentile(posD, "CERTIFICATION")).isEqualTo(axisPercentile(posA, "CERTIFICATION"));
         // 다만 새 체계는 "왜 반영 안 됐는지"를 목록으로 돌려준다.
         assertThat(posD.getUnmatchedCertifications()).containsExactly("정크자격1", "정크자격2");
@@ -196,7 +196,7 @@ class OldVsNewScoreComparisonDemo {
         List<PasserData> top5 = OldFormulaV8.top5Similar(user, PASSERS);
         int oldTotal = OldFormulaV8.totalScore(user, top5);
         double[] oldAxes = OldFormulaV8.axisScores(user, top5);
-        SpecPositionResult pos = positionCalculator.calculate(user, profile, null);
+        SpecPositionResult pos = positionCalculator.calculate(user, profile, () -> null);
 
         System.out.println();
         System.out.println("━━ " + title);
@@ -226,7 +226,7 @@ class OldVsNewScoreComparisonDemo {
     }
 
     private int axisPercentile(UserSpec user, JobSpecProfile profile, String axis) {
-        return axisPercentile(positionCalculator.calculate(user, profile, null), axis);
+        return axisPercentile(positionCalculator.calculate(user, profile, () -> null), axis);
     }
 
     private int axisPercentile(SpecPositionResult pos, String axis) {
