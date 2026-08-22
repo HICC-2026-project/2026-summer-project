@@ -32,6 +32,7 @@ public class GeminiService {
 
     private final WebClient.Builder webClientBuilder;
     private final GeminiDailyQuota dailyQuota;
+    private final GeminiCallStats callStats;
 
     /** JSON 블록만 추출하는 패턴 (응답 앞뒤 잡담 제거) */
     private static final Pattern JSON_PATTERN = Pattern.compile("\\{[\\s\\S]*}", Pattern.DOTALL);
@@ -216,6 +217,7 @@ public class GeminiService {
         // 옮기는 걸 권장한다.
         String uri = String.format("/models/%s:generateContent?key=%s", model, apiKey);
 
+        long startedAt = System.currentTimeMillis();
         try {
             Map<?, ?> response = client.post()
                     .uri(uri)
@@ -229,10 +231,14 @@ public class GeminiService {
                 Map<?, ?> candidate = (Map<?, ?>) candidates.get(0);
                 if (candidate.get("content") instanceof Map<?, ?> content && content.get("parts") instanceof List<?> parts && !parts.isEmpty()) {
                     Map<?, ?> firstPart = (Map<?, ?>) parts.get(0);
+                    callStats.recordSuccess(System.currentTimeMillis() - startedAt);
                     return (String) firstPart.get("text");
                 }
             }
+            // 200이지만 candidates가 비어 있는 응답(안전 필터 등) — 호출부에서 폴백을 타므로 실패로 센다.
+            callStats.recordFailure(System.currentTimeMillis() - startedAt);
         } catch (Exception e) {
+            callStats.recordFailure(System.currentTimeMillis() - startedAt);
             log.error("Gemini API 호출 실패: {}", e.getMessage());
         }
         return "";

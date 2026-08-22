@@ -43,6 +43,9 @@ jobs:
       - name: 린트
         run: npm run lint
 
+      - name: 컴포넌트 테스트
+        run: npm test
+
       # 빌드 타임에 백엔드 주소가 필요하진 않지만(모두 NEXT_PUBLIC_* 폴백이 있음),
       # Vercel 환경과 동일하게 프로덕션 빌드가 통과하는지 확인한다.
       - name: 프로덕션 빌드

@@ -58,7 +58,7 @@ public class SpecPositionCalculator {
      * 미만이면 그 프로필로는 비교하지 않는다 — 1~2명 분포에서의 percentile은 그 한두 명의
      * 개인 스펙에 좌우되는 무의미한 값인데 5명 비교와 똑같은 확신으로 그려진다.
      */
-    private static final int MIN_SAMPLE = 3;
+    public static final int MIN_SAMPLE = 3;
 
     /**
      * 갭으로 보여줄 최소 보유율. 이 값 미만은 "합격자 다수가 가진 것"이라 말할 수 없다.

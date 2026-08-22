@@ -52,6 +52,10 @@ public class GeminiDailyQuota {
         return false;
     }
 
+    public int dailyLimit() {
+        return dailyLimit;
+    }
+
     public int usedToday() {
         rollDayIfNeeded(LocalDate.now(ServiceTime.ZONE_ID));
         return used.get();

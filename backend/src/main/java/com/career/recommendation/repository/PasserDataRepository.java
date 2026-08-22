@@ -55,6 +55,19 @@ public interface PasserDataRepository extends JpaRepository<PasserData, UUID> {
             """)
     List<PasserData> findReviewedWithProofBefore(@Param("before") LocalDateTime before);
 
+    /** 운영 요약: 직무별 비교 가능(검증·DEMO) 합격자 수. */
+    @Query("""
+            SELECT p.jobType, COUNT(p)
+            FROM PasserData p
+            WHERE (p.isVerified = true OR p.dataOrigin = 'DEMO')
+            GROUP BY p.jobType
+            """)
+    List<Object[]> countComparableByJobType();
+
+    /** 운영 요약: 검수 대기 건수. */
+    @Query("SELECT COUNT(p) FROM PasserData p WHERE p.dataOrigin = 'USER_REPORT' AND p.reviewedAt IS NULL")
+    long countPendingReports();
+
     /**
      * 특정 직무의 비교 가능(검증 완료 또는 DEMO) 합격자 전원을 조회한다.
      * JobSpecProfileService가 직무 요구 프로필(분포·보유율)을 집계하는 데 쓴다.
