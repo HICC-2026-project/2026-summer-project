@@ -27,6 +27,8 @@ interface ProfileTabProps {
   onLogout: () => void;
   /** 회원 탈퇴. 예시 화면에서는 없다. */
   onWithdraw?: () => void;
+  /** 닉네임 수정. 예시 화면에서는 없다. */
+  onEditNickname?: () => void;
 }
 
 function rowStyle(hasBorder: boolean): CSSProperties {
@@ -49,6 +51,7 @@ export function ProfileTab({
   onOpenPasserReport,
   onLogout,
   onWithdraw,
+  onEditNickname,
 }: ProfileTabProps) {
   const displayName = nickname ?? DEMO_USER_NAME;
   const targetSummary = `${target.size} ${jobLabel(target.job)}`;
@@ -94,7 +97,19 @@ export function ProfileTab({
           {displayName.slice(0, 1)}
         </div>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: "#15141B", letterSpacing: "-0.02em" }}>{displayName}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#15141B", letterSpacing: "-0.02em" }}>{displayName}</div>
+            {!isDemo && onEditNickname && (
+              <button
+                type="button"
+                onClick={onEditNickname}
+                aria-label="닉네임 수정"
+                style={{ border: "1px solid #E1E0EA", background: "#fff", borderRadius: 8, padding: "3px 8px", fontSize: 11.5, color: "#61616C", cursor: "pointer" }}
+              >
+                수정
+              </button>
+            )}
+          </div>
           <div style={{ fontSize: 13.5, color: "#61616C", marginTop: 2 }}>{targetSummary} 준비 중</div>
         </div>
       </div>

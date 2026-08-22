@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, KAKAO_LOGIN_URL } from "@/lib/api";
 import { clearTokens, getAccessToken, onSessionExpired } from "@/lib/auth";
-import { deleteMe, getMe, getRecommendations, getRoadmap, postLogout, postPasserReport, putSpec, putTarget } from "./api";
+import { deleteMe, getMe, getRecommendations, getRoadmap, patchNickname, postLogout, postPasserReport, putSpec, putTarget } from "./api";
 import { RECOMMENDATIONS, ROADMAP } from "./data";
 import {
   fromLanguageScoresPayload,
@@ -475,6 +475,16 @@ export function SpecRoadApp() {
               void postLogout().catch(() => {});
               clearTokens();
               resetToLogin();
+            }}
+            onEditNickname={() => {
+              // 입력 한 칸짜리 변경이라 별도 화면 대신 브라우저 프롬프트로 받는다. 검증(길이·제어문자)은 서버가 한다.
+              const next = window.prompt("새 닉네임을 입력하세요 (50자 이내)", nickname ?? "");
+              if (next == null) return;
+              const trimmed = next.trim();
+              if (trimmed === "" || trimmed === nickname) return;
+              patchNickname(trimmed)
+                .then((me) => setNickname(me.nickname))
+                .catch((e) => window.alert(e instanceof ApiError ? e.message : "닉네임을 바꾸지 못했어요."));
             }}
             onWithdraw={() => {
               // 되돌릴 수 없는 동작이라 브라우저 확인창을 한 번 거친다.

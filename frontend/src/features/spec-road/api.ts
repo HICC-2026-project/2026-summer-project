@@ -100,3 +100,11 @@ export function getMyPasserReports(): Promise<MyPasserReport[]> {
 export function deleteMe(): Promise<void> {
   return apiFetch<void>("/api/v1/users/me", { method: "DELETE" });
 }
+
+// 닉네임 변경. 앱에서 바꾼 닉네임은 이후 카카오 로그인이 덮어쓰지 않는다(서버 nickname_overridden).
+export function patchNickname(nickname: string): Promise<UserMeResponse> {
+  return apiFetch<UserMeResponse>("/api/v1/users/me/nickname", {
+    method: "PATCH",
+    body: JSON.stringify({ nickname }),
+  });
+}

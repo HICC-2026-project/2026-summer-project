@@ -28,6 +28,7 @@ interface AppScreenProps {
   onOpenPasserReport: () => void;
   onLogout: () => void;
   onWithdraw?: () => void;
+  onEditNickname?: () => void;
 }
 
 export function AppScreen({
@@ -51,6 +52,7 @@ export function AppScreen({
   onOpenPasserReport,
   onLogout,
   onWithdraw,
+  onEditNickname,
 }: AppScreenProps) {
   return (
     <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", background: "#F6F6F9" }}>
@@ -89,6 +91,7 @@ export function AppScreen({
             onOpenPasserReport={onOpenPasserReport}
             onLogout={onLogout}
             onWithdraw={onWithdraw}
+            onEditNickname={onEditNickname}
           />
         )}
       </div>
