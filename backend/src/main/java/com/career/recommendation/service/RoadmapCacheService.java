@@ -43,8 +43,8 @@ public class RoadmapCacheService {
                     .orElseGet(() -> RoadmapCache.builder().user(user).build());
 
             // ⚠️ 알려진 경합: RecommendationCacheService.save()와 동일 — 같은 유저의 동시 요청이
-            // 카운트 증가분 하나를 잃을 수 있으나(read-then-write, 락 없음) 서비스가 죽지는
-            // 않는다. 원자적 UPSERT 전환은 로컬 DB 검증이 필요해 이번 세션에선 보류한다.
+            // 카운트 증가분 하나를 잃을 수 있다(read-then-write, 락 없음). 하루 게이트는 AiDailyAttemptLimiter가
+            // 맡으므로 이 카운트는 통계용일 뿐 — 유실돼도 동작에 영향이 없다.
             java.time.LocalDate today = java.time.LocalDate.now(ServiceTime.ZONE_ID);
             if (today.equals(rec.getLastUpdatedDate())) {
                 rec.setDailyUpdateCount(rec.getDailyUpdateCount() != null ? rec.getDailyUpdateCount() + 1 : 1);

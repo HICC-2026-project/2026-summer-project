@@ -46,9 +46,8 @@ public class RecommendationCacheService {
 
             // ⚠️ 알려진 경합: 같은 유저의 요청 두 개가 거의 동시에 findByUser_Id에서 둘 다
             // "없음"을 보면(신규 유저의 첫 두 요청, 더블클릭 등) 카운트 증가분 하나가 유실될 수
-            // 있다(read-then-write, 락 없음) — 최악의 경우 하루 3회 제한이 4~5회로 느슨해질 뿐,
-            // 서비스가 죽지는 않는다. 원자적 UPSERT로 고치려면 로컬 DB로 실제 검증이 필요해
-            // 지금 세션에선 보류한다.
+            // 있다(read-then-write, 락 없음). 하루 게이트는 AiDailyAttemptLimiter(원자 UPSERT)로 옮겨갔으므로
+            // 이 카운트는 통계용일 뿐이고, 유실돼도 동작에 영향이 없다.
             java.time.LocalDate today = java.time.LocalDate.now(ServiceTime.ZONE_ID);
             if (today.equals(rec.getLastUpdatedDate())) {
                 rec.setDailyUpdateCount(rec.getDailyUpdateCount() != null ? rec.getDailyUpdateCount() + 1 : 1);
