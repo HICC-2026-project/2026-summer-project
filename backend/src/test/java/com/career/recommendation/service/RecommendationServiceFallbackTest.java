@@ -1,15 +1,14 @@
 package com.career.recommendation.service;
 
-import com.career.recommendation.dto.recommendation.MatchScoreResult;
+import com.career.recommendation.dto.position.SpecPositionResult;
 import com.career.recommendation.dto.recommendation.RecommendationResponse;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.repository.ActivityRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
-import com.career.recommendation.util.MatchScoreCalculator;
 import com.career.recommendation.util.PromptDataBuilder;
-import com.career.recommendation.util.SimilarSpecFinder;
+import com.career.recommendation.util.SpecPositionCalculator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,7 +19,6 @@ import org.springframework.security.core.Authentication;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,9 +44,8 @@ class RecommendationServiceFallbackTest {
     @Mock private RecommendationRepository recommendationRepository;
     @Mock private RecommendationCacheService recommendationCacheService;
     @Mock private ActivityRepository activityRepository;
-    @Mock private GlobalCertPoolService globalCertPoolService;
-    @Mock private SimilarSpecFinder similarSpecFinder;
-    @Mock private MatchScoreCalculator matchScoreCalculator;
+    @Mock private JobSpecProfileService jobSpecProfileService;
+    @Mock private SpecPositionCalculator specPositionCalculator;
     @Mock private GeminiService geminiService;
     @Mock private PromptDataBuilder promptDataBuilder;
     @Mock private ObjectMapper objectMapper;
@@ -58,7 +55,7 @@ class RecommendationServiceFallbackTest {
     @InjectMocks private RecommendationService recommendationService;
 
     /** 활동 0건 + Gemini 장애 + 캐시 없음 상태를 만든다. */
-    private void givenNoActivitiesAndGeminiDown(MatchScoreResult matchResult) {
+    private void givenNoActivitiesAndGeminiDown(SpecPositionResult position) {
         UUID userId = UUID.randomUUID();
         when(user.getId()).thenReturn(userId);
         when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
@@ -67,8 +64,9 @@ class RecommendationServiceFallbackTest {
         when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
         when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
 
-        when(similarSpecFinder.find(any(), any(), any())).thenReturn(List.of());
-        when(similarSpecFinder.buildComparisonMessage(any(), any())).thenReturn("비교 데이터가 부족합니다.");
+        when(jobSpecProfileService.getJobProfile(any())).thenReturn(null);
+        when(jobSpecProfileService.getOverallProfile()).thenReturn(null);
+        when(specPositionCalculator.calculate(any(), any(), any())).thenReturn(position);
 
         // 핵심 조건: 추천 가능한 활동이 한 건도 없다.
         when(activityRepository.findRecommendableActivities(any(), any())).thenReturn(List.of());
@@ -76,24 +74,27 @@ class RecommendationServiceFallbackTest {
         when(promptDataBuilder.buildAvailableActivitiesJson(any())).thenReturn("[]");
         when(promptDataBuilder.serializeSpecForRecommendation(any())).thenReturn("{}");
         when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
-        when(promptDataBuilder.buildSimilarCasesText(any())).thenReturn("");
-
-        when(globalCertPoolService.getGlobalCertPool()).thenReturn(Set.of());
-        when(globalCertPoolService.getJobPasserCertRows(any())).thenReturn(List.of());
+        when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
 
         when(geminiService.generateRecommendation(any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("Gemini 장애 시뮬레이션"));
+    }
 
-        when(matchScoreCalculator.calculate(any(), any(), any(), any())).thenReturn(matchResult);
+    private SpecPositionResult emptyPosition(List<String> unmatched) {
+        return SpecPositionResult.builder()
+                .basis("NONE")
+                .basisMessage("아직 비교할 합격자 데이터가 부족합니다.")
+                .sampleSize(0)
+                .axes(List.of())
+                .gaps(List.of())
+                .matchedCertifications(List.of())
+                .unmatchedCertifications(unmatched)
+                .build();
     }
 
     @Test
     void 추천할_활동이_0건이어도_null이_아니라_빈_활동_목록을_반환한다() {
-        givenNoActivitiesAndGeminiDown(MatchScoreResult.builder()
-                .totalScore(0)
-                .compareRows(List.of())
-                .unrecognizedCertifications(List.of())
-                .build());
+        givenNoActivitiesAndGeminiDown(emptyPosition(List.of()));
 
         RecommendationResponse response = recommendationService.getRecommendations(authentication);
 
@@ -101,41 +102,32 @@ class RecommendationServiceFallbackTest {
         assertThat(response.getActivities()).isEmpty();
         assertThat(response.isAiRecommendation()).isFalse();
         assertThat(response.getScoreFormulaVersion())
-                .isEqualTo(MatchScoreCalculator.CURRENT_SCORE_FORMULA_VERSION);
+                .isEqualTo(SpecPositionCalculator.CURRENT_SCORE_FORMULA_VERSION);
     }
 
     @Test
     void 추천할_활동이_0건이어도_getRecommendations가_예외를_던지지_않는다() {
-        givenNoActivitiesAndGeminiDown(MatchScoreResult.builder()
-                .totalScore(0)
-                .compareRows(List.of())
-                .unrecognizedCertifications(List.of())
-                .build());
+        givenNoActivitiesAndGeminiDown(emptyPosition(List.of()));
 
         assertThatCode(() -> recommendationService.getRecommendations(authentication))
                 .doesNotThrowAnyException();
     }
 
     @Test
-    void 활동이_0건이어도_미인식_자격증_고지는_그대로_전달된다() {
-        givenNoActivitiesAndGeminiDown(MatchScoreResult.builder()
-                .totalScore(0)
-                .compareRows(List.of())
-                .unrecognizedCertifications(List.of("완전정크자격증123"))
-                .build());
+    void 활동이_0건이어도_위치_갭_계산_결과는_그대로_전달된다() {
+        // 미매칭 자격증 고지는 활동·Gemini와 무관한 정보다 — 폴백에서도 살아있어야 한다.
+        givenNoActivitiesAndGeminiDown(emptyPosition(List.of("완전정크자격증123")));
 
         RecommendationResponse response = recommendationService.getRecommendations(authentication);
 
-        assertThat(response.getUnrecognizedCertifications()).containsExactly("완전정크자격증123");
+        assertThat(response.getSpecPosition()).isNotNull();
+        assertThat(response.getSpecPosition().getUnmatchedCertifications())
+                .containsExactly("완전정크자격증123");
     }
 
     @Test
     void 폴백_응답은_캐시에_저장되지_않는다() {
-        givenNoActivitiesAndGeminiDown(MatchScoreResult.builder()
-                .totalScore(0)
-                .compareRows(List.of())
-                .unrecognizedCertifications(List.of())
-                .build());
+        givenNoActivitiesAndGeminiDown(emptyPosition(List.of()));
 
         recommendationService.getRecommendations(authentication);
 

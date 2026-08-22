@@ -49,6 +49,13 @@ public class JobSpecProfile {
     private final List<CertStat> certStats;
 
     /**
+     * 프로필에 합성 DEMO(또는 출처 미상) 데이터가 한 건이라도 포함되었는지.
+     * FE가 "데모 데이터 포함 비교" 고지를 띄우는 근거다 — 실데이터만으로 집계된 것처럼
+     * 보여주면 안 된다는 기존 원칙(sampleComparisonData)을 프로필 체계에서도 유지한다.
+     */
+    private final boolean containsDemoData;
+
+    /**
      * 자격증 하나의 프로필 내 통계.
      * displayName은 합격자들이 실제로 가장 많이 쓴 원본 표기다 — canonical 값
      * ("AWSSAA", "ADSP")을 그대로 화면에 내보내면 사용자가 못 알아본다.

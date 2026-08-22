@@ -39,32 +39,32 @@ public class GeminiService {
      * 활동 추천 생성 (DB 활동 기반 RAG 패턴)
      * @param userSpecJson          사용자 스펙 (JSON 문자열)
      * @param targetJob             목표 직무
-     * @param similarCases          유사 합격자 케이스 요약 (SimilarSpecFinder에서 생성)
+     * @param positionContext       합격자 비교 데이터(직무 요구 프로필 내 위치·갭 요약 — PromptDataBuilder.buildPositionContextText)
      * @param availableActivitiesJson DB에 등록된 활성 활동 목록 (JSON 배열 문자열)
      * @return Gemini API 응답 JSON 텍스트 (파싱 실패 시 빈 문자열)
      */
     public String generateRecommendation(String userSpecJson, String targetJob,
-                                         String similarCases, String availableActivitiesJson,
+                                         String positionContext, String availableActivitiesJson,
                                          java.time.LocalDate today) {
-        String prompt = buildRecommendationPrompt(userSpecJson, targetJob, similarCases, availableActivitiesJson, today);
+        String prompt = buildRecommendationPrompt(userSpecJson, targetJob, positionContext, availableActivitiesJson, today);
         String systemInstruction = "당신은 취업 커리어 어드바이저입니다. 사용자의 스펙을 분석하고, 제공된 활동 목록 중에서만 맞춤형 활동을 추천해 주세요. 목록에 없는 활동을 임의로 만들지 마세요. 반드시 JSON 형식으로만 응답하세요.";
         String raw = callGeminiApi(systemInstruction, prompt);
         return extractJsonBlock(raw);
     }
 
     /**
-     * 커리어 로드맵 생성 (DB 활동 기반 RAG 패턴 + F-03 연계 및 유사 합격자 맥락 반영)
+     * 커리어 로드맵 생성 (DB 활동 기반 RAG 패턴 + F-03 연계 및 합격자 비교 맥락 반영)
      * @param userSpecJson               사용자 스펙 JSON
      * @param targetJob                  목표 직무
      * @param grade                      현재 학년 (null이면 학기 구분 없이 월별 단위)
-     * @param similarCases               유사 합격자 케이스 요약 (SimilarSpecFinder)
+     * @param positionContext            합격자 비교 데이터(직무 요구 프로필 내 위치·갭 요약)
      * @param topRecommendedActivities  F-03에서 우선 추천된 활동 목록 요약 (JSON 문자열)
      * @param availableActivitiesJson     DB에 등록된 활성 활동 목록 (JSON 배열 문자열)
      */
     public String generateRoadmap(String userSpecJson, String targetJob, Integer grade,
-                                  String similarCases, String topRecommendedActivities,
+                                  String positionContext, String topRecommendedActivities,
                                   String availableActivitiesJson, java.time.LocalDate today) {
-        String prompt = buildRoadmapPrompt(userSpecJson, targetJob, grade, similarCases, topRecommendedActivities, availableActivitiesJson, today);
+        String prompt = buildRoadmapPrompt(userSpecJson, targetJob, grade, positionContext, topRecommendedActivities, availableActivitiesJson, today);
         // ⚠️ 이 systemInstruction은 buildRoadmapPrompt의 규칙 4·5와 반드시 같은 매칭 정책을
         // 말해야 한다. 예전엔 여기서 "단기 기간에는 DB 활동 매칭, 먼 미래는 가이드 제안"이라는
         // 2분할을 못박아 규칙 4("각 시기마다 매칭")·5("적합한 공고가 없는 시기만 가이드")와
@@ -73,7 +73,7 @@ public class GeminiService {
         // (Opus 5 높음 검토 12라운드가 규칙 4·5만 고친 이전 수정이 이 문장 때문에 절반만
         // 효과가 있었을 거라고 지적). 규칙 4·5와 동일하게 "시기 무관, 적합한 활동이 있으면
         // 매칭, 없는 시기만 가이드"로 통일한다.
-        String systemInstruction = "당신은 취업 커리어 어드바이저입니다. 사용자의 현재 스펙과 목표 직무, 유사 합격자 데이터 및 우선 추천 활동을 기반으로 시기별 커리어 로드맵을 생성하되, 각 시기마다 제공된 DB 활동 목록 중 마감일과 직무가 적합한 활동이 있으면 매칭하고, 적합한 공고가 없는 시기에만 역량 준비 가이드를 제안하세요. JSON 형식으로만 응답하세요.";
+        String systemInstruction = "당신은 취업 커리어 어드바이저입니다. 사용자의 현재 스펙과 목표 직무, 합격자 비교 데이터(분포 내 위치·갭) 및 우선 추천 활동을 기반으로 시기별 커리어 로드맵을 생성하되, 각 시기마다 제공된 DB 활동 목록 중 마감일과 직무가 적합한 활동이 있으면 매칭하고, 적합한 공고가 없는 시기에만 역량 준비 가이드를 제안하세요. JSON 형식으로만 응답하세요.";
         String raw = callGeminiApi(systemInstruction, prompt);
         return extractJsonBlock(raw);
     }
@@ -92,7 +92,7 @@ public class GeminiService {
                 [목표 직무]
                 %s
 
-                [유사 합격자 케이스]
+                [합격자 비교 데이터 — 분포 내 위치와 갭]
                 %s
 
                 [추천 가능한 활동 목록 (DB 등록 활동)]
@@ -102,6 +102,8 @@ public class GeminiService {
                 1. 반드시 위 "추천 가능한 활동 목록"에 있는 활동 중에서만 선택하세요.
                 2. 각 활동의 id 값을 그대로 사용하세요 (UUID 형식). 목록에 없는 ID는 절대로 임의로 생성하지 마세요.
                 3. 사용자의 스펙과 목표 직무에 가장 적합한 활동을 최대 5개 골라 추천하세요.
+                   특히 [합격자 비교 데이터]의 갭(합격자 다수가 보유하지만 사용자에게 없는 항목)을
+                   메울 수 있는 활동을 우선하세요.
                 4. 목록에 적합한 활동이 5개 미만이면 있는 만큼만 추천하세요.
                 5. targetSpec은 공고의 필수 지원 조건입니다. 사용자가 명확하게 충족하지 못하는 활동은 우선 추천하지 마세요.
                 6. UserSpec에 해당 정보가 없으면 불충족으로 단정하지 말고 '확인 필요'로 처리하세요.
@@ -139,7 +141,7 @@ public class GeminiService {
                 [목표 직무]
                 %s
 
-                [유사 합격자 케이스]
+                [합격자 비교 데이터 — 분포 내 위치와 갭]
                 %s
 
                 %s
@@ -152,7 +154,7 @@ public class GeminiService {
                 
                 ## 규칙
                 1. 6개월 커리어 로드맵을 위 기간 단위로 작성해 주세요.
-                2. [유사 합격자 케이스]의 준비 경험(자격증, 경험 수 등) 및 시기별 흐름을 반영하세요.
+                2. [합격자 비교 데이터]의 갭(부족한 항목)을 이른 시기부터 우선 보완하는 방향으로 흐름을 구성하세요.
                 3. [우선 반영할 AI 추천 활동]에 포함된 활동들을 6개월 타임라인 중 적절한 시기에 우선적으로 배치하세요.
                 4. 각 시기마다 [전체 DB 등록 활동 목록]에서 마감일과 직무가 적합한 실제 활동의 ID를 매칭하세요.
                 5. 적합한 DB 활동 공고가 없거나 마감된 시기는, activityIds는 빈 배열([])로 두고, 해당 시기에 필수적으로 준비해야 할 역량 개발 가이드(예: "자격증 취득 및 포트폴리오 구체화", "알고리즘 코딩테스트 대비", "주요 부스트캠프/인턴십 차기 기수 모집 대비")를 activity 필드와 reason 필드에 설명하세요.

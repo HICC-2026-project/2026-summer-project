@@ -1,7 +1,7 @@
 package com.career.recommendation.util;
 
+import com.career.recommendation.dto.position.SpecPositionResult;
 import com.career.recommendation.entity.Activity;
-import com.career.recommendation.entity.PasserData;
 import com.career.recommendation.entity.TargetJob;
 import com.career.recommendation.entity.UserSpec;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -105,24 +105,34 @@ public class PromptDataBuilder {
     }
 
     /**
-     * 유사 합격자 목록을 Gemini 프롬프트용 텍스트로 변환한다.
+     * 위치·갭 계산 결과(SpecPositionResult)를 Gemini 프롬프트용 텍스트로 변환한다.
+     *
+     * 예전 buildSimilarCasesText(유사 합격자 5명의 원본 스펙 나열)를 대체한다 — 개별 케이스
+     * 나열보다 "분포 내 위치 + 부족한 것(갭)"이 추천 이유 생성에 더 직접적인 신호이고,
+     * 화면(specPosition)과 프롬프트가 같은 데이터를 보므로 추천 이유와 비교 탭이 서로
+     * 모순될 수 없다.
      */
-    public String buildSimilarCasesText(List<PasserData> passerList) {
-        if (passerList.isEmpty()) return "유사 합격자 데이터 없음";
-        StringBuilder sb = new StringBuilder();
-        int limit = Math.min(passerList.size(), 5);
-        for (int i = 0; i < limit; i++) {
-            PasserData p = passerList.get(i);
-            sb.append(String.format("합격자%d: 학점=%s/%s, 어학=%s, 자격증=%s\n",
-                    i + 1,
-                    p.getGpa() != null ? p.getGpa() : "미상",
-                    p.getGpaMax() != null ? p.getGpaMax() : "미상",
-                    p.getLanguageScores() != null ? p.getLanguageScores() : List.of(),
-                    p.getCertifications() != null ? String.join(", ", p.getCertifications()) : "없음"
-            ));
+    public String buildPositionContextText(SpecPositionResult position) {
+        if (position == null || SpecPositionCalculator.BASIS_NONE.equals(position.getBasis())) {
+            return "합격자 비교 데이터 없음";
         }
-        if (passerList.size() > 5) {
-            sb.append(String.format("... 외 %d명\n", passerList.size() - 5));
+        StringBuilder sb = new StringBuilder();
+        sb.append(position.getBasisMessage()).append('\n');
+        if (position.getAxes() != null) {
+            for (SpecPositionResult.AxisPosition axis : position.getAxes()) {
+                sb.append(String.format("- %s: 내 값 %s / 합격자 중앙값 %s%s%n",
+                        axis.getLabel(), axis.getMyValue(), axis.getMedianValue(),
+                        axis.getPercentile() != null
+                                ? String.format(" (합격자 분포에서 percentile %d)", axis.getPercentile())
+                                : ""));
+            }
+        }
+        if (position.getGaps() != null && !position.getGaps().isEmpty()) {
+            sb.append("부족한 항목(갭 — 합격자 다수 보유, 사용자 미보유):\n");
+            for (SpecPositionResult.SpecGap gap : position.getGaps()) {
+                sb.append(String.format("- %s (합격자 %d%% 보유)%n",
+                        gap.getName(), gap.getHolderRatePercent()));
+            }
         }
         return sb.toString();
     }

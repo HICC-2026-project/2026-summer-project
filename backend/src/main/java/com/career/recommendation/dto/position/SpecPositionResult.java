@@ -32,6 +32,9 @@ public class SpecPositionResult {
     /** 비교에 쓴 프로필의 합격자 수. basis가 NONE이면 0. */
     private Integer sampleSize;
 
+    /** 비교에 쓴 프로필에 합성 DEMO(또는 출처 미상) 데이터가 포함되었는지. FE 고지용. */
+    private Boolean demoDataIncluded;
+
     /** 축별 위치. 합격자 데이터가 없는 축은 아예 포함하지 않는다(예전 v8 규칙 유지). */
     private List<AxisPosition> axes;
 
