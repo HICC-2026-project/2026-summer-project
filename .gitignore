@@ -24,3 +24,8 @@ Thumbs.db
 
 # Local uploaded proof images
 **/uploads/
+
+# Claude Code 로컬 런타임 (launch.json은 팀 공유용이라 제외하지 않음)
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
