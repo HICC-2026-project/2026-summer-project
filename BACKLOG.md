@@ -222,7 +222,7 @@
 
 ## E7. 인프라·운영 — 담당 BE-3, 규모 M
 
-- [ ] 프론트 CI: 타입체크·lint·build 워크플로우 (`frontend/**` 경로 트리거)
+- [x] 프론트 CI: `.github/workflows/frontend-ci.yml` — Node 22, tsc/lint/build, `frontend/**` 경로 트리거
 - [ ] 탄력적 IP 고정, 카카오 리다이렉트 URI 운영값 반영 (메모리상 미완)
 - [ ] `backend-deploy.yml` 헬스체크 후 롤백 단계
 - [ ] 구조화 로깅 + Gemini 호출 실패율/지연 메트릭 (Actuator + 간단 대시보드 또는 CloudWatch)
