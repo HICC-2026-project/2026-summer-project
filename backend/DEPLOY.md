@@ -90,6 +90,7 @@ CLAUDE_API_KEY=<팀 공용 키>
 FRONTEND_REDIRECT_URI=http://<EC2 퍼블릭 IP>:3000/oauth/callback   # 프론트 배포 전이면 일단 이대로
 CORS_ALLOWED_ORIGINS=http://localhost:3000,https://*.vercel.app     # 프론트 배포 후 실제 도메인 추가
 ADMIN_PROVIDER_IDS=KAKAO:<카카오 회원번호>,KAKAO:<…>                 # 제보 검수(관리자) 계정. 로그인 시 역할 동기화. 비우면 검수 API 사용 불가
+GEMINI_DAILY_LIMIT=500                                         # Gemini 서비스 전역 일일 호출 상한(시도 기준). 0이면 무제한
 ```
 
 ## 5. 실행

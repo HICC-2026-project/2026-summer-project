@@ -46,6 +46,11 @@ public final class GapMatcher {
     private GapMatcher() {
     }
 
+    /** 직무 코드에 대응하는 활동 태그 키워드(소문자). 활동 검색의 jobType 필터도 같은 표를 쓴다. */
+    public static List<String> jobKeywords(JobType job) {
+        return JOB_KEYWORDS.getOrDefault(job, List.of());
+    }
+
     /** 알려진 갭 하나. name은 비교 탭에 보이는 이름 그대로, keywords는 활동 본문(소문자)에서 찾을 단어. */
     public record Gap(String name, List<String> keywords) {
     }

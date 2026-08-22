@@ -6,12 +6,15 @@ import com.career.recommendation.exception.InvalidTokenException;
 import com.career.recommendation.repository.RefreshTokenRepository;
 import com.career.recommendation.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TokenService {
@@ -42,7 +45,17 @@ public class TokenService {
         }
 
         RefreshToken saved = refreshTokenRepository.findByToken(refreshToken)
-                .orElseThrow(() -> new InvalidTokenException("리프레시 토큰이 존재하지 않습니다."));
+                .orElseThrow(() -> {
+                    // 서명·만료·typ이 모두 정상인데 DB에 없다 = 이미 로테이션으로 폐기된 토큰의 재사용.
+                    // 정상 클라이언트는 교체된 새 토큰만 들고 있으므로, 옛 토큰이 다시 오면 둘 중 하나다:
+                    // (a) 탈취자가 먼저 썼고 지금 온 게 정상 사용자, (b) 정상 사용자가 먼저 썼고 지금 온 게 탈취자.
+                    // 어느 쪽인지 구분할 수 없으므로 그 사용자의 모든 리프레시 토큰을 폐기해 양쪽 다 재로그인시킨다
+                    // (OAuth 2.0 Security BCP의 refresh token rotation 권고와 같은 대응).
+                    UUID userId = jwtTokenProvider.getUserIdFromToken(refreshToken);
+                    int revoked = refreshTokenRepository.deleteByUserId(userId);
+                    log.warn("리프레시 토큰 재사용 감지: user={}, 폐기된 세션 {}건 — 전체 재로그인 필요", userId, revoked);
+                    return new InvalidTokenException("리프레시 토큰이 재사용되어 모든 세션을 종료했습니다. 다시 로그인해 주세요.");
+                });
 
         if (saved.getExpiresAt().isBefore(LocalDateTime.now())) {
             refreshTokenRepository.delete(saved);

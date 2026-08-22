@@ -213,7 +213,7 @@
 
 ## E6. 활동 데이터 품질·검색 — 담당 BE-2, 규모 M
 
-- [ ] `GET /activities` 필터 확장: `jobType`(tags 기반), `deadlineAfter`, 키워드 검색(`name/organization ILIKE`)
+- [x] `GET /activities` 필터: `jobType`(태그 정규식, GapMatcher 키워드 공유)·`deadlineAfter`(상시 포함)·`keyword`(이름·주최·설명, LIKE 이스케이프). DB 테스트 5건
 - [x] `ActivityDeadlineScheduler` — 매일 00:05 KST `deadline < today` → `is_active=false` (당일 마감 유지), DB 테스트
 - [ ] 크롤러 재수집 파이프라인 문서화 + 증분 시드 생성 (기존 데이터 중복 방지 키 `url`)
 - [ ] `targetSpec` JSON 스키마 고정 및 검증 테스트
@@ -226,7 +226,7 @@
 - [ ] 탄력적 IP 고정, 카카오 리다이렉트 URI 운영값 반영 (메모리상 미완)
 - [ ] `backend-deploy.yml` 헬스체크 후 롤백 단계
 - [ ] 구조화 로깅 + Gemini 호출 실패율/지연 메트릭 (Actuator + 간단 대시보드 또는 CloudWatch)
-- [ ] Gemini 일일 호출 상한 전역 가드 (현재 사용자별 `dailyUpdateCount`만 존재)
+- [x] `GeminiDailyQuota` — 전역 일일 시도 상한(`GEMINI_DAILY_LIMIT`, 기본 500), 초과 시 폴백
 - [x] `OldVsNewScoreComparisonDemo` `@Tag("demo")` + surefire `excludedGroups` — `./mvnw test -Pdemo`로만 실행
 - [ ] 증빙 파일 로컬 경로 백업/정리 크론 (E2-4 전까지)
 
@@ -236,7 +236,7 @@
 
 - [x] 회원 탈퇴 `DELETE /api/v1/users/me` — V22로 recommendations·roadmap_caches FK CASCADE 추가, 제보는 reporter NULL로 익명 유지. DB 테스트 + 프로필 탭 탈퇴 링크(confirm)
 - [ ] 구글 로그인 (FE에 "곧 지원 예정" 문구 존재, `User.provider`에 GOOGLE 예약됨)
-- [ ] 리프레시 토큰 회전 시 재사용 감지(탈취 대응) 테스트
+- [x] 리프레시 토큰 재사용 감지 — 교체된 토큰 재제시 시 그 사용자 세션 전부 폐기 + 테스트
 - [ ] 닉네임 변경 API
 
 ---
@@ -330,7 +330,7 @@
 - [x] `SpecPositionServiceCacheTest` — Caffeine 실제 올린 슬라이스 테스트 5건 (캐시 적중·폴백 지연 조회·null 키·evictAll)
 - [ ] 추천·로드맵 E2E 시나리오 테스트: 스펙 저장 → 추천 → 로드맵이 같은 갭을 참조
 - [ ] 프론트 컴포넌트 테스트 최소 세트 (CompareTab 막대/미입력 렌더링)
-- [ ] PROJECT.md "주요 요청 흐름"에 v9 위치·갭 흐름 반영
+- [x] PROJECT.md 추천·로드맵·제보/검수 흐름 v9 현행화
 
 ---
 

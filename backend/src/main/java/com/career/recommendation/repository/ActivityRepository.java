@@ -43,32 +43,35 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID> {
             Pageable pageable);
 
     /**
-     * 현재 신청 가능한 활동 목록을 페이지 단위로 조회한다.
-     * 마감일이 없는 활동은 상시 모집으로 간주하여 포함한다.
+     * 현재 신청 가능한 활동 목록 검색. 마감일이 없는 활동은 상시 모집으로 간주하여 포함한다.
+     * 필터는 전부 선택이며 "필터 없음"은 null이 아니라 빈 문자열/null 날짜로 넘긴다 —
+     * JPQL에서 null 파라미터는 DB 타입 추론이 실패할 수 있어 빈 문자열 비교가 안전하다.
+     *
+     * @param type          활동 유형 코드(INTERNSHIP 등). "" = 전체
+     * @param deadlineAfter 이 날짜 이후 마감(또는 상시)만. 조건 없음 = 아주 과거 날짜(null은 DB 타입 추론 실패)
+     * @param keywordLike   "%소문자 키워드%" 형태. "" = 조건 없음. 이름·주최·설명에서 찾는다
+     * @param jobPattern    태그에 매칭할 POSIX 정규식(예: "백엔드|backend|서버"). "" = 조건 없음
      */
     @Query("""
             SELECT a
             FROM Activity a
             WHERE a.isActive = true
               AND (a.deadline IS NULL OR a.deadline >= :today)
+              AND (:type = '' OR a.type = :type)
+              AND (a.deadline IS NULL OR a.deadline >= :deadlineAfter)
+              AND (:keywordLike = ''
+                   OR lower(a.name) LIKE :keywordLike ESCAPE '!'
+                   OR lower(coalesce(a.organization, '')) LIKE :keywordLike ESCAPE '!'
+                   OR lower(coalesce(a.description, '')) LIKE :keywordLike ESCAPE '!')
+              AND (:jobPattern = ''
+                   OR function('texticregexeq', function('array_to_string', a.tags, ' '), :jobPattern) = true)
             """)
-    Page<Activity> findOpenActivities(
+    Page<Activity> searchOpenActivities(
             @Param("today") LocalDate today,
-            Pageable pageable);
-
-    /**
-     * 지정한 유형 중 현재 신청 가능한 활동을 페이지 단위로 조회한다.
-     */
-    @Query("""
-            SELECT a
-            FROM Activity a
-            WHERE a.isActive = true
-              AND a.type = :type
-              AND (a.deadline IS NULL OR a.deadline >= :today)
-            """)
-    Page<Activity> findOpenActivitiesByType(
             @Param("type") String type,
-            @Param("today") LocalDate today,
+            @Param("deadlineAfter") LocalDate deadlineAfter,
+            @Param("keywordLike") String keywordLike,
+            @Param("jobPattern") String jobPattern,
             Pageable pageable);
 
     /** 마감일이 today 이전인 활성 활동을 비활성화한다(ActivityDeadlineScheduler). 마감일 당일은 유지. */

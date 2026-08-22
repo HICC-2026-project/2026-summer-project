@@ -1,5 +1,6 @@
 package com.career.recommendation.controller;
 
+import com.career.recommendation.domain.JobType;
 import com.career.recommendation.dto.activity.ActivityResponse;
 import com.career.recommendation.service.ActivityService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -9,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,6 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
+import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.UUID;
 
@@ -40,11 +44,17 @@ public class ActivityController {
     /** 미인증으로 호출 가능한 엔드포인트라 비정상적으로 큰 size로 DB 전체를 끌어오는 걸 막는다. */
     private static final int MAX_PAGE_SIZE = 100;
 
-    @Operation(summary = "활동 목록 조회", description = "활동 목록을 페이지네이션으로 조회한다. type으로 필터링 가능.")
+    @Operation(summary = "활동 목록 조회", description = "현재 신청 가능한 활동을 페이지네이션으로 조회한다. type·jobType·deadlineAfter·keyword로 필터링 가능(모두 선택, AND 결합).")
     @GetMapping
     public Page<ActivityResponse> getActivities(
-            @Parameter(description = "활동 유형 필터 (예: 인턴십·대외활동·공모전·교육, 생략 시 전체)")
+            @Parameter(description = "활동 유형 (INTERNSHIP | EXTERNAL | COMPETITION | EDUCATION, 생략 시 전체)")
             @RequestParam(required = false) String type,
+            @Parameter(description = "목표 직무 코드 — 태그가 그 직무에 맞는 활동만 (BACKEND 등)")
+            @RequestParam(required = false) String jobType,
+            @Parameter(description = "이 날짜(YYYY-MM-DD) 이후 마감인 활동만. 상시 모집은 항상 포함")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate deadlineAfter,
+            @Parameter(description = "이름·주최·설명 부분 일치 검색 (2~50자, 대소문자 무시)")
+            @RequestParam(required = false) String keyword,
             @Parameter(description = "페이지 번호 (0부터 시작)")
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "페이지 크기 (최대 " + MAX_PAGE_SIZE + ")")
@@ -79,7 +89,17 @@ public class ActivityController {
                 Sort.by(sortDirection, sortBy)
         );
 
-        return activityService.getActivities(type, pageRequest);
+        // 기존 page/size/sortBy 검증과 같은 방식(ResponseStatusException → 400)으로 필터도 검증한다.
+        JobType job = null;
+        if (jobType != null && !jobType.isBlank()) {
+            job = JobType.from(jobType).orElseThrow(() -> new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "jobType은 " + Arrays.toString(JobType.values()) + " 중 하나여야 합니다."));
+        }
+        if (keyword != null && !keyword.isBlank() && (keyword.trim().length() < 2 || keyword.length() > 50)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "keyword는 2~50자여야 합니다.");
+        }
+        ActivityService.ActivityFilter filter = new ActivityService.ActivityFilter(type, job, deadlineAfter, keyword);
+        return activityService.getActivities(filter, pageRequest);
     }
 
     @Operation(

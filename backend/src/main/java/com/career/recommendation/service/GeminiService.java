@@ -31,6 +31,7 @@ public class GeminiService {
     private String model;
 
     private final WebClient.Builder webClientBuilder;
+    private final GeminiDailyQuota dailyQuota;
 
     /** JSON 블록만 추출하는 패턴 (응답 앞뒤 잡담 제거) */
     private static final Pattern JSON_PATTERN = Pattern.compile("\\{[\\s\\S]*}", Pattern.DOTALL);
@@ -199,6 +200,10 @@ public class GeminiService {
 
         if (apiKey == null || apiKey.isBlank() || apiKey.contains("입력")) {
             log.warn("Gemini API 키가 설정되지 않았습니다. 즉시 폴백 데이터를 반환합니다.");
+            return "";
+        }
+        if (!dailyQuota.tryAcquire()) {
+            // 전역 일일 상한 — 호출을 건너뛰면 호출부가 폴백 추천으로 처리한다(사용자별 한도와 별개).
             return "";
         }
 
