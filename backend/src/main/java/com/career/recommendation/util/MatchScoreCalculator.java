@@ -7,12 +7,14 @@ import com.career.recommendation.entity.UserSpec;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -20,6 +22,12 @@ import java.util.stream.Collectors;
 /**
  * BE-1 담당 — 유저 스펙과 합격자 데이터를 비교하여 MatchScoreResult를 계산한다.
  * 항목별 내역 (학점, 어학, 자격증) 및 총점을 반환한다.
+ *
+ * 계산 구조: 사람(사용자·합격자) 1명당 정규화·환산을 한 번만 수행해 AxisValues로 만들고
+ * (axisValues), 총점(calculateTotalScore)과 비교 행(calculateDetails)은 그 사전 계산 값만
+ * 사용한다. 같은 결측 규칙("데이터 없는 축은 제외")을 두 곳이 자동으로 공유하게 하기 위한
+ * 구조다 — 예전처럼 두 메서드가 각자 원본을 다시 훑으면 결측 처리가 조금씩 어긋나
+ * 화면 안에서 총점과 막대가 모순돼 보이는 문제(v7 이력 참고)가 재발하기 쉽다.
  */
 @Component
 public class MatchScoreCalculator {
@@ -95,6 +103,12 @@ public class MatchScoreCalculator {
      * 전 구간을 쓰고 있고, 학점만 못 쓰고 있던 것이 문제였기 때문이다.
      */
     private static final double GPA_FLOOR_RATIO = 0.5;
+
+    /** 학점 표시·막대의 기준 만점(4.5 환산). */
+    private static final double GPA_SCALE_MAX = 4.5;
+
+    /** 어학 막대의 기준 만점(토익 환산 만점). */
+    private static final double LANG_SCALE_MAX = 990.0;
 
     /**
      * 자격증 막대의 100% 기준이 되는 가중치 합. 학점이 4.5, 어학이 990이라는 고정 만점으로
@@ -206,6 +220,17 @@ public class MatchScoreCalculator {
     private record CertContext(Set<String> observedCerts, Map<String, Double> jobWeights, boolean hasJobData) {}
 
     /**
+     * 사람 1명(사용자 또는 합격자)의 축별 사전 계산 값. 원본(BigDecimal 학점, 어학 JSON,
+     * 자격증 문자열 배열)의 정규화·환산은 여기서 한 번만 일어나고, 이후의 총점·비교 행
+     * 계산은 전부 이 값만 사용한다.
+     *
+     * hasGpa를 gpaRatio == 0과 구분하는 이유: "학점 미입력"(비교 불가·축 제외)과
+     * "학점이 실제로 0"(비교 가능)은 다른 상태다. 어학·자격증은 0이 곧 "없음"이라 값 하나로
+     * 충분하지만, 학점은 결측 여부를 따로 들고 있어야 한다.
+     */
+    private record AxisValues(boolean hasGpa, double gpaRatio, double toeic, double certValue, int certCount) {}
+
+    /**
      * 유저 스펙과 합격자 케이스 목록을 비교하여 총점과 상세 내역(CompareRow)을 포함한 결과를 반환한다.
      *
      * @param globalCertPool 2층 인식에 쓸 자격증 원본 문자열 전체(직무·유사도 무관, DB 전체 스캔 결과).
@@ -245,31 +270,32 @@ public class MatchScoreCalculator {
         // 못 내는 상황에서도 "이 자격증은 우리가 못 알아봤다"는 사실 자체는 알려줄 수 있다.
         List<String> unrecognized = unrecognizedCertifications(userSpec.getCertifications(), certContext);
 
-        // ⚠️ 인식 개수는 여기서 직접 내려준다 — FE가 "입력 개수 − 미인식 개수"로 역산하면
-        // 안 된다. 이 클래스의 인식·미인식 집계는 전부 canonicalCert 기준(공백·"필기/실기"
-        // 등 제거 후 dedup)이라, "정보처리기사 필기"+"정보처리기사 실기"처럼 원본 2개가
-        // canonical 1개로 접히는 순간 원본 개수 기반 뺄셈은 틀린 값이 된다(비교 탭 자격증
-        // 행의 집계 — countRecognized — 와 어긋나는, 이 필드가 고치려는 바로 그 불일치).
-        int recognizedCount = countRecognized(userSpec.getCertifications(), certContext);
+        // ⚠️ 인식 개수(user.certCount)는 여기서 직접 내려준다 — FE가 "입력 개수 − 미인식
+        // 개수"로 역산하면 안 된다. 이 클래스의 인식·미인식 집계는 전부 canonicalCert 기준
+        // (공백·"필기/실기" 등 제거 후 dedup)이라, "정보처리기사 필기"+"정보처리기사 실기"처럼
+        // 원본 2개가 canonical 1개로 접히는 순간 원본 개수 기반 뺄셈은 틀린 값이 된다.
+        AxisValues user = axisValues(userSpec.getGpa(), userSpec.getGpaMax(),
+                userSpec.getLanguageScores(), userSpec.getCertifications(), certContext);
 
         if (passerList == null || passerList.isEmpty()) {
             return MatchScoreResult.builder()
                     .totalScore(0)
                     .compareRows(List.of())
                     .unrecognizedCertifications(unrecognized)
-                    .recognizedCertificationCount(recognizedCount)
+                    .recognizedCertificationCount(user.certCount())
                     .build();
         }
 
-        double totalScore = calculateTotalScore(userSpec, passerList, certContext);
-
-        List<CompareRowDto> rows = calculateDetails(userSpec, passerList, certContext);
+        List<AxisValues> passers = passerList.stream()
+                .filter(Objects::nonNull)
+                .map(p -> axisValues(p.getGpa(), p.getGpaMax(), p.getLanguageScores(), p.getCertifications(), certContext))
+                .toList();
 
         return MatchScoreResult.builder()
-                .totalScore((int) Math.round(totalScore))
-                .compareRows(rows)
+                .totalScore((int) Math.round(calculateTotalScore(user, passers)))
+                .compareRows(calculateDetails(user, passers))
                 .unrecognizedCertifications(unrecognized)
-                .recognizedCertificationCount(recognizedCount)
+                .recognizedCertificationCount(user.certCount())
                 .build();
     }
 
@@ -282,14 +308,36 @@ public class MatchScoreCalculator {
                 .collect(Collectors.toSet());
     }
 
+    /** 원본 스펙 필드를 축별 사전 계산 값으로 변환한다. 사람 1명당 한 번만 호출된다. */
+    private AxisValues axisValues(BigDecimal gpa, BigDecimal gpaMax,
+                                  List<Map<String, Object>> languageScores, String[] certifications,
+                                  CertContext certContext) {
+        boolean hasGpa = gpa != null && gpaMax != null && gpaMax.signum() > 0;
+        double gpaRatio = hasGpa ? gpa.doubleValue() / gpaMax.doubleValue() : 0.0;
+
+        // 자격증 가중 합계와 인식 개수를 한 번의 순회로 얻는다. 같은 자격증을 중복 표기해도
+        // (정규화 후 같아지면) 한 번만 센다. 미인식 입력의 기여는 정확히 0 — v3 불변식
+        // (weightOf 주석 참고).
+        double certValue = 0.0;
+        int certCount = 0;
+        for (String canonical : canonicalCerts(certifications)) {
+            double weight = weightOf(canonical, certContext);
+            if (weight > 0) {
+                certValue += weight;
+                certCount++;
+            }
+        }
+
+        return new AxisValues(hasGpa, gpaRatio, getMaxEquivalentToeic(languageScores), certValue, certCount);
+    }
+
     /**
      * ⚠️ v7 재구성: 예전(~v6)에는 "합격자별로 3축 가중합 → 합격자 평균" 구조였고, 그 안에서
-     * 합격자 쪽 데이터가 결측인 축은 자동 100점이었다(scoreGpa/scoreLang/scoreCert의
-     * "비교 불가 → 감점 없음" 분기). 그런데 자동 100은 "감점 없음"이 아니라 "만점 가산"이다 —
-     * 합격자 테이블에 결측 필드가 흔한 상황(운영 60행)에서 결측 많은 합격자가 뽑힐수록
-     * 총점이 위로 부풀었고, 비교 탭 평균(calculateDetails)은 같은 결측을 "제외"로 처리해서
-     * 화면의 막대(70~86%)와 총점(97점)이 서로 모순돼 보이는 "이상한 결론"이 나왔다
-     * (2026-08-11 사용자 제보의 핵심 원인).
+     * 합격자 쪽 데이터가 결측인 축은 자동 100점이었다. 그런데 자동 100은 "감점 없음"이 아니라
+     * "만점 가산"이다 — 합격자 테이블에 결측 필드가 흔한 상황(운영 60행)에서 결측 많은
+     * 합격자가 뽑힐수록 총점이 위로 부풀었고, 비교 탭 평균(calculateDetails)은 같은 결측을
+     * "제외"로 처리해서 화면의 막대(70~86%)와 총점(97점)이 서로 모순돼 보이는 "이상한 결론"이
+     * 나왔다(2026-08-11 사용자 제보의 핵심 원인).
      *
      * v7은 축 단위로 계산한다: 각 축(학점·어학·자격증)마다 "그 축 데이터를 실제로 가진
      * 합격자"만 상대로 점수를 내 평균하고, 그 축 데이터를 가진 합격자가 한 명도 없으면 그
@@ -297,19 +345,19 @@ public class MatchScoreCalculator {
      * 내리지도 않는 진짜 "중립"이 되고, 총점과 비교 탭이 같은 결측 규칙을 쓰게 된다.
      * 전 축이 제외되면(합격자 전원이 전 필드 결측 — 사실상 불량 데이터) 0점을 반환한다.
      */
-    private double calculateTotalScore(UserSpec userSpec, List<PasserData> passerList, CertContext certContext) {
+    private double calculateTotalScore(AxisValues user, List<AxisValues> passers) {
         // 축별로 "데이터를 가진 합격자 대상 점수"들의 평균. 데이터 가진 합격자가 없으면 비어 있음.
-        java.util.OptionalDouble gpaAxis = passerList.stream()
-                .filter(p -> p != null && p.getGpa() != null && p.getGpaMax() != null && p.getGpaMax().signum() > 0)
-                .mapToDouble(p -> scoreGpa(userSpec.getGpa(), userSpec.getGpaMax(), p.getGpa(), p.getGpaMax()))
+        OptionalDouble gpaAxis = passers.stream()
+                .filter(AxisValues::hasGpa)
+                .mapToDouble(p -> scoreGpa(user, p.gpaRatio()))
                 .average();
-        java.util.OptionalDouble langAxis = passerList.stream()
-                .filter(p -> p != null && getMaxEquivalentToeic(p.getLanguageScores()) > 0)
-                .mapToDouble(p -> scoreLang(userSpec.getLanguageScores(), p.getLanguageScores()))
+        OptionalDouble langAxis = passers.stream()
+                .filter(p -> p.toeic() > 0)
+                .mapToDouble(p -> ratioScore(user.toeic(), p.toeic()))
                 .average();
-        java.util.OptionalDouble certAxis = passerList.stream()
-                .filter(p -> p != null && certValue(p.getCertifications(), certContext) > 0)
-                .mapToDouble(p -> scoreCert(userSpec.getCertifications(), p.getCertifications(), certContext))
+        OptionalDouble certAxis = passers.stream()
+                .filter(p -> p.certValue() > 0)
+                .mapToDouble(p -> ratioScore(user.certValue(), p.certValue()))
                 .average();
 
         double weightedSum = 0.0;
@@ -321,33 +369,31 @@ public class MatchScoreCalculator {
         return weightUsed > 0 ? weightedSum / weightUsed : 0.0;
     }
 
-    private List<CompareRowDto> calculateDetails(UserSpec userSpec, List<PasserData> passerList, CertContext certContext) {
+    private List<CompareRowDto> calculateDetails(AxisValues user, List<AxisValues> passers) {
         // --- 1. 학점 (GPA) ---
         // 학점 데이터가 없는 합격자는 평균 계산에서 제외한다 — 포함시키면 0으로 잡혀 평균이
-        // 실제보다 크게 낮아진다. scoreGpa()가 합격자 학점 결측을 "비교 불가(감점 없음)"로
-        // 처리하는 것과 같은 원칙이다. 정상 학점이 0점일 수는 없으므로 >0 필터로 결측을 걸러낸다.
-        double userGpaNorm = normalizeGpaTo45(userSpec.getGpa(), userSpec.getGpaMax());
-        double avgPasserGpaNorm = passerList.stream()
-                .mapToDouble(p -> normalizeGpaTo45(p.getGpa(), p.getGpaMax()))
+        // 실제보다 크게 낮아진다. 정상 학점이 0일 수는 없으므로 >0 필터로 결측을 걸러낸다.
+        double userGpaNorm = user.gpaRatio() * GPA_SCALE_MAX;
+        double avgPasserGpaNorm = passers.stream()
+                .mapToDouble(p -> p.gpaRatio() * GPA_SCALE_MAX)
                 .filter(value -> value > 0)
                 .average()
                 .orElse(0.0);
-        
+
         CompareRowDto gpaRow = CompareRowDto.builder()
                 .label("학점")
                 .weight("40%")
                 .myVal(userGpaNorm > 0 ? String.format("%.2f/4.5", userGpaNorm) : "미입력")
                 .avgVal(avgPasserGpaNorm > 0 ? String.format("%.2f/4.5", avgPasserGpaNorm) : "없음")
-                .myPct((int) Math.min(100, Math.round((userGpaNorm / 4.5) * 100)))
-                .avgPct((int) Math.min(100, Math.round((avgPasserGpaNorm / 4.5) * 100)))
+                .myPct((int) Math.min(100, Math.round(userGpaNorm / GPA_SCALE_MAX * 100)))
+                .avgPct((int) Math.min(100, Math.round(avgPasserGpaNorm / GPA_SCALE_MAX * 100)))
                 .status(userGpaNorm >= avgPasserGpaNorm ? "충족" : "부족")
                 .build();
 
         // --- 2. 어학 성적 (Language) ---
         // GPA와 같은 이유로, 어학 성적이 없는(또는 환산 불가한) 합격자는 평균에서 제외한다.
-        double userMaxToeic = getMaxEquivalentToeic(userSpec.getLanguageScores());
-        double avgPasserToeic = passerList.stream()
-                .mapToDouble(p -> getMaxEquivalentToeic(p.getLanguageScores()))
+        double avgPasserToeic = passers.stream()
+                .mapToDouble(AxisValues::toeic)
                 .filter(value -> value > 0)
                 .average()
                 .orElse(0.0);
@@ -355,74 +401,89 @@ public class MatchScoreCalculator {
         CompareRowDto langRow = CompareRowDto.builder()
                 .label("어학 성적")
                 .weight("33.3%")
-                .myVal(userMaxToeic > 0 ? String.format("환산 %d", (int) userMaxToeic) : "없음")
+                .myVal(user.toeic() > 0 ? String.format("환산 %d", (int) user.toeic()) : "없음")
                 .avgVal(avgPasserToeic > 0 ? String.format("환산 %d", (int) avgPasserToeic) : "없음")
-                .myPct((int) Math.min(100, Math.round((userMaxToeic / 990.0) * 100)))
-                .avgPct((int) Math.min(100, Math.round((avgPasserToeic / 990.0) * 100)))
-                .status(userMaxToeic >= avgPasserToeic ? "충족" : "부족")
+                .myPct((int) Math.min(100, Math.round(user.toeic() / LANG_SCALE_MAX * 100)))
+                .avgPct((int) Math.min(100, Math.round(avgPasserToeic / LANG_SCALE_MAX * 100)))
+                .status(user.toeic() >= avgPasserToeic ? "충족" : "부족")
                 .build();
 
         // --- 3. 자격증 (Certifications) ---
-        // myVal·avgVal은 "입력한 개수"가 아니라 "인식된(점수에 기여한) 개수"를 보여준다.
-        // 입력 개수를 그대로 보여주면, 정크 5개를 넣었을 때 "5개"라고 뜨면서 동시에
-        // 막대·상태는 0에 가깝게 나와 화면 안에서 숫자끼리 모순돼 보인다.
-        // (실제로 뭘 놓쳤는지는 unrecognizedCertifications 배너가 별도로 알려준다.)
-        int userCertCount = countRecognized(userSpec.getCertifications(), certContext);
-        double avgPasserCertCount = passerList.stream()
-                .mapToDouble(p -> countRecognized(p.getCertifications(), certContext))
+        // 학점·어학과 달리 자격증 0개는 "결측"이 아니라 "실제로 안 가짐"이므로 평균에서
+        // 제외하지 않고 0으로 포함한다. myVal·avgVal은 "입력한 개수"가 아니라 "인식된
+        // (점수에 기여한) 개수"다 — 입력 개수를 그대로 보여주면, 정크 5개를 넣었을 때
+        // "5개"라고 뜨면서 동시에 막대·상태는 0에 가깝게 나와 화면 안에서 숫자끼리 모순돼
+        // 보인다. (실제로 뭘 놓쳤는지는 unrecognizedCertifications 배너가 별도로 알려준다.)
+        double avgPasserCertCount = passers.stream()
+                .mapToDouble(AxisValues::certCount)
                 .average()
                 .orElse(0.0);
-
-        double userCertValue = certValue(userSpec.getCertifications(), certContext);
-        double avgPasserCertValue = passerList.stream()
-                .mapToDouble(p -> certValue(p.getCertifications(), certContext))
+        double avgPasserCertValue = passers.stream()
+                .mapToDouble(AxisValues::certValue)
                 .average()
                 .orElse(0.0);
 
         // 막대는 학점(÷4.5)·어학(÷990)과 마찬가지로 고정 기준(CERT_SCALE_MAX)으로 나눈다.
         // 즉 "합격자 대비 몇 %"가 아니라 "자격증 항목을 절대적으로 얼마나 채웠나"를 나타낸다.
         // 합격자 평균으로 나누던 예전 방식은 합격자 막대를 항상 67%에 고정시켰다.
-        //
-        // 합격자 평균이 0이어도 별도 분기가 필요 없다 — 분모가 상수라 0으로 나눌 일이 없고,
-        // "합격자도 자격증이 없다"를 0%로 보여주는 게 사실에 맞다. (예전엔 상대 기준이라
-        // 0/0이 정의되지 않아 100%로 예외 처리했는데, 그건 자격증이 하나도 없는 사용자에게
-        // "만점"이라고 표시하는 셈이라 오히려 오해를 만들었다. 자격증 항목이 감점되지 않는다는
-        // 사실은 status의 "충족"과 총점이 이미 전달한다 — 학점·어학 막대가 낮아도 상대 비교에서
-        // 충족이 나올 수 있는 것과 같은 구조다.)
-        int certMyPct = (int) Math.min(100, Math.round(userCertValue / CERT_SCALE_MAX * 100));
-        int certAvgPct = (int) Math.min(100, Math.round(avgPasserCertValue / CERT_SCALE_MAX * 100));
-
+        // 분모가 상수라 0으로 나눌 일이 없고, "합격자도 자격증이 없다"는 0%로 보여주는 게
+        // 사실에 맞다(감점되지 않는다는 사실은 status의 "충족"과 총점이 이미 전달한다).
         CompareRowDto certRow = CompareRowDto.builder()
                 .label("자격증/수상")
                 .weight("26.7%")
-                .myVal(String.format("%d개", userCertCount))
+                .myVal(String.format("%d개", user.certCount()))
                 .avgVal(String.format("%.1f개", avgPasserCertCount))
-                .myPct(certMyPct)
-                .avgPct(certAvgPct)
-                .status(userCertValue >= avgPasserCertValue ? "충족" : "부족")
+                .myPct((int) Math.min(100, Math.round(user.certValue() / CERT_SCALE_MAX * 100)))
+                .avgPct((int) Math.min(100, Math.round(avgPasserCertValue / CERT_SCALE_MAX * 100)))
+                .status(user.certValue() >= avgPasserCertValue ? "충족" : "부족")
                 .build();
 
         // ⚠️ 합격자 쪽 데이터가 없는 항목은 행 자체를 뺀다 — 총점(calculateTotalScore)이 그
         // 축을 제외·가중치 재정규화하는 것과 같은 규칙을 화면에도 적용한다. 예전엔 "양쪽 다
         // 0일 때만" 뺐는데, 그러면 사용자만 값이 있는 축(합격자 전원 결측)이 user >= avg(0)로
         // 무조건 "충족" + 명목 가중치("40%") 라벨을 달고 그려졌다 — 정작 총점 계산엔 그 축이
-        // 아예 안 들어갔는데 화면은 "이 항목이 40%를 차지하고 충족"이라고 말하는, v7이 고친
-        // 것과 같은 부류의 점수-막대 모순이다. 비교의 근거는 합격자 데이터이므로, 합격자
-        // 데이터가 없으면 사용자 입력 여부와 무관하게 "비교 불가"로 행을 감춘다.
-        // (사용자만 미입력이고 합격자 데이터는 있는 경우는 "부족"이 맞으므로 그대로 남는다.)
+        // 아예 안 들어갔는데 화면은 "이 항목이 40%를 차지하고 충족"이라고 말하는 점수-막대
+        // 모순이다. (사용자만 미입력이고 합격자 데이터는 있는 경우는 "부족"이 맞으므로 남는다.)
         //
         // 남은 행의 weight 라벨("40%" 등)은 명목값 그대로 둔다 — 재정규화는 비율을 보존하므로
         // (예: 어학 33.3% : 자격증 26.7% = 재정규화 후에도 5:4) 라벨 간 상대 비중은 계속 참이다.
-        java.util.List<CompareRowDto> rows = new java.util.ArrayList<>(3);
+        List<CompareRowDto> rows = new ArrayList<>(3);
         if (avgPasserGpaNorm > 0) rows.add(gpaRow);
         if (avgPasserToeic > 0) rows.add(langRow);
         if (avgPasserCertValue > 0) rows.add(certRow);
         return rows;
     }
 
-    private double normalizeGpaTo45(BigDecimal gpa, BigDecimal gpaMax) {
-        if (gpa == null || gpaMax == null || gpaMax.signum() <= 0) return 0.0;
-        return (gpa.doubleValue() / gpaMax.doubleValue()) * 4.5;
+    /**
+     * 학점 축 점수. 바닥값(GPA_FLOOR_RATIO)부터 합격자 기준선까지를 0~100으로 편다.
+     * 단순 비율(userRatio / passerRatio)을 쓰면 학점 축만 하위 구간을 못 써서, 명목 가중치
+     * 40%에 비해 실제 영향력이 훨씬 작아진다(GPA_FLOOR_RATIO 주석 참고).
+     * 합격자 학점 결측은 호출부 필터(hasGpa)가 "축 제외"로 처리하므로 여기 오지 않는다.
+     */
+    private double scoreGpa(AxisValues user, double passerRatio) {
+        // 사용자가 입력하지 않은 항목은 0점이다. 예전에는 50점을 줘서, 스펙을 하나도 넣지
+        // 않아도 종합 점수가 37점쯤 나오는 문제가 있었다.
+        if (!user.hasGpa()) return 0.0;
+        if (passerRatio <= 0) return 100.0;
+        if (user.gpaRatio() >= passerRatio) return 100.0;
+
+        double span = passerRatio - GPA_FLOOR_RATIO;
+        if (span <= 0) {
+            // 합격자 학점이 바닥값 이하라 구간을 만들 수 없다. 이 경우엔 바닥값을 적용하지 않고
+            // 예전처럼 단순 비율로 비교한다(분모가 0 이하가 되는 것을 막는다).
+            return Math.max(0.0, (user.gpaRatio() / passerRatio) * 100.0);
+        }
+        return Math.max(0.0, (user.gpaRatio() - GPA_FLOOR_RATIO) / span * 100.0);
+    }
+
+    /**
+     * 어학·자격증 공용 비율 점수(내 값 / 합격자 값, 100 상한). 두 축 모두 0이 "실제로 없음"을
+     * 뜻하는 값이라 같은 식을 쓴다 — 사용자 0은 0점, 합격자 이상이면 100점.
+     * 합격자 값 0(결측)은 호출부 필터가 "축 제외"로 처리하므로 여기 오지 않는다.
+     */
+    private double ratioScore(double userValue, double passerValue) {
+        if (userValue <= 0) return 0.0;
+        return Math.min(100.0, (userValue / passerValue) * 100.0);
     }
 
     private double getMaxEquivalentToeic(List<Map<String, Object>> langScores) {
@@ -432,59 +493,6 @@ public class MatchScoreCalculator {
                 .mapToDouble(this::convertToEquivalentToeic)
                 .max()
                 .orElse(0.0);
-    }
-
-    private double scoreGpa(BigDecimal userGpa, BigDecimal userGpaMax,
-                            BigDecimal passerGpa, BigDecimal passerGpaMax) {
-        // v7부터 합격자 쪽 학점 결측은 호출부(calculateTotalScore)가 필터로 "축 제외" 처리한다 —
-        // 자동 100은 "감점 없음"이 아니라 "만점 가산"이라 총점을 부풀렸기 때문(버전 이력 7 참고).
-        // 이 분기는 정상 경로에선 도달하지 않는 방어선으로만 남긴다.
-        if (passerGpa == null || passerGpaMax == null || passerGpaMax.signum() <= 0) {
-            return 100.0;
-        }
-        // 사용자가 입력하지 않은 항목은 0점이다.
-        // 예전에는 50점을 줘서, 스펙을 하나도 넣지 않아도 종합 점수가 37점쯤 나오는 문제가 있었다.
-        if (userGpa == null || userGpaMax == null || userGpaMax.signum() <= 0) {
-            return 0.0;
-        }
-
-        double userVal = userGpa.doubleValue() / userGpaMax.doubleValue();
-        double passerVal = passerGpa.doubleValue() / passerGpaMax.doubleValue();
-        if (passerVal <= 0) return 100.0;
-        if (userVal >= passerVal) return 100.0;
-
-        // 바닥값(GPA_FLOOR_RATIO)부터 합격자 기준선까지를 0~100으로 편다.
-        // 단순 비율(userVal / passerVal)을 쓰면 학점 축만 하위 구간을 못 써서,
-        // 명목 가중치 40%에 비해 실제 영향력이 훨씬 작아진다(GPA_FLOOR_RATIO 주석 참고).
-        double span = passerVal - GPA_FLOOR_RATIO;
-        if (span <= 0) {
-            // 합격자 학점이 바닥값 이하라 구간을 만들 수 없다. 이 경우엔 바닥값을 적용하지 않고
-            // 예전처럼 단순 비율로 비교한다(분모가 0 이하가 되는 것을 막는다).
-            return Math.max(0.0, (userVal / passerVal) * 100.0);
-        }
-        return Math.max(0.0, (userVal - GPA_FLOOR_RATIO) / span * 100.0);
-    }
-
-    private double scoreLang(List<Map<String, Object>> userLangScores,
-                             List<Map<String, Object>> passerLangScores) {
-        // v7부터 합격자 어학 결측은 호출부가 필터로 "축 제외" 처리한다(scoreGpa 주석 참고).
-        // 이 분기는 정상 경로에선 도달하지 않는 방어선으로만 남긴다.
-        double passerMaxToeic = getMaxEquivalentToeic(passerLangScores);
-        if (passerMaxToeic <= 0) {
-            return 100.0;
-        }
-
-        // 사용자가 입력하지 않은 항목은 0점 (예전 50점 기본값 제거).
-        double userMaxToeic = getMaxEquivalentToeic(userLangScores);
-        if (userMaxToeic <= 0) {
-            return 0.0;
-        }
-
-        if (userMaxToeic >= passerMaxToeic) {
-            return 100.0;
-        }
-
-        return (userMaxToeic / passerMaxToeic) * 100.0;
     }
 
     private double convertToEquivalentToeic(Map<String, Object> scoreData) {
@@ -514,7 +522,7 @@ public class MatchScoreCalculator {
         if ("TOEFL".equals(type)) {
             Double score = asDouble(scoreData.get("score"));
             if (score == null) return 0.0;
-            
+
             if (score >= 108) return 950.0 + ((score - 108) / (120 - 108) * 40.0);
             if (score >= 101) return interpolate(score, 101, 108, 900, 950);
             if (score >= 94) return interpolate(score, 94, 101, 850, 900);
@@ -534,56 +542,6 @@ public class MatchScoreCalculator {
     }
 
     /**
-     * 합격자 자격증(passerCerts)과 사용자 자격증(userCerts)의 가중 합계를 비교한다.
-     * 학점(scoreGpa)·어학(scoreLang)과 같은 "비율" 구조로 통일했다 —
-     * 예전엔 자격증만 "합격자 목록에 있는 걸 몇 개 맞혔나"를 셌는데,
-     * 이 방향은 사용자가 합격자보다 훨씬 많은 자격증을 갖고 있어도
-     * 합격자가 안 가진 자격증이면 전혀 반영되지 않는 문제가 있었다.
-     */
-    private double scoreCert(String[] userCerts, String[] passerCerts, CertContext certContext) {
-        double passerValue = certValue(passerCerts, certContext);
-        // v7부터 합격자 자격증 결측(가중치 합 0)은 호출부가 필터로 "축 제외" 처리한다
-        // (scoreGpa 주석 참고). 이 분기는 정상 경로에선 도달하지 않는 방어선으로만 남긴다.
-        if (passerValue <= 0) return 100.0;
-
-        double userValue = certValue(userCerts, certContext);
-        if (userValue <= 0) return 0.0;
-
-        return Math.min(100.0, (userValue / passerValue) * 100.0);
-    }
-
-    /**
-     * 자격증 문자열 배열의 가중 합계. 같은 자격증을 중복 표기해도(정규화 후 같아지면) 한 번만 센다.
-     *
-     * v2까지는 "인식 못 한 자격증도 기본 가중치로 일부 인정"했는데, 이 기본 가중치가 0보다 큰 한
-     * 정크 문자열을 적는 게 아예 안 적는 것보다 항상 유리해지는 문제가 수학적으로 있었다
-     * (상한을 둬도 크기만 줄 뿐 방향은 못 바꾼다). v3는 원칙을 바꿨다 — 인식되지 않은 입력은
-     * 기여가 정확히 0이다. weightOf()가 그 판정을 담당한다.
-     */
-    private double certValue(String[] certs, CertContext certContext) {
-        if (certs == null) return 0.0;
-
-        return Arrays.stream(certs)
-                .map(this::canonicalCert)
-                .filter(value -> !value.isBlank())
-                .distinct()
-                .mapToDouble(value -> weightOf(value, certContext))
-                .sum();
-    }
-
-    /** 정규화 후 중복 제거된 자격증 중 실제로 인식된(가중치 > 0) 것의 개수. 화면 myVal·avgVal 표시용. */
-    private int countRecognized(String[] certs, CertContext certContext) {
-        if (certs == null) return 0;
-
-        return (int) Arrays.stream(certs)
-                .map(this::canonicalCert)
-                .filter(value -> !value.isBlank())
-                .distinct()
-                .filter(value -> weightOf(value, certContext) > 0)
-                .count();
-    }
-
-    /**
      * 목표 직무 합격자의 보유율에서 자격증별 가중치를 유도한다.
      *
      * 난이도에 대한 임의 판단(예전 CERT_WEIGHTS의 2.0/1.5/1.0/0.5) 대신
@@ -598,20 +556,13 @@ public class MatchScoreCalculator {
      * @param jobPasserCertRows 1인 1행. 자격증이 없는 합격자는 null 또는 빈 배열 행으로 들어온다.
      */
     private Map<String, Double> buildJobCertWeights(List<String[]> jobPasserCertRows) {
-        if (jobPasserCertRows == null || jobPasserCertRows.isEmpty()) {
-            return Map.of();
-        }
-
         int totalPassers = jobPasserCertRows.size();
         Map<String, Integer> holderCounts = new LinkedHashMap<>();
         for (String[] row : jobPasserCertRows) {
-            if (row == null) continue;
-            // 한 사람이 같은 자격증을 중복 표기해도 1명으로 센다.
-            Arrays.stream(row)
-                    .map(this::canonicalCert)
-                    .filter(value -> !value.isBlank())
-                    .distinct()
-                    .forEach(value -> holderCounts.merge(value, 1, Integer::sum));
+            // canonicalCerts가 dedup하므로 한 사람이 같은 자격증을 중복 표기해도 1명으로 센다.
+            for (String canonical : canonicalCerts(row)) {
+                holderCounts.merge(canonical, 1, Integer::sum);
+            }
         }
 
         Map<String, Double> weights = new LinkedHashMap<>();
@@ -642,8 +593,7 @@ public class MatchScoreCalculator {
 
         // hasJobData로 폴백 여부를 가른다 — jobWeights.isEmpty()로 판단하면 "직무 데이터가
         // 아예 없다"와 "직무 합격자는 있는데 전원 자격증이 0개다"가 똑같이 빈 맵이 되어
-        // 후자도 CERT_WEIGHTS로 잘못 폴백한다(그 직무에서 보유율 0%라는 실데이터가 있는데도
-        // 임의 판단표를 쓰게 됨 — 애초에 보유율 기반으로 바꾼 이유가 무효화된다).
+        // 후자도 CERT_WEIGHTS로 잘못 폴백한다(CertContext 주석 참고).
         if (certContext.hasJobData()) {
             // 그 직무 합격자 중 아무도 갖고 있지 않은 자격증도 "인식은 되므로" 하한을 받는다.
             return certContext.jobWeights().getOrDefault(canonicalCert, JOB_WEIGHT_MIN);
@@ -674,14 +624,26 @@ public class MatchScoreCalculator {
         return List.copyOf(firstRawByCanonical.values());
     }
 
+    /** 정규화 후 중복 제거된 자격증 표기 집합. 입력 순서를 유지하고 빈 값은 버린다. */
+    private Set<String> canonicalCerts(String[] certs) {
+        if (certs == null) return Set.of();
+        Set<String> result = new LinkedHashSet<>();
+        for (String raw : certs) {
+            String canonical = canonicalCert(raw);
+            if (!canonical.isBlank()) {
+                result.add(canonical);
+            }
+        }
+        return result;
+    }
+
     /**
      * 자격증 표기를 정규화한다. "정보처리기사 필기" · "정보처리기사(필기)" 같은 변형을
      * "정보처리기사"로, 별칭("SQL개발자")은 CERT_ALIASES를 통해 표준 표기("SQLD")로 모은다.
      *
      * ⚠️ CERT_WEIGHTS의 key는 반드시 이 함수의 출력과 정확히 같은 형태(공백 없음, 대문자)로
-     * 적어야 한다. 하나라도 어긋나면 예외 없이 조용히 DEFAULT_CERT_WEIGHT로 떨어진다 —
-     * MatchScoreCalculatorTest의 "운영 DB 자격증이 기본 가중치로 떨어지지 않는지" 테스트가
-     * 이 정합성을 지킨다.
+     * 적어야 한다. 하나라도 어긋나면 예외 없이 조용히 미인식으로 떨어진다 —
+     * MatchScoreCalculatorTest의 "운영 DB 자격증이 전부 매핑되는지" 테스트가 이 정합성을 지킨다.
      */
     private String canonicalCert(String raw) {
         if (raw == null) return "";
