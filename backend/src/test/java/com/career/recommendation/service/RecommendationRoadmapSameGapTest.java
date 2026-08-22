@@ -8,6 +8,7 @@ import com.career.recommendation.repository.PasserDataRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserRepository;
 import com.career.recommendation.repository.UserSpecRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -18,10 +19,11 @@ import org.springframework.cache.CacheManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,9 +37,10 @@ import static org.mockito.Mockito.when;
  * Gemini만 목으로 막고, 두 서비스가 프롬프트에 넣는 [합격자 비교 데이터] 텍스트를 잡아 비교한다.
  * 둘 중 한쪽이 SpecPositionService를 거치지 않고 자체 계산을 하기 시작하면 여기서 깨진다.
  */
+// 테스트 트랜잭션을 쓰지 않는다 — AiDailyAttemptLimiter가 REQUIRES_NEW로 사용자 FK를 보므로 사용자가 실제로
+// 커밋돼 있어야 한다. 만든 데이터는 @AfterEach에서 직접 지운다.
 @SpringBootTest
 @ActiveProfiles("local")
-@Transactional
 class RecommendationRoadmapSameGapTest {
 
     @Autowired private RecommendationService recommendationService;
@@ -50,6 +53,14 @@ class RecommendationRoadmapSameGapTest {
     @MockBean private GeminiService geminiService;
 
     private Authentication auth;
+    private UUID userId;
+    private final List<UUID> passerIds = new ArrayList<>();
+
+    @AfterEach
+    void cleanup() {
+        passerIds.forEach(passerDataRepository::deleteById);
+        if (userId != null) userRepository.deleteById(userId); // spec·target·cache·attempts는 FK CASCADE
+    }
 
     @BeforeEach
     void setUp() {
@@ -66,12 +77,13 @@ class RecommendationRoadmapSameGapTest {
         // 이 테스트만의 직무 코드를 쓸 수 없으니(JobType 6종 고정) 시드와 섞여도 갭 이름이 반드시 포함되도록
         // SQLD 보유 합격자 3명을 넣는다 — 보유율이 20% 아래로 떨어질 만큼 시드가 크지 않다.
         for (int i = 0; i < 3; i++) {
-            passerDataRepository.save(PasserData.builder().jobType("BACKEND").year(2026)
+            passerIds.add(passerDataRepository.save(PasserData.builder().jobType("BACKEND").year(2026)
                     .gpa(new BigDecimal("3.8")).gpaMax(new BigDecimal("4.5"))
                     .languageScores(List.of(Map.of("type", "TOEIC", "score", 900)))
                     .certifications(new String[]{"SQLD"}).experienceCount(2)
-                    .isVerified(true).dataOrigin(PasserData.ORIGIN_USER_REPORT).build());
+                    .isVerified(true).dataOrigin(PasserData.ORIGIN_USER_REPORT).build()).getId());
         }
+        userId = user.getId();
         auth = new UsernamePasswordAuthenticationToken(user.getId(), null, List.of());
     }
 
