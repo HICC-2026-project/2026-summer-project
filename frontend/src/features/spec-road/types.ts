@@ -96,6 +96,8 @@ export interface Recommendation {
   name: string;
   deadline: string;
   reason: string;
+  // 이 활동이 메우는 갭(비교 탭의 갭 이름과 동일). 없으면 undefined.
+  targetGap?: string | null;
   org?: string;
   score?: number;
   passers?: number;
@@ -111,6 +113,7 @@ export interface ApiRecommendationItem {
   name: string;
   reason: string;
   deadline: string;
+  targetGap?: string | null;
 }
 
 // specPosition의 축 하나 — 합격자 분포 내 내 위치.

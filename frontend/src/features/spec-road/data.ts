@@ -60,6 +60,7 @@ export const RECOMMENDATIONS: Recommendation[] = [
     score: 84,
     passers: 8,
     reason: "수상 이력이 대기업 서류에서 가점 요소가 돼요.",
+    targetGap: "경험",
     tags: ["해커톤", "수상", "팀"],
     bullets: [
       "수상 시 대기업 공채 서류에서 정량 가점을 받아요.",
@@ -71,6 +72,7 @@ export const RECOMMENDATIONS: Recommendation[] = [
     id: 5,
     type: "인턴십",
     name: "토스 NEXT 개발자 인턴",
+    targetGap: "경험",
     org: "비바리퍼블리카",
     deadline: "2026-08-31",
     score: 79,

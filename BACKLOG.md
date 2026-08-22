@@ -203,11 +203,11 @@
 
 ## E5. 갭 ↔ 추천·로드맵 정합성 — 담당 BE-1, 규모 M
 
-- [ ] `PromptDataBuilder`가 갭 리스트(축·percentile·미입력)를 프롬프트에 넣는 형식 고정 + 스냅샷 테스트
-- [ ] Gemini 응답의 추천 활동마다 `targetGap`(어떤 축을 메우는지) 필드 요구 → `RecommendationResponse`에 노출
-- [ ] 갭 축과 `Activity.tags`/`type` 매핑 규칙 기반 폴백 추천 (Gemini 실패 시 `RecommendationServiceFallbackTest` 확장)
-- [ ] 로드맵 스텝이 갭 우선순위 순서를 따르는지 검증 테스트
-- [ ] 추천 카드에 "이 활동은 [자격증] 갭을 줄여요" 표시 (FE)
+- [x] `buildPositionContextText` 스냅샷 테스트 + "targetGap에 쓸 수 있는 갭 이름(우선순위 순)" 닫힌 목록 추가
+- [x] `ActivityRecommendation.targetGap` — Gemini 값은 알려진 갭 이름일 때만 수용(`GapMatcher.normalizeTargetGap`), 없으면 규칙 매칭. 캐시 재사용 시 새 갭 기준으로 재정렬
+- [x] `GapMatcher.rankForFallback` — 갭 키워드(+3)·직무 태그(+2)·마감순. 폴백 이유에 갭 명시. 테스트 추가
+- [~] 로드맵 프롬프트 규칙 2에 "갭 이름 순서 = 보완 우선순위" 명시. 출력 순서 검증은 Gemini 의존이라 자동 테스트 불가 — 프롬프트 입력(갭 순서)만 스냅샷으로 고정
+- [x] 추천 카드 "○○ 갭 보완" 칩 (FE)
 
 ---
 

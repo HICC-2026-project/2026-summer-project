@@ -132,4 +132,37 @@ class RecommendationServiceFallbackTest {
         // 폴백을 캐싱하면 활동이 다시 생겨도 빈 추천이 캐시로 굳어버린다.
         verify(recommendationCacheService, never()).save(any(), any());
     }
+
+    @Test
+    void 폴백_추천은_갭을_메우는_활동을_앞세우고_그_갭을_targetGap과_이유에_적는다() {
+        // 예전 폴백은 목록 앞 3개(마감 임박순)를 그대로 잘라 "왜 이 활동인지"가 없었다.
+        SpecPositionResult position = SpecPositionResult.builder()
+                .basis("JOB").basisMessage("백엔드 합격자 5명").sampleSize(5)
+                .axes(List.of(SpecPositionResult.AxisPosition.builder().axis("LANGUAGE").label("어학 성적").percentile(null).build()))
+                .gaps(List.of(SpecPositionResult.SpecGap.builder().name("SQLD").holderRatePercent(60).build()))
+                .matchedCertifications(List.of()).unmatchedCertifications(List.of())
+                .build();
+        givenNoActivitiesAndGeminiDown(position);
+        com.career.recommendation.entity.Activity filler = activity("독서 모임", null, java.time.LocalDate.of(2026, 8, 25));
+        com.career.recommendation.entity.Activity sqld = activity("SQLD 자격증 특강", null, java.time.LocalDate.of(2026, 9, 30));
+        com.career.recommendation.entity.Activity toeic = activity("TOEIC 스터디", null, java.time.LocalDate.of(2026, 10, 1));
+        com.career.recommendation.entity.Activity other = activity("교양 특강", null, java.time.LocalDate.of(2026, 8, 26));
+        when(activityRepository.findRecommendableActivities(any(), any()))
+                .thenReturn(List.of(filler, sqld, toeic, other));
+
+        RecommendationResponse response = recommendationService.getRecommendations(authentication);
+
+        assertThat(response.isAiRecommendation()).isFalse();
+        assertThat(response.getActivities()).extracting(a -> a.getName())
+                .containsExactly("SQLD 자격증 특강", "TOEIC 스터디", "독서 모임");
+        assertThat(response.getActivities().get(0).getTargetGap()).isEqualTo("SQLD");
+        assertThat(response.getActivities().get(0).getReason()).contains("SQLD");
+        assertThat(response.getActivities().get(1).getTargetGap()).isEqualTo("어학 성적");
+        assertThat(response.getActivities().get(2).getTargetGap()).isNull();
+    }
+
+    private com.career.recommendation.entity.Activity activity(String name, String[] tags, java.time.LocalDate deadline) {
+        return com.career.recommendation.entity.Activity.builder()
+                .id(UUID.randomUUID()).type("EDUCATION").name(name).tags(tags).deadline(deadline).build();
+    }
 }

@@ -14,6 +14,7 @@ import com.career.recommendation.repository.ActivityRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
+import com.career.recommendation.util.GapMatcher;
 import com.career.recommendation.util.PromptDataBuilder;
 import com.career.recommendation.util.SpecPositionCalculator;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -184,7 +185,18 @@ public class RecommendationService {
         String jobType = (targetJob != null) ? targetJob.getJobType() : null;
         SpecPositionResult position = specPositionService.calculate(userSpec, jobType);
 
+        // 갭이 새 스펙 기준으로 바뀌었으니 카드의 targetGap도 다시 맞춘다 — 사용자가 방금 딴 자격증이
+        // 비교 탭에서는 사라졌는데 추천 카드엔 "이 갭을 줄여요"로 남아 있으면 두 화면이 모순된다.
+        List<String> knownGaps = GapMatcher.knownGapNames(position);
+        List<ActivityRecommendation> realigned = cachedResponse.getActivities() == null ? null
+                : cachedResponse.getActivities().stream()
+                .map(a -> a.toBuilder()
+                        .targetGap(GapMatcher.normalizeTargetGap(a.getTargetGap(), knownGaps).orElse(null))
+                        .build())
+                .toList();
+
         return cachedResponse.toBuilder()
+                .activities(realigned)
                 .specPosition(position)
                 .targetJobName(jobType != null ? jobType : "미설정")
                 .scoreFormulaVersion(SpecPositionCalculator.CURRENT_SCORE_FORMULA_VERSION)
@@ -256,18 +268,27 @@ public class RecommendationService {
                                                          SpecPositionResult position, String targetJobName) {
         List<Activity> safeActivities = (activeActivities != null) ? activeActivities : List.of();
 
+        // 예전엔 목록 앞 3개(마감 임박순)를 그대로 잘라 "왜 이 활동인지"가 없었다.
+        // 갭 키워드·목표 직무 태그로 순위를 매기고, 갭이 맞는 활동엔 그 갭을 이유에 적는다.
+        List<String> knownGaps = GapMatcher.knownGapNames(position);
         List<ActivityRecommendation> recs = new ArrayList<>();
-        int count = Math.min(3, safeActivities.size());
-        for (int i = 0; i < count; i++) {
-            Activity a = safeActivities.get(i);
+        for (GapMatcher.Ranked r : GapMatcher.rankForFallback(safeActivities, targetJobName, knownGaps, 3)) {
+            Activity a = r.activity();
+            String reason;
+            if (r.targetGap() != null) {
+                reason = String.format("[AI 응답 지연 임시 추천] 합격자 비교에서 부족한 '%s'을(를) 보완할 수 있는 활동이에요.", r.targetGap());
+            } else if (a.getDescription() != null && !a.getDescription().isBlank()) {
+                reason = "[AI 응답 지연 임시 추천] " + a.getDescription();
+            } else {
+                reason = "[AI 응답 지연 임시 추천] 사용자의 목표 직무 및 학점 스펙 기반 DB 맞춤 추천 활동입니다.";
+            }
             recs.add(ActivityRecommendation.builder()
                     .id(a.getId())
                     .type(a.getType())
                     .name(a.getName())
-                    .reason(a.getDescription() != null && !a.getDescription().isBlank()
-                            ? "[AI 응답 지연 임시 추천] " + a.getDescription()
-                            : "[AI 응답 지연 임시 추천] 사용자의 목표 직무 및 학점 스펙 기반 DB 맞춤 추천 활동입니다.")
+                    .reason(reason)
                     .deadline(a.getDeadline())
+                    .targetGap(r.targetGap())
                     .build());
         }
 
@@ -299,6 +320,9 @@ public class RecommendationService {
 
         if (geminiResult.getActivities() == null || geminiResult.getActivities().isEmpty()) return null;
 
+        // Gemini의 targetGap은 비교 탭의 갭 이름과 같을 때만 받는다 — 지어낸 갭이 추천 카드에 뜨면 두 화면이 어긋난다.
+        List<String> knownGaps = GapMatcher.knownGapNames(position);
+
         List<ActivityRecommendation> result = new ArrayList<>();
         for (GeminiActivity a : geminiResult.getActivities()) {
             // Gemini가 배열 원소로 null을 섞어 보내면(스키마 이탈) a.getId()에서 NPE가 나
@@ -321,6 +345,9 @@ public class RecommendationService {
                         .name(dbActivity.getName())
                         .reason(a.getReason() != null ? a.getReason() : "")
                         .deadline(dbActivity.getDeadline())
+                        .targetGap(GapMatcher.normalizeTargetGap(a.getTargetGap(), knownGaps)
+                                .or(() -> GapMatcher.matchGap(dbActivity, knownGaps))
+                                .orElse(null))
                         .build());
             } else {
                 log.warn("Gemini가 DB에 없는 활동 ID를 반환함 (무시): {}", a.getId());

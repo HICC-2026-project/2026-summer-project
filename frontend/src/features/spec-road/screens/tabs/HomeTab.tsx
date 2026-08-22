@@ -234,6 +234,12 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
                       {r.type}
                     </span>
                     <span style={{ fontSize: 12, fontWeight: 600, color: ddayColor(r.deadline) }}>{dday(r.deadline)}</span>
+                    {/* 비교 탭의 갭 이름 그대로 — "추천은 이 갭을 메우려고 나왔다"를 카드에서 바로 읽게 한다. */}
+                    {r.targetGap && (
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: "#12A150", background: "#E7F6EE", padding: "4px 9px", borderRadius: 7, whiteSpace: "nowrap" }}>
+                        {r.targetGap} 갭 보완
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: 16.5, fontWeight: 700, color: "#15141B", letterSpacing: "-0.01em", marginBottom: 3, lineHeight: 1.3 }}>
                     {r.name}

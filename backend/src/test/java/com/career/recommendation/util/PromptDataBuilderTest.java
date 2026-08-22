@@ -1,8 +1,11 @@
 package com.career.recommendation.util;
 
+import com.career.recommendation.dto.position.SpecPositionResult;
 import com.career.recommendation.entity.TargetJob;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -39,5 +42,45 @@ class PromptDataBuilderTest {
         targetJob.setIndustry("IT");
 
         assertThat(builder.buildTargetJobString(targetJob)).isEqualTo("BACKEND / 대기업 / IT");
+    }
+
+    @Test
+    void 위치_갭_컨텍스트는_고정_형식이고_targetGap_허용_목록을_우선순위_순으로_닫아_준다() {
+        // 스냅샷: 이 문자열이 Gemini 프롬프트에 그대로 들어간다. 형식이 바뀌면 추천·로드맵 프롬프트
+        // 규칙(targetGap 이름 목록, 갭 우선순위)이 같이 깨지므로 의도된 변경인지 여기서 걸러낸다.
+        SpecPositionResult position = SpecPositionResult.builder()
+                .basis("JOB")
+                .basisMessage("백엔드 합격자 12명의 분포와 비교한 결과입니다.")
+                .axes(List.of(
+                        axis("학점", "3.80/4.5", "3.60/4.5", 72),
+                        axis("어학 성적", "미입력", "환산 850", null)))
+                .gaps(List.of(
+                        SpecPositionResult.SpecGap.builder().name("정보처리기사").holderRatePercent(70).build(),
+                        SpecPositionResult.SpecGap.builder().name("SQLD").holderRatePercent(55).build()))
+                .build();
+
+        String text = builder.buildPositionContextText(position);
+
+        assertThat(text).isEqualTo("""
+                백엔드 합격자 12명의 분포와 비교한 결과입니다.
+                - 학점: 내 값 3.80/4.5 / 합격자 중앙값 3.60/4.5 (합격자 분포에서 percentile 72)
+                - 어학 성적: 내 값 미입력 / 합격자 중앙값 환산 850
+                부족한 항목(갭 — 합격자 다수 보유, 사용자 미보유):
+                - 정보처리기사 (합격자 70% 보유)
+                - SQLD (합격자 55% 보유)
+                targetGap에 쓸 수 있는 갭 이름(우선순위 순): 정보처리기사, SQLD, 어학 성적
+                """);
+    }
+
+    @Test
+    void 비교_데이터가_없으면_컨텍스트는_한_줄이다() {
+        assertThat(builder.buildPositionContextText(null)).isEqualTo("합격자 비교 데이터 없음");
+        assertThat(builder.buildPositionContextText(SpecPositionResult.builder().basis("NONE").build()))
+                .isEqualTo("합격자 비교 데이터 없음");
+    }
+
+    private SpecPositionResult.AxisPosition axis(String label, String my, String median, Integer percentile) {
+        return SpecPositionResult.AxisPosition.builder().axis(label).label(label)
+                .myValue(my).medianValue(median).percentile(percentile).coverage(12).build();
     }
 }
