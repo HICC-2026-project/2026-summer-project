@@ -327,7 +327,7 @@
 
 ## E9. 품질·테스트 — 전원, 규모 S
 
-- [ ] `SpecPositionService`/`JobSpecProfileService` 캐시 동작 통합 테스트 (self-invocation 방지가 실제로 작동하는지)
+- [x] `SpecPositionServiceCacheTest` — Caffeine 실제 올린 슬라이스 테스트 5건 (캐시 적중·폴백 지연 조회·null 키·evictAll)
 - [ ] 추천·로드맵 E2E 시나리오 테스트: 스펙 저장 → 추천 → 로드맵이 같은 갭을 참조
 - [ ] 프론트 컴포넌트 테스트 최소 세트 (CompareTab 막대/미입력 렌더링)
 - [ ] PROJECT.md "주요 요청 흐름"에 v9 위치·갭 흐름 반영
