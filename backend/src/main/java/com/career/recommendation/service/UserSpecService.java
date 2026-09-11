@@ -53,9 +53,7 @@ public class UserSpecService {
             UserSpecRequest request
     ) {
         User user = currentUserService.getCurrentUser(authentication);
-        UserSpegit fetch origin
-        git checkout claude/personal-activity-recommendations-qimzn3
-        claude   # 이 폴더에서 실행하면 CLAUDE.md도 그대로 읽혀요c savedUserSpec = upsert(user, request);
+        UserSpec savedUserSpec = upsert(user, request);
         return UserSpecResponse.from(savedUserSpec);
     }
 
