@@ -80,7 +80,7 @@ class ActivitySearchTest {
     @Test
     void keyword는_이름_주최_설명에서_대소문자_무시로_찾고_LIKE_메타문자는_리터럴이다() {
         assertThat(names(new ActivityFilter(null, null, null, "토스"))).contains("데이터 인턴 " + MARK);
-        assertThat(names(new ActivityFilter(null, null, null, MARK.toUpperCase()))).hasSize(4);
+        assertThat(names(new ActivityFilter(null, null, null, MARK.toUpperCase()))).hasSize(6);
         // "%"를 넣어도 와일드카드가 아니라 글자 그대로 — 전체를 긁을 수 없다
         assertThat(names(new ActivityFilter(null, null, null, "100% 특가"))).containsExactly("100% 특가 " + MARK);
         assertThat(names(new ActivityFilter(null, null, null, "%" + MARK))).isEmpty();
