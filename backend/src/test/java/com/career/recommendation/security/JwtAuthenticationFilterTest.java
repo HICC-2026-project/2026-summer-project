@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -56,6 +57,15 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void 헬스체크는_토큰_없이_200이고_내부_상세는_숨긴다() throws Exception {
+        // backend-deploy.yml이 이 경로로 부팅을 판정한다. show-details=never라 DB 상태 같은 내부 정보는 노출되지 않는다.
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.components").doesNotExist());
+    }
+
+    @Test
     void public_경로는_토큰_없이도_접근된다() throws Exception {
         mockMvc.perform(get("/api/v1/auth/refresh"))
                 .andExpect(status().is(org.springframework.http.HttpStatus.METHOD_NOT_ALLOWED.value()));
@@ -77,5 +87,33 @@ class JwtAuthenticationFilterTest {
 
         mockMvc.perform(get(PROTECTED_PATH).header("Authorization", "Bearer " + refreshToken))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void 일반_USER_토큰으로_관리자_경로에_접근하면_403_ACCESS_DENIED() throws Exception {
+        User user = userRepository.save(User.builder()
+                .nickname("user")
+                .provider("KAKAO")
+                .providerId("provider-id-user-" + System.nanoTime())
+                .build());
+        String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole());
+
+        mockMvc.perform(get("/api/v1/admin/passers/reports").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    void ADMIN_토큰으로는_관리자_경로가_열린다() throws Exception {
+        User admin = userRepository.save(User.builder()
+                .nickname("admin")
+                .provider("KAKAO")
+                .providerId("provider-id-admin-" + System.nanoTime())
+                .role("ADMIN")
+                .build());
+        String accessToken = jwtTokenProvider.createAccessToken(admin.getId(), admin.getRole());
+
+        mockMvc.perform(get("/api/v1/admin/passers/reports").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk());
     }
 }

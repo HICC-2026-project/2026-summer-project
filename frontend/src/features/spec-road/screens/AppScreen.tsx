@@ -13,6 +13,7 @@ interface AppScreenProps {
   spec: Spec;
   target: Target;
   nickname: string | null;
+  isAdmin?: boolean;
   recommendations: Recommendation[];
   recMeta: RecommendationMeta | null;
   recLoading: boolean;
@@ -26,6 +27,8 @@ interface AppScreenProps {
   onEditSpec: () => void;
   onOpenPasserReport: () => void;
   onLogout: () => void;
+  onWithdraw?: () => void;
+  onEditNickname?: () => void;
 }
 
 export function AppScreen({
@@ -34,6 +37,7 @@ export function AppScreen({
   spec,
   target,
   nickname,
+  isAdmin = false,
   recommendations,
   recMeta,
   recLoading,
@@ -47,6 +51,8 @@ export function AppScreen({
   onEditSpec,
   onOpenPasserReport,
   onLogout,
+  onWithdraw,
+  onEditNickname,
 }: AppScreenProps) {
   return (
     <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", background: "#F6F6F9" }}>
@@ -73,16 +79,19 @@ export function AppScreen({
             roadmapLimitReached={roadmapLimitReached}
           />
         )}
-        {tab === "compare" && <CompareTab isDemo={isDemo} recMeta={recMeta} />}
+        {tab === "compare" && <CompareTab isDemo={isDemo} recMeta={recMeta} onOpenPasserReport={onOpenPasserReport} />}
         {tab === "profile" && (
           <ProfileTab
             spec={spec}
             target={target}
             nickname={nickname}
+            isAdmin={isAdmin}
             isDemo={isDemo}
             onEditSpec={onEditSpec}
             onOpenPasserReport={onOpenPasserReport}
             onLogout={onLogout}
+            onWithdraw={onWithdraw}
+            onEditNickname={onEditNickname}
           />
         )}
       </div>

@@ -1,5 +1,6 @@
 package com.career.recommendation.entity;
 
+import com.career.recommendation.domain.ReviewStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -16,6 +17,11 @@ import java.util.UUID;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class PasserData {
 
+    /** data_origin 값. 사용자 제보 — 검수 대상. */
+    public static final String ORIGIN_USER_REPORT = "USER_REPORT";
+    /** 발표·검증용 합성 데이터 — 검수 없이 비교 가능 집합에 포함(PasserDataRepository 참고). */
+    public static final String ORIGIN_DEMO = "DEMO";
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -24,8 +30,16 @@ public class PasserData {
     @JoinColumn(name = "activity_id")
     private Activity activity;
 
+    /**
+     * 제보자. USER_REPORT에만 있고 DEMO·PUBLIC_REVIEW·탈퇴 사용자 제보는 null.
+     * 본인 제보 조회·중복 제한용 내부 정보 — 비교·추천 응답 DTO에 절대 싣지 않는다.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reporter_user_id")
+    private User reporter;
+
     @Column(name = "job_type")
-    private String jobType;   // BACKEND | FRONTEND | AI_ML | DATA_ENGINEER | PM | SECURITY
+    private String jobType;   // JobType enum의 name() — 정의는 domain.JobType 한 곳에서만
 
     private Integer year;
 
@@ -70,6 +84,26 @@ public class PasserData {
 
     @Column(name = "proof_file_size")
     private Long proofFileSize;
+
+    // --- 검수 이력 (V21) ---
+    /** 검수 시각. null이면 아직 검수 전(PENDING). 승인·반려 모두 채운다. */
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reviewed_by_user_id")
+    private User reviewedBy;
+
+    /** 반려 사유. 승인이면 null. */
+    @Column(name = "reject_reason", length = 300)
+    private String rejectReason;
+
+    /** 검수 상태 — isVerified와 reviewedAt 두 컬럼에서 파생한다. 세 값의 단일 정의는 domain.ReviewStatus. */
+    public ReviewStatus reviewStatus() {
+        if (Boolean.TRUE.equals(isVerified)) return ReviewStatus.VERIFIED;
+        if (reviewedAt != null) return ReviewStatus.REJECTED;
+        return ReviewStatus.PENDING;
+    }
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

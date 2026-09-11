@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -51,10 +52,17 @@ class RoadmapServiceEmptyStepsTest {
     @Mock private RoadmapCacheService roadmapCacheService;
     @Mock private GeminiService geminiService;
     @Mock private PromptDataBuilder promptDataBuilder;
+    @Mock private AiDailyAttemptLimiter aiDailyAttemptLimiter;
     @Mock private Authentication authentication;
     @Mock private User user;
 
     @InjectMocks private RoadmapService roadmapService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void allowDailyAttempts() {
+        // 이 테스트들은 캐시·폴백 동작이 관심사다. 하루 시도 상한은 항상 통과시킨다.
+        lenient().when(aiDailyAttemptLimiter.tryAcquire(any(), any())).thenReturn(true);
+    }
 
     @Test
     void 알맹이_없는_스텝만_있으면_AI_성공으로_처리하지_않고_폴백을_쓴다() throws Exception {

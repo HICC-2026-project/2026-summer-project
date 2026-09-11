@@ -1,5 +1,6 @@
 package com.career.recommendation.controller;
 
+import com.career.recommendation.dto.user.NicknameRequest;
 import com.career.recommendation.dto.user.TargetJobRequest;
 import com.career.recommendation.dto.user.TargetJobResponse;
 import com.career.recommendation.dto.user.UserMeResponse;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -53,5 +55,23 @@ public class UserController {
             @Valid @RequestBody TargetJobRequest request
     ) {
         return targetJobService.saveOrUpdateMyTarget(authentication, request);
+    }
+
+    @Operation(summary = "닉네임 변경",
+            description = "앱에서 바꾼 닉네임은 이후 카카오 로그인 시 카카오 프로필 닉네임으로 덮어써지지 않는다.")
+    @PatchMapping("/me/nickname")
+    public UserMeResponse updateNickname(
+            Authentication authentication,
+            @Valid @RequestBody NicknameRequest request
+    ) {
+        return userService.updateNickname(authentication, request.getNickname());
+    }
+
+    @Operation(summary = "회원 탈퇴",
+            description = "계정과 스펙·목표·추천·로드맵·리프레시 토큰을 삭제한다. 제보한 합격자 데이터는 익명으로 남는다. 되돌릴 수 없다.")
+    @DeleteMapping("/me")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteMe(Authentication authentication) {
+        userService.deleteMe(authentication);
     }
 }

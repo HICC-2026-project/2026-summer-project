@@ -24,6 +24,9 @@ public class GeminiService {
     @Value("${gemini.api.key}")
     private String apiKey;
 
+    @Value("${gemini.api.key-in-header:true}")
+    private boolean keyInHeader;
+
     @Value("${gemini.api.base-url}")
     private String baseUrl;
 
@@ -31,6 +34,8 @@ public class GeminiService {
     private String model;
 
     private final WebClient.Builder webClientBuilder;
+    private final GeminiDailyQuota dailyQuota;
+    private final GeminiCallStats callStats;
 
     /** JSON 블록만 추출하는 패턴 (응답 앞뒤 잡담 제거) */
     private static final Pattern JSON_PATTERN = Pattern.compile("\\{[\\s\\S]*}", Pattern.DOTALL);
@@ -109,7 +114,8 @@ public class GeminiService {
                 6. UserSpec에 해당 정보가 없으면 불충족으로 단정하지 말고 '확인 필요'로 처리하세요.
                 7. 우대사항은 targetSpec에 포함되지 않습니다.
                 8. UserSpec에 없는 경력·전공·학력 정보는 임의로 생성하지 마세요.
-                9. 각 추천에는 id(UUID), name, type, reason(이 사용자에게 추천하는 구체적 이유), deadline(YYYY-MM-DD) 필드를 포함하세요.
+                9. 각 추천에는 id(UUID), name, type, reason(이 사용자에게 추천하는 구체적 이유), deadline(YYYY-MM-DD), targetGap 필드를 포함하세요.
+                   targetGap은 이 활동이 메우는 갭으로, [합격자 비교 데이터]의 "targetGap에 쓸 수 있는 갭 이름" 중 하나를 글자 그대로 쓰거나, 해당 없으면 null로 두세요. 목록에 없는 이름을 만들지 마세요.
                 10. 추천 이유(reason)에는 사용자가 충족한 조건과 확인이 필요한 조건을 구분하여 작성하세요.
                 11. 응답은 {"activities": [...]} JSON 형식으로만 출력하세요.
                 """, today, spec, job, cases, availableActivities);
@@ -154,7 +160,7 @@ public class GeminiService {
                 
                 ## 규칙
                 1. 6개월 커리어 로드맵을 위 기간 단위로 작성해 주세요.
-                2. [합격자 비교 데이터]의 갭(부족한 항목)을 이른 시기부터 우선 보완하는 방향으로 흐름을 구성하세요.
+                2. [합격자 비교 데이터]의 갭(부족한 항목)을 이른 시기부터 우선 보완하는 방향으로 흐름을 구성하세요. "targetGap에 쓸 수 있는 갭 이름"의 순서가 보완 우선순위입니다 — 앞에 있는 갭을 더 이른 시기에 배치하세요.
                 3. [우선 반영할 AI 추천 활동]에 포함된 활동들을 6개월 타임라인 중 적절한 시기에 우선적으로 배치하세요.
                 4. 각 시기마다 [전체 DB 등록 활동 목록]에서 마감일과 직무가 적합한 실제 활동의 ID를 매칭하세요.
                 5. 적합한 DB 활동 공고가 없거나 마감된 시기는, activityIds는 빈 배열([])로 두고, 해당 시기에 필수적으로 준비해야 할 역량 개발 가이드(예: "자격증 취득 및 포트폴리오 구체화", "알고리즘 코딩테스트 대비", "주요 부스트캠프/인턴십 차기 기수 모집 대비")를 activity 필드와 reason 필드에 설명하세요.
@@ -200,19 +206,23 @@ public class GeminiService {
             log.warn("Gemini API 키가 설정되지 않았습니다. 즉시 폴백 데이터를 반환합니다.");
             return "";
         }
+        if (!dailyQuota.tryAcquire()) {
+            // 전역 일일 상한 — 호출을 건너뛰면 호출부가 폴백 추천으로 처리한다(사용자별 한도와 별개).
+            return "";
+        }
 
-        // ⚠️ 알려진 이슈: API 키가 쿼리스트링(?key=...)에 실린다. URL은 프록시·APM·에러
-        // 스택트레이스(WebClientResponseException 메시지에 요청 URL이 포함되는 경우가 있다)에
-        // 남을 수 있어, 쿼리스트링에 두면 그 로그에 키가 찍힐 위험이 있다. Gemini는
-        // x-goog-api-key 헤더도 지원해서 그쪽으로 옮기는 게 더 안전하지만, 이 세션엔 실제
-        // Gemini API 키로 호출을 검증할 방법이 없어(로컬에 키 없음) 추천·로드맵 핵심 경로를
-        // 검증 없이 바꾸지 않고 보류한다. 나중에 로컬/스테이징에서 실제 호출로 검증한 뒤
-        // 옮기는 걸 권장한다.
-        String uri = String.format("/models/%s:generateContent?key=%s", model, apiKey);
+        // API 키는 x-goog-api-key 헤더로 보낸다(Gemini 공식 지원). 예전엔 쿼리스트링(?key=)에 실어서 프록시·APM·
+        // WebClientResponseException 메시지(요청 URL 포함)에 키가 찍힐 수 있었다. 운영에서 헤더 방식에 문제가 보이면
+        // GEMINI_API_KEY_IN_HEADER=false 로 되돌릴 수 있다 — 두 방식 모두 같은 키로 동작한다.
+        String uri = keyInHeader
+                ? String.format("/models/%s:generateContent", model)
+                : String.format("/models/%s:generateContent?key=%s", model, apiKey);
 
+        long startedAt = System.currentTimeMillis();
         try {
             Map<?, ?> response = client.post()
                     .uri(uri)
+                    .headers(h -> { if (keyInHeader) h.set("x-goog-api-key", apiKey); })
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody)
                     .retrieve()
@@ -223,10 +233,14 @@ public class GeminiService {
                 Map<?, ?> candidate = (Map<?, ?>) candidates.get(0);
                 if (candidate.get("content") instanceof Map<?, ?> content && content.get("parts") instanceof List<?> parts && !parts.isEmpty()) {
                     Map<?, ?> firstPart = (Map<?, ?>) parts.get(0);
+                    callStats.recordSuccess(System.currentTimeMillis() - startedAt);
                     return (String) firstPart.get("text");
                 }
             }
+            // 200이지만 candidates가 비어 있는 응답(안전 필터 등) — 호출부에서 폴백을 타므로 실패로 센다.
+            callStats.recordFailure(System.currentTimeMillis() - startedAt);
         } catch (Exception e) {
+            callStats.recordFailure(System.currentTimeMillis() - startedAt);
             log.error("Gemini API 호출 실패: {}", e.getMessage());
         }
         return "";

@@ -36,5 +36,7 @@ public class GeminiRecommendationResult {
         private String type;
         private String reason;
         private String deadline;
+        /** 이 활동이 메우는 갭 이름(프롬프트 규칙 9). 없으면 null. */
+        private String targetGap;
     }
 }

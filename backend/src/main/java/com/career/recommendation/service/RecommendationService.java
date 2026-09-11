@@ -1,5 +1,6 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.util.ServiceTime;
 import com.career.recommendation.dto.gemini.GeminiRecommendationResult;
 import com.career.recommendation.dto.gemini.GeminiRecommendationResult.GeminiActivity;
 import com.career.recommendation.dto.position.SpecPositionResult;
@@ -14,6 +15,7 @@ import com.career.recommendation.repository.ActivityRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
+import com.career.recommendation.util.GapMatcher;
 import com.career.recommendation.util.PromptDataBuilder;
 import com.career.recommendation.util.SpecPositionCalculator;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -55,9 +57,10 @@ public class RecommendationService {
     private final GeminiService geminiService;
     private final PromptDataBuilder promptDataBuilder;
     private final ObjectMapper objectMapper;
+    private final AiDailyAttemptLimiter aiDailyAttemptLimiter;
 
     private static final int MAX_RECOMMENDABLE_ACTIVITIES = 20;
-    private static final ZoneId SERVICE_ZONE_ID = ZoneId.of("Asia/Seoul");
+    private static final ZoneId SERVICE_ZONE_ID = ServiceTime.ZONE_ID;
 
     /**
      * 현재 로그인한 유저의 맞춤 추천 활동 목록을 반환한다.
@@ -76,12 +79,11 @@ public class RecommendationService {
         UserSpec userSpec = userSpecRepository.findByUser_Id(user.getId()).orElse(null);
         TargetJob targetJob = targetJobRepository.findByUser_Id(user.getId()).orElse(null);
 
-        boolean needsNewAiCall = false;
         boolean wantsRefresh = false;
         RecommendationResponse cachedResponse = null;
 
         if (cached == null) {
-            needsNewAiCall = true;
+            wantsRefresh = true;
         } else {
             cachedResponse = deserialize(cached.getResultJson());
             boolean isSpecChanged = isSpecModifiedSince(userSpec, targetJob, cached.getCreatedAt());
@@ -104,30 +106,13 @@ public class RecommendationService {
             // 시나리오와 겹치면 실제로 밟을 수 있는 경로다. legacy도 같은 하루 3회 게이트를
             // 통과하게 해서, 하루 제한에 도달하면 legacy든 아니든 옛 캐시를 그대로 반환한다.
             wantsRefresh = isLegacyCache || !hasUsableActivities || isSpecChanged;
-            if (wantsRefresh) {
-                // 이 체크가 없으면 Gemini가 장애로 폴백만 반환할 때(캐시 미저장) 매 요청마다
-                // API를 호출하게 된다(RoadmapService와 동일한 안전장치).
-                if (cached.getLastUpdatedDate() == null || !today.equals(cached.getLastUpdatedDate())) {
-                    needsNewAiCall = true;
-                } else if (cached.getDailyUpdateCount() < 3) {
-                    needsNewAiCall = true;
-                }
-            }
         }
 
-        // ⚠️ 알려진 한계(다음 세션에서 스키마 변경으로 완전히 고쳐야 함): 이 하루 3회 게이트
-        // 전체가 "성공 횟수"만 센다 — dailyUpdateCount는 오직 저장 성공(recommendationCacheService
-        // .save()가 실제로 실행됐을 때, 즉 response.isAiRecommendation()==true일 때)에만
-        // 증가한다. Gemini가 계속 실패하면 폴백만 반복되고 카운트는 0에 머무르므로, 위
-        // 게이트는 "하루 3회"를 절대 못 보고 매 요청마다 무조건 통과시킨다 — 주석이
-        // "안전장치"라고 부르는 게 실패 반복 상황에서는 실제로 발동하지 않는다는 뜻이다.
-        // 게다가 cachedResponse == null(캐시 JSON 자체가 파싱 불가)이면 바로 아래 조기
-        // 반환 조건(cachedResponse != null)을 만족 못해, needsNewAiCall이 false로 막혀도
-        // 그대로 Gemini 재시도 경로로 흘러내려간다 — 이 경우엔 하루 제한이 완전히 우회된다.
-        // 실패 시도까지 세는 별도 카운터(예: lastAttemptDate + dailyAttemptCount 컬럼)를
-        // 추가해 성공 여부와 무관하게 증가시켜야 이 게이트가 이름값대로 동작한다.
-        // Opus 5(높음) 검토 11라운드가 실제 부하로 재현: legacy 캐시 + 하루 카운트 0(=장애
-        // 상황의 실제 상태)에서 5회 요청이 Gemini를 10회 호출하는 것을 확인함.
+        // 하루 시도 상한 — 성공·실패와 무관하게 "시도"를 센다(AiDailyAttemptLimiter). 예전 게이트는 저장 성공만
+        // 세서 Gemini 장애 중엔 매 요청이 통과했고, 캐시 JSON 파싱 실패(cachedResponse == null)면 아예 우회됐다.
+        // 지금은 재호출이 필요한 모든 경로(첫 호출 포함)가 이 한 줄을 지난다.
+        boolean needsNewAiCall = wantsRefresh
+                && aiDailyAttemptLimiter.tryAcquire(user.getId(), AiDailyAttemptLimiter.KIND_RECOMMENDATION);
 
         if (!needsNewAiCall && cachedResponse != null) {
             // ⚠️ 재생성이 필요했는데(스펙 변경·legacy·만료 활동) 하루 한도에 막혀 캐시를 주는
@@ -158,13 +143,16 @@ public class RecommendationService {
         String targetJobStr = promptDataBuilder.buildTargetJobString(targetJob);
         String positionContext = promptDataBuilder.buildPositionContextText(position);
 
-        RecommendationResponse response = callGeminiWithRetry(
-                userSpecJson, targetJobStr, positionContext, availableActivitiesJson,
-                position, activeActivities,
-                jobType != null ? jobType : "미설정", today
-        );
+        // 한도에 막혔는데 캐시까지 없거나 깨진 경우(위 조기 반환을 못 탄 경우): Gemini 없이 규칙 기반 폴백을 준다.
+        RecommendationResponse response = needsNewAiCall
+                ? callGeminiWithRetry(
+                        userSpecJson, targetJobStr, positionContext, availableActivitiesJson,
+                        position, activeActivities,
+                        jobType != null ? jobType : "미설정", today)
+                : buildFallbackResponse(activeActivities, position, jobType != null ? jobType : "미설정")
+                        .toBuilder().dailyLimitReached(true).build();
 
-        // 6. 결과 캐싱 (일일 제한 카운트 증가) — 별도 Bean에서 호출
+        // 6. 결과 캐싱 — 별도 Bean에서 호출. (daily_update_count는 통계용으로만 남아 있고 하루 게이트는 AiDailyAttemptLimiter가 맡는다)
         if (response.isAiRecommendation()) {
             recommendationCacheService.save(user, response);
         }
@@ -184,7 +172,18 @@ public class RecommendationService {
         String jobType = (targetJob != null) ? targetJob.getJobType() : null;
         SpecPositionResult position = specPositionService.calculate(userSpec, jobType);
 
+        // 갭이 새 스펙 기준으로 바뀌었으니 카드의 targetGap도 다시 맞춘다 — 사용자가 방금 딴 자격증이
+        // 비교 탭에서는 사라졌는데 추천 카드엔 "이 갭을 줄여요"로 남아 있으면 두 화면이 모순된다.
+        List<GapMatcher.Gap> knownGaps = GapMatcher.knownGaps(position);
+        List<ActivityRecommendation> realigned = cachedResponse.getActivities() == null ? null
+                : cachedResponse.getActivities().stream()
+                .map(a -> a.toBuilder()
+                        .targetGap(GapMatcher.normalizeTargetGap(a.getTargetGap(), knownGaps).orElse(null))
+                        .build())
+                .toList();
+
         return cachedResponse.toBuilder()
+                .activities(realigned)
                 .specPosition(position)
                 .targetJobName(jobType != null ? jobType : "미설정")
                 .scoreFormulaVersion(SpecPositionCalculator.CURRENT_SCORE_FORMULA_VERSION)
@@ -256,18 +255,27 @@ public class RecommendationService {
                                                          SpecPositionResult position, String targetJobName) {
         List<Activity> safeActivities = (activeActivities != null) ? activeActivities : List.of();
 
+        // 예전엔 목록 앞 3개(마감 임박순)를 그대로 잘라 "왜 이 활동인지"가 없었다.
+        // 갭 키워드·목표 직무 태그로 순위를 매기고, 갭이 맞는 활동엔 그 갭을 이유에 적는다.
+        List<GapMatcher.Gap> knownGaps = GapMatcher.knownGaps(position);
         List<ActivityRecommendation> recs = new ArrayList<>();
-        int count = Math.min(3, safeActivities.size());
-        for (int i = 0; i < count; i++) {
-            Activity a = safeActivities.get(i);
+        for (GapMatcher.Ranked r : GapMatcher.rankForFallback(safeActivities, targetJobName, knownGaps, 3)) {
+            Activity a = r.activity();
+            String reason;
+            if (r.targetGap() != null) {
+                reason = String.format("[AI 응답 지연 임시 추천] 합격자 비교에서 부족한 '%s'을(를) 보완할 수 있는 활동이에요.", r.targetGap());
+            } else if (a.getDescription() != null && !a.getDescription().isBlank()) {
+                reason = "[AI 응답 지연 임시 추천] " + a.getDescription();
+            } else {
+                reason = "[AI 응답 지연 임시 추천] 사용자의 목표 직무 및 학점 스펙 기반 DB 맞춤 추천 활동입니다.";
+            }
             recs.add(ActivityRecommendation.builder()
                     .id(a.getId())
                     .type(a.getType())
                     .name(a.getName())
-                    .reason(a.getDescription() != null && !a.getDescription().isBlank()
-                            ? "[AI 응답 지연 임시 추천] " + a.getDescription()
-                            : "[AI 응답 지연 임시 추천] 사용자의 목표 직무 및 학점 스펙 기반 DB 맞춤 추천 활동입니다.")
+                    .reason(reason)
                     .deadline(a.getDeadline())
+                    .targetGap(r.targetGap())
                     .build());
         }
 
@@ -299,6 +307,9 @@ public class RecommendationService {
 
         if (geminiResult.getActivities() == null || geminiResult.getActivities().isEmpty()) return null;
 
+        // Gemini의 targetGap은 비교 탭의 갭 이름과 같을 때만 받는다 — 지어낸 갭이 추천 카드에 뜨면 두 화면이 어긋난다.
+        List<GapMatcher.Gap> knownGaps = GapMatcher.knownGaps(position);
+
         List<ActivityRecommendation> result = new ArrayList<>();
         for (GeminiActivity a : geminiResult.getActivities()) {
             // Gemini가 배열 원소로 null을 섞어 보내면(스키마 이탈) a.getId()에서 NPE가 나
@@ -321,6 +332,9 @@ public class RecommendationService {
                         .name(dbActivity.getName())
                         .reason(a.getReason() != null ? a.getReason() : "")
                         .deadline(dbActivity.getDeadline())
+                        .targetGap(GapMatcher.normalizeTargetGap(a.getTargetGap(), knownGaps)
+                                .or(() -> GapMatcher.matchGap(dbActivity, knownGaps))
+                                .orElse(null))
                         .build());
             } else {
                 log.warn("Gemini가 DB에 없는 활동 ID를 반환함 (무시): {}", a.getId());

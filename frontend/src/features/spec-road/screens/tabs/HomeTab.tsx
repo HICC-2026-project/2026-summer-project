@@ -1,6 +1,6 @@
 "use client";
 
-import { DEMO_SPEC_POSITION, DEMO_USER_NAME, PRIMARY } from "../../data";
+import { BADGE, DEMO_SPEC_POSITION, DEMO_USER_NAME, PRIMARY } from "../../data";
 import { StateMessage } from "../../components/StateMessage";
 import { dday, ddayColor, hasMeaningfulLangScore, jobLabel, percentileLabel } from "../../helpers";
 import type { Recommendation, RecommendationMeta, Spec, Target } from "../../types";
@@ -16,6 +16,9 @@ interface HomeTabProps {
   recError: boolean;
   onOpenDetail: (id: string | number) => void;
 }
+
+// 히어로 카드 안의 칩 — 축·갭·표본 수가 같은 모양을 쓴다.
+const HERO_CHIP = { fontSize: 12.5, fontWeight: 700, background: "rgba(255,255,255,0.16)", padding: "6px 11px", borderRadius: 999, whiteSpace: "nowrap" } as const;
 
 export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMeta, recLoading, recError, onOpenDetail }: HomeTabProps) {
   const targetSummary = `${target.size} ${jobLabel(target.job)}`;
@@ -86,25 +89,19 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
         {hasPosition && !recLoading ? (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {position!.axes.map((a) => (
-              <span
-                key={a.axis}
-                style={{
-                  fontSize: 12.5,
-                  fontWeight: 700,
-                  background: "rgba(255,255,255,0.16)",
-                  padding: "6px 11px",
-                  borderRadius: 999,
-                  whiteSpace: "nowrap",
-                }}
-              >
+              <span key={a.axis} style={HERO_CHIP}>
                 {a.label} {percentileLabel(a.percentile)}
               </span>
             ))}
             {position!.gaps.length > 0 && (
-              <span style={{ fontSize: 12.5, fontWeight: 700, background: "rgba(255,255,255,0.16)", padding: "6px 11px", borderRadius: 999, whiteSpace: "nowrap" }}>
+              <span style={HERO_CHIP}>
                 보완 추천 {position!.gaps.length}개
               </span>
             )}
+            {/* 표본 수 — 몇 명과 비교한 결과인지 카드 안에서 바로 읽히게 한다. */}
+            <span style={{ ...HERO_CHIP, fontWeight: 600, background: "rgba(255,255,255,0.10)", opacity: 0.9 }}>
+              {position!.basis === "JOB" && position!.targetJobLabel ? `${position!.targetJobLabel} 합격자` : "전체 합격자"} {position!.sampleSize}명 기준
+            </span>
           </div>
         ) : (
           <div style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, letterSpacing: "-0.03em" }}>–</div>
@@ -230,6 +227,12 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
                       {r.type}
                     </span>
                     <span style={{ fontSize: 12, fontWeight: 600, color: ddayColor(r.deadline) }}>{dday(r.deadline)}</span>
+                    {/* 비교 탭의 갭 이름 그대로 — "추천은 이 갭을 메우려고 나왔다"를 카드에서 바로 읽게 한다. */}
+                    {r.targetGap && (
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: BADGE.ok.color, background: BADGE.ok.bg, padding: "4px 9px", borderRadius: 7, whiteSpace: "nowrap" }}>
+                        {r.targetGap} 갭 보완
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: 16.5, fontWeight: 700, color: "#15141B", letterSpacing: "-0.01em", marginBottom: 3, lineHeight: 1.3 }}>
                     {r.name}

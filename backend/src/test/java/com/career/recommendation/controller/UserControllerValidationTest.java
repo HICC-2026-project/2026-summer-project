@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -136,5 +137,19 @@ class UserControllerValidationTest {
         mockMvc.perform(get("/api/v1/users/me"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("사용자가 존재하지 않습니다."));
+    }
+
+    @Test
+    void 닉네임이_비거나_50자를_넘거나_제어문자가_있으면_400() throws Exception {
+        for (String body : new String[]{
+                "{\"nickname\": \"   \"}",
+                "{\"nickname\": \"" + "가".repeat(51) + "\"}",
+                "{\"nickname\": \"줄바꿈\\n포함\"}"}) {
+            mockMvc.perform(patch("/api/v1/users/me/nickname")
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        }
+        verifyNoInteractions(userService);
     }
 }

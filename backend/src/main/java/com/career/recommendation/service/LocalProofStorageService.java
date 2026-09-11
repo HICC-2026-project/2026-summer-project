@@ -3,6 +3,8 @@ package com.career.recommendation.service;
 import com.career.recommendation.exception.InvalidProofFileException;
 import com.career.recommendation.exception.ProofStorageException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -13,6 +15,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -56,17 +59,39 @@ public class LocalProofStorageService {
         }
     }
 
-    public void deleteQuietly(String storedName) {
+    /**
+     * 파일을 지운다. 예외를 던지지 않는다 — DB 저장 실패 뒤의 보상 동작에서 원래 예외를 가리지 않기 위함.
+     * @return 파일이 지워졌거나 원래 없었으면 true, IO 오류/경로 이상으로 남아 있으면 false
+     *         (ProofRetentionScheduler는 false면 DB 메타를 비우지 않아 고아 파일이 생기지 않게 한다)
+     */
+    public boolean deleteQuietly(String storedName) {
         if (storedName == null || storedName.isBlank()) {
-            return;
+            return true;
         }
 
         try {
             Path target = storageRoot.resolve(storedName).normalize();
             ensureInsideStorageRoot(target);
             Files.deleteIfExists(target);
-        } catch (IOException | RuntimeException ignored) {
-            // DB 저장 실패 뒤 정리하는 보상 동작이다. 원래 예외를 가리지 않도록 무시한다.
+            return true;
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
+    /**
+     * 검수자가 증빙을 열어볼 때 쓴다. 저장 루트 밖 경로·없는 파일은 Optional.empty().
+     * 파일이 없을 수 있는 이유: 서버 재배포로 로컬 디스크가 초기화된 경우(E2-4 S3 전환 전까지의 한계).
+     */
+    public Optional<Resource> load(String storedName) {
+        if (storedName == null || storedName.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            Path target = resolveForInspection(storedName);
+            return Files.isRegularFile(target) ? Optional.of(new FileSystemResource(target)) : Optional.empty();
+        } catch (InvalidProofFileException outsideRoot) {
+            return Optional.empty();
         }
     }
 

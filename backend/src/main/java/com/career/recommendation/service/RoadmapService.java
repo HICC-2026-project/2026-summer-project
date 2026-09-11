@@ -1,5 +1,6 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.util.ServiceTime;
 import com.career.recommendation.dto.gemini.GeminiRoadmapResult;
 import com.career.recommendation.dto.gemini.GeminiRoadmapResult.GeminiTimelineStep;
 import com.career.recommendation.dto.recommendation.RecommendationResponse;
@@ -58,10 +59,11 @@ public class RoadmapService {
     private final RoadmapCacheService roadmapCacheService;
     private final GeminiService geminiService;
     private final PromptDataBuilder promptDataBuilder;
+    private final AiDailyAttemptLimiter aiDailyAttemptLimiter;
     private final ObjectMapper objectMapper;
 
     private static final int MAX_RECOMMENDABLE_ACTIVITIES = 20;
-    private static final ZoneId SERVICE_ZONE_ID = ZoneId.of("Asia/Seoul");
+    private static final ZoneId SERVICE_ZONE_ID = ServiceTime.ZONE_ID;
     /** 프롬프트가 HIGH/MEDIUM/LOW만 쓰라고 지시하지만 강제되지 않아, Gemini가 임의 문자열을
      * 반환해도 검증 없이 그대로 FE에 전달되고 있었다. FE가 이 값으로 배지를 매핑한다면
      * 미매핑 값에서 빈 배지가 뜬다. */
@@ -79,6 +81,7 @@ public class RoadmapService {
         UserSpec userSpec   = userSpecRepository.findByUser_Id(user.getId()).orElse(null);
         TargetJob targetJob = targetJobRepository.findByUser_Id(user.getId()).orElse(null);
         LocalDate today = LocalDate.now(SERVICE_ZONE_ID);
+        boolean attemptAcquired = false;
 
         if (cached != null) {
             try {
@@ -92,34 +95,25 @@ public class RoadmapService {
                     if (!isSpecChanged && hasUsableActivities) {
                         return deserialized;
                     }
-                    // 갱신이 필요하더라도 하루 제한(3회)을 넘으면 캐시를 그대로 준다.
-                    // 만료 활동이 계속 남아 있거나 Gemini가 실패를 반복할 때
-                    // 매 요청마다 API를 호출하는 것을 막는 안전장치다.
-                    //
-                    // ⚠️ 알려진 한계(RecommendationService와 동일 — 그쪽 주석 참고): dailyUpdateCount는
-                    // roadmapCacheService.save()가 실제로 실행됐을 때만(즉 response.isAiRoadmap()
-                    // ==true, 성공했을 때만) 증가한다. Gemini가 계속 실패해 폴백만 반복되면 카운트가
-                    // 0에 머물러 이 게이트가 절대 발동하지 않는다 — "실패를 반복할 때 막는
-                    // 안전장치"라는 주석이 실패 반복 상황에서는 실제로 동작하지 않는다는 뜻이다.
-                    // 실패 시도까지 세는 별도 카운터가 추가돼야 이름값대로 동작한다.
-                    //
-                    // 게다가 이 게이트는 RecommendationService보다 우회 경로가 하나 더 많다:
-                    // 위 87행의 "deserialized.getTimeline() != null && !isEmpty()" 조건에 걸리면
-                    // (캐시가 애초에 빈 타임라인이거나, 111행 catch로 파싱 자체가 실패하면) 이
-                    // if 블록 전체를 건너뛰어 게이트를 거치지 않고 곧장 Gemini 재호출로
-                    // 흘러간다 — RecommendationService의 cachedResponse==null 우회와 같은
-                    // 형태의 갭이 여기선 두 곳(빈 타임라인 + 파싱 실패)에 있다.
-                    if (cached.getLastUpdatedDate() != null && today.equals(cached.getLastUpdatedDate())
-                            && cached.getDailyUpdateCount() != null && cached.getDailyUpdateCount() >= 3) {
+                    // 갱신이 필요하더라도 하루 시도 상한(AiDailyAttemptLimiter — 성공·실패 무관)을 넘으면 캐시를 그대로 준다.
+                    // 예전 게이트(daily_update_count)는 저장 성공만 세서 Gemini 장애 중엔 발동하지 않았다.
+                    if (!aiDailyAttemptLimiter.tryAcquire(user.getId(), AiDailyAttemptLimiter.KIND_ROADMAP)) {
                         // 한도에 막혀 옛 로드맵을 주는 것임을 FE가 안내할 수 있게 플래그를
                         // 붙인다. toBuilder 결과는 반환 전용 — 캐시에 저장하지 않는다
                         // (RecommendationResponse.dailyLimitReached 주석 참고).
                         return deserialized.toBuilder().dailyLimitReached(true).build();
                     }
+                    attemptAcquired = true;
                 }
             } catch (Exception e) {
                 log.warn("로드맵 캐시 파싱 실패: {}", e.getMessage());
             }
+        }
+        // 캐시가 없거나 비었거나 깨진 경로도 같은 상한을 지난다 — 예전엔 이 세 경로가 게이트를 우회해 곧장 Gemini로 갔다.
+        if (!attemptAcquired && !aiDailyAttemptLimiter.tryAcquire(user.getId(), AiDailyAttemptLimiter.KIND_ROADMAP)) {
+            List<Activity> openForFallback = activityRepository.findRecommendableActivities(today, PageRequest.of(0, MAX_RECOMMENDABLE_ACTIVITIES));
+            Integer gradeForFallback = (userSpec != null) ? userSpec.getGrade() : null;
+            return buildFallbackRoadmap(gradeForFallback, openForFallback, today).toBuilder().dailyLimitReached(true).build();
         }
 
         String userSpecJson = promptDataBuilder.serializeSpecForRoadmap(userSpec);

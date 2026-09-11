@@ -2,7 +2,7 @@ import { getAccessToken, getRefreshToken, notifySessionExpired, setTokens } from
 
 // 프로덕션(Vercel)에서는 same-origin("")으로 호출해 next.config.ts의 /api/* 프록시를 타고,
 // 로컬 개발에서는 로컬 백엔드를 직접 호출한다.
-const API_BASE_URL =
+export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   (process.env.NODE_ENV === "production" ? "" : "http://localhost:8080");
 
@@ -82,7 +82,9 @@ async function parseBody<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+// 인증·401 재발급·에러 변환까지 끝낸 Response를 돌려준다. JSON이 아닌 응답(이미지 blob 등)을
+// 받아야 할 때 쓴다 — 이 경로를 안 타면 토큰 만료 시 그 요청만 조용히 실패한다.
+export async function apiFetchRaw(path: string, options?: RequestInit): Promise<Response> {
   const accessToken = typeof window !== "undefined" ? getAccessToken() : null;
 
   let res = await request(path, options, accessToken);
@@ -102,7 +104,11 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
     throw new ApiError(res.status, await extractErrorMessage(res));
   }
 
-  return parseBody<T>(res);
+  return res;
+}
+
+export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  return parseBody<T>(await apiFetchRaw(path, options));
 }
 
 // 백엔드 GlobalExceptionHandler는 { code, message, timestamp } 형태로 응답한다.

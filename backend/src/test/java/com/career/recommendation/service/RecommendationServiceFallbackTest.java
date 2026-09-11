@@ -2,6 +2,7 @@ package com.career.recommendation.service;
 
 import com.career.recommendation.dto.position.SpecPositionResult;
 import com.career.recommendation.dto.recommendation.RecommendationResponse;
+import com.career.recommendation.entity.Activity;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.repository.ActivityRepository;
 import com.career.recommendation.repository.RecommendationRepository;
@@ -18,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -49,6 +52,7 @@ class RecommendationServiceFallbackTest {
     @Mock private GeminiService geminiService;
     @Mock private PromptDataBuilder promptDataBuilder;
     @Mock private ObjectMapper objectMapper;
+    @Mock private AiDailyAttemptLimiter aiDailyAttemptLimiter;
     @Mock private Authentication authentication;
     @Mock private User user;
 
@@ -58,6 +62,7 @@ class RecommendationServiceFallbackTest {
     private void givenNoActivitiesAndGeminiDown(SpecPositionResult position) {
         UUID userId = UUID.randomUUID();
         when(user.getId()).thenReturn(userId);
+        lenient().when(aiDailyAttemptLimiter.tryAcquire(any(), any())).thenReturn(true);
         when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
 
         when(recommendationRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
@@ -131,5 +136,38 @@ class RecommendationServiceFallbackTest {
 
         // 폴백을 캐싱하면 활동이 다시 생겨도 빈 추천이 캐시로 굳어버린다.
         verify(recommendationCacheService, never()).save(any(), any());
+    }
+
+    @Test
+    void 폴백_추천은_갭을_메우는_활동을_앞세우고_그_갭을_targetGap과_이유에_적는다() {
+        // 예전 폴백은 목록 앞 3개(마감 임박순)를 그대로 잘라 "왜 이 활동인지"가 없었다.
+        SpecPositionResult position = SpecPositionResult.builder()
+                .basis("JOB").basisMessage("백엔드 합격자 5명").sampleSize(5)
+                .axes(List.of(SpecPositionResult.AxisPosition.builder().axis("LANGUAGE").label("어학 성적").percentile(null).build()))
+                .gaps(List.of(SpecPositionResult.SpecGap.builder().name("SQLD").holderRatePercent(60).build()))
+                .matchedCertifications(List.of()).unmatchedCertifications(List.of())
+                .build();
+        givenNoActivitiesAndGeminiDown(position);
+        Activity filler = activity("독서 모임", null, LocalDate.of(2026, 8, 25));
+        Activity sqld = activity("SQLD 자격증 특강", null, LocalDate.of(2026, 9, 30));
+        Activity toeic = activity("TOEIC 스터디", null, LocalDate.of(2026, 10, 1));
+        Activity other = activity("교양 특강", null, LocalDate.of(2026, 8, 26));
+        when(activityRepository.findRecommendableActivities(any(), any()))
+                .thenReturn(List.of(filler, sqld, toeic, other));
+
+        RecommendationResponse response = recommendationService.getRecommendations(authentication);
+
+        assertThat(response.isAiRecommendation()).isFalse();
+        assertThat(response.getActivities()).extracting(a -> a.getName())
+                .containsExactly("SQLD 자격증 특강", "TOEIC 스터디", "독서 모임");
+        assertThat(response.getActivities().get(0).getTargetGap()).isEqualTo("SQLD");
+        assertThat(response.getActivities().get(0).getReason()).contains("SQLD");
+        assertThat(response.getActivities().get(1).getTargetGap()).isEqualTo("어학 성적");
+        assertThat(response.getActivities().get(2).getTargetGap()).isNull();
+    }
+
+    private Activity activity(String name, String[] tags, LocalDate deadline) {
+        return Activity.builder()
+                .id(UUID.randomUUID()).type("EDUCATION").name(name).tags(tags).deadline(deadline).build();
     }
 }

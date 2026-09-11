@@ -1,10 +1,13 @@
 package com.career.recommendation.repository;
 
 import com.career.recommendation.entity.PasserData;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -13,6 +16,57 @@ public interface PasserDataRepository extends JpaRepository<PasserData, UUID> {
     List<PasserData> findByActivityId(UUID activityId);
 
     List<PasserData> findByIsVerifiedTrue();
+
+    /** 본인이 제보한 합격자 데이터(최신순). 제보 상태 확인용. */
+    List<PasserData> findAllByReporter_IdOrderByCreatedAtDesc(UUID reporterId);
+
+    /** 같은 사용자가 같은 직무·연도로 아직 검수되지 않은 제보를 이미 올렸는지 (중복 제보 차단). */
+    boolean existsByReporter_IdAndJobTypeAndYearAndReviewedAtIsNull(UUID reporterId, String jobType, Integer year);
+
+    /** 사용자의 일정 시각 이후 제보 수 (일일 제보 상한). */
+    long countByReporter_IdAndCreatedAtAfter(UUID reporterId, LocalDateTime after);
+
+    /**
+     * 검수(관리자) 목록. 사용자 제보(USER_REPORT)만 대상이다 — DEMO·PUBLIC_REVIEW는 검수 개념이 없다.
+     * 상태는 PasserData.reviewStatus()와 같은 규칙으로 두 컬럼에서 판정한다:
+     * PENDING = 미검수, VERIFIED = 승인, REJECTED = 검수했지만 미승인. 최신 건이 먼저.
+     */
+    @Query("""
+            SELECT p FROM PasserData p
+            WHERE p.dataOrigin = 'USER_REPORT'
+              AND (
+                   (:status = 'PENDING'  AND p.reviewedAt IS NULL)
+                OR (:status = 'VERIFIED' AND p.isVerified = true)
+                OR (:status = 'REJECTED' AND p.isVerified = false AND p.reviewedAt IS NOT NULL)
+              )
+            ORDER BY COALESCE(p.reviewedAt, p.createdAt) DESC
+            """)
+    Page<PasserData> findReportsByStatus(@Param("status") String status, Pageable pageable);
+
+    /**
+     * 증빙 보관 기한이 지난 제보. 검수가 끝난(승인·반려) 제보의 증빙은 더 볼 일이 없으므로
+     * reviewedAt 기준 일정 기간 뒤 파일을 지운다(ProofRetentionScheduler). 미검수(PENDING)는 대상이 아니다.
+     */
+    @Query("""
+            SELECT p FROM PasserData p
+            WHERE p.proofStoredName IS NOT NULL
+              AND p.reviewedAt IS NOT NULL
+              AND p.reviewedAt < :before
+            """)
+    List<PasserData> findReviewedWithProofBefore(@Param("before") LocalDateTime before);
+
+    /** 운영 요약: 직무별 비교 가능(검증·DEMO) 합격자 수. */
+    @Query("""
+            SELECT p.jobType, COUNT(p)
+            FROM PasserData p
+            WHERE (p.isVerified = true OR p.dataOrigin = 'DEMO')
+            GROUP BY p.jobType
+            """)
+    List<Object[]> countComparableByJobType();
+
+    /** 운영 요약: 검수 대기 건수. */
+    @Query("SELECT COUNT(p) FROM PasserData p WHERE p.dataOrigin = 'USER_REPORT' AND p.reviewedAt IS NULL")
+    long countPendingReports();
 
     /**
      * 특정 직무의 비교 가능(검증 완료 또는 DEMO) 합격자 전원을 조회한다.

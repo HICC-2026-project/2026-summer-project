@@ -1,5 +1,6 @@
 package com.career.recommendation.util;
 
+import com.career.recommendation.domain.JobType;
 import com.career.recommendation.dto.position.JobSpecProfile;
 import com.career.recommendation.dto.position.JobSpecProfile.CertStat;
 import com.career.recommendation.dto.position.SpecPositionResult;
@@ -57,7 +58,7 @@ public class SpecPositionCalculator {
      * 미만이면 그 프로필로는 비교하지 않는다 — 1~2명 분포에서의 percentile은 그 한두 명의
      * 개인 스펙에 좌우되는 무의미한 값인데 5명 비교와 똑같은 확신으로 그려진다.
      */
-    private static final int MIN_SAMPLE = 3;
+    public static final int MIN_SAMPLE = 3;
 
     /**
      * 갭으로 보여줄 최소 보유율. 이 값 미만은 "합격자 다수가 가진 것"이라 말할 수 없다.
@@ -90,6 +91,14 @@ public class SpecPositionCalculator {
         JobSpecProfile profile;
         String basis;
         JobSpecProfile overallProfile = null;
+        // 목표 직무 식별 정보 — 비교에 쓰였든 아니든 항상 내려준다(FE 제보 유도 CTA용).
+        String targetJobType = (jobProfile != null && jobProfile.getJobType() != null && !jobProfile.getJobType().isBlank())
+                ? jobProfile.getJobType() : null;
+        SpecPositionResult.SpecPositionResultBuilder base = SpecPositionResult.builder()
+                .targetJobType(targetJobType)
+                .targetJobLabel(JobType.labelOf(targetJobType))
+                .jobSampleSize(targetJobType != null ? jobProfile.getSampleSize() : 0)
+                .minSampleSize(MIN_SAMPLE);
         if (jobProfile != null && jobProfile.getJobType() != null && jobProfile.getSampleSize() >= MIN_SAMPLE) {
             profile = jobProfile;
             basis = BASIS_JOB;
@@ -98,7 +107,7 @@ public class SpecPositionCalculator {
             profile = overallProfile;
             basis = BASIS_OVERALL;
         } else {
-            return SpecPositionResult.builder()
+            return base
                     .basis(BASIS_NONE)
                     .basisMessage("아직 비교할 합격자 데이터가 부족합니다.")
                     .sampleSize(0)
@@ -113,7 +122,7 @@ public class SpecPositionCalculator {
         Set<String> userCerts = SpecNormalizer.canonicalCerts(
                 userSpec != null ? userSpec.getCertifications() : null);
 
-        return SpecPositionResult.builder()
+        return base
                 .basis(basis)
                 .basisMessage(basisMessage(basis, jobProfile, profile))
                 .sampleSize(profile.getSampleSize())
@@ -128,7 +137,7 @@ public class SpecPositionCalculator {
     private String basisMessage(String basis, JobSpecProfile jobProfile, JobSpecProfile used) {
         if (BASIS_JOB.equals(basis)) {
             return String.format("%s 합격자 %d명의 분포와 비교한 결과입니다.",
-                    used.getJobType(), used.getSampleSize());
+                    JobType.labelOf(used.getJobType()), used.getSampleSize());
         }
         // 전체 폴백 — 원인(직무 미설정 vs 직무 데이터 부족)을 구분해 정직하게 말한다.
         // 예전 buildComparisonMessage가 폴백 사실을 숨기고 직무명을 단언하던 문제의 재발 방지.
@@ -138,7 +147,7 @@ public class SpecPositionCalculator {
                     used.getSampleSize());
         }
         return String.format("%s 합격자 데이터가 부족해, 직무 구분 없이 전체 합격자 %d명의 분포와 비교한 결과입니다.",
-                jobType, used.getSampleSize());
+                JobType.labelOf(jobType), used.getSampleSize());
     }
 
     /**

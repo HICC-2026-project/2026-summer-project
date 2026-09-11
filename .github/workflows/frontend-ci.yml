@@ -1,0 +1,54 @@
+name: Frontend CI
+
+# PR이 올라오면 프론트엔드를 타입체크·린트·빌드해, 깨진 코드가 main에 들어가는 것을 막는다.
+# 배포(Vercel)는 Vercel의 Git 연동이 따로 하므로 여기서는 검증만 한다.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+
+jobs:
+  verify:
+    name: 타입체크 & 린트 & 빌드
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Next 16·ESLint 9 의존성이 Node 20.19+ 또는 22를 요구한다(npm ci EBADENGINE 경고 기준).
+      - name: Node 22 설치
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 의존성 설치
+        run: npm ci --no-audit --no-fund
+
+      - name: 타입체크
+        run: npx tsc --noEmit
+
+      - name: 린트
+        run: npm run lint
+
+      - name: 컴포넌트 테스트
+        run: npm test
+
+      # 빌드 타임에 백엔드 주소가 필요하진 않지만(모두 NEXT_PUBLIC_* 폴백이 있음),
+      # Vercel 환경과 동일하게 프로덕션 빌드가 통과하는지 확인한다.
+      - name: 프로덕션 빌드
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"

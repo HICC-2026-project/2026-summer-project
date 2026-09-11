@@ -11,8 +11,8 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import com.career.recommendation.validation.ValidJobType;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -26,10 +26,7 @@ import java.util.Objects;
 public class PasserReportRequest {
 
     @NotBlank(message = "목표 직무는 필수입니다.")
-    @Pattern(
-            regexp = "(?i)(BACKEND|FRONTEND|AI_ML|DATA_ENGINEER|PM|SECURITY)",
-            message = "지원하지 않는 직무 코드입니다."
-    )
+    @ValidJobType
     private String jobType;
 
     @NotNull(message = "합격 연도는 필수입니다.")
