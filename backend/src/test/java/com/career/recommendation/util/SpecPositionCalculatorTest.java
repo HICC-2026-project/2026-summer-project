@@ -164,6 +164,59 @@ class SpecPositionCalculatorTest {
         assertThat(exp.getMedianValue()).isEqualTo("3.0개");
     }
 
+    @Test
+    void 사용자_경험이_N개면_myValue는_N개이고_percentile이_분포에서_계산된다() {
+        JobSpecProfile job = profileOf("BACKEND", List.of(
+                passerWithExp("3.00", 2), passerWithExp("3.50", 3), passerWithExp("4.00", 5)));
+        UserSpec userWithExp = UserSpec.builder()
+                .gpa(new BigDecimal("3.50")).gpaMax(new BigDecimal("4.50"))
+                .experiences(List.of(
+                        Map.of("type", "PROJECT", "title", "토이 프로젝트"),
+                        Map.of("type", "INTERNSHIP", "title", "여름 인턴")))
+                .build();
+
+        SpecPositionResult result = calculator.calculate(userWithExp, job, () -> null);
+
+        AxisPosition exp = axis(result, "EXPERIENCE");
+        assertThat(exp.getMyValue()).isEqualTo("2개");
+        assertThat(exp.getPercentile())
+                .isEqualTo(SpecPositionCalculator.percentileOf(new int[]{2, 3, 5}, 2));
+    }
+
+    @Test
+    void 사용자_경험이_null이면_미입력이고_percentile은_null이다() {
+        JobSpecProfile job = profileOf("BACKEND", List.of(
+                passerWithExp("3.00", 2), passerWithExp("3.50", 3), passerWithExp("4.00", 5)));
+        UserSpec noExpUser = UserSpec.builder()
+                .gpa(new BigDecimal("3.50")).gpaMax(new BigDecimal("4.50"))
+                .build(); // experiences 미설정 → null(미입력)
+
+        SpecPositionResult result = calculator.calculate(noExpUser, job, () -> null);
+
+        AxisPosition exp = axis(result, "EXPERIENCE");
+        assertThat(exp.getMyValue()).isEqualTo("미입력");
+        assertThat(exp.getPercentile()).isNull();
+    }
+
+    @Test
+    void 사용자_경험이_빈_리스트면_0개이고_percentile은_null이_아니다() {
+        // 빈 리스트는 미입력이 아니라 "실제로 0개"다 — 자격증 축과 같은 원칙.
+        JobSpecProfile job = profileOf("BACKEND", List.of(
+                passerWithExp("3.00", 2), passerWithExp("3.50", 3), passerWithExp("4.00", 5)));
+        UserSpec zeroExpUser = UserSpec.builder()
+                .gpa(new BigDecimal("3.50")).gpaMax(new BigDecimal("4.50"))
+                .experiences(List.of())
+                .build();
+
+        SpecPositionResult result = calculator.calculate(zeroExpUser, job, () -> null);
+
+        AxisPosition exp = axis(result, "EXPERIENCE");
+        assertThat(exp.getMyValue()).isEqualTo("0개");
+        assertThat(exp.getPercentile()).isNotNull();
+        assertThat(exp.getPercentile())
+                .isEqualTo(SpecPositionCalculator.percentileOf(new int[]{2, 3, 5}, 0));
+    }
+
     // --- 갭 리스트 ---
 
     @Test

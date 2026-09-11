@@ -48,6 +48,11 @@ public class UserSpecRequest {
             @Size(max = 100, message = "자격증 이름은 100자 이하여야 합니다.")
             String> certifications;
 
+    // 경험은 신규 필드라 과거/외부 클라이언트 호환을 위해 optional로 둔다(null이면 미입력).
+    // languageScores·certifications의 @NotNull 규약과 다른 이유가 이것이다.
+    @Size(max = 20, message = "경험은 최대 20개까지 저장할 수 있습니다.")
+    private List<@NotNull(message = "경험 항목은 null일 수 없습니다.") @Valid ExperienceRequest> experiences;
+
     @NotNull(message = "학년은 필수입니다.")
     @Min(value = 1, message = "학년은 1 이상이어야 합니다.")
     @Max(value = 4, message = "학년은 4 이하여야 합니다.")

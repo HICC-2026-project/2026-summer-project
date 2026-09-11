@@ -3,6 +3,7 @@
 import { useState, type CSSProperties } from "react";
 import { Chip } from "../components/Chip";
 import {
+  EXPERIENCE_TYPE_OPTIONS,
   GPA_SCALE_OPTIONS,
   GRADE_OPTIONS,
   INDUSTRY_OPTIONS,
@@ -13,8 +14,8 @@ import {
   PRIMARY,
   SIZE_OPTIONS,
 } from "../data";
-import { chipStyle } from "../helpers";
-import type { JobCode, OnboardStep, Spec, Target } from "../types";
+import { chipStyle, experienceTypeLabel } from "../helpers";
+import type { Experience, ExperienceType, JobCode, OnboardStep, Spec, Target } from "../types";
 
 interface OnboardingScreenProps {
   step: OnboardStep;
@@ -28,6 +29,8 @@ interface OnboardingScreenProps {
   onSetLangScore: (type: string, v: string) => void;
   onAddCert: (v: string) => void;
   onRemoveCert: (v: string) => void;
+  onAddExperience: (experience: Experience) => void;
+  onRemoveExperience: (index: number) => void;
   onSetJob: (v: JobCode) => void;
   onSetSize: (v: string) => void;
   onSetIndustry: (v: string) => void;
@@ -91,11 +94,16 @@ export function OnboardingScreen({
   onSetLangScore,
   onAddCert,
   onRemoveCert,
+  onAddExperience,
+  onRemoveExperience,
   onSetJob,
   onSetSize,
   onSetIndustry,
 }: OnboardingScreenProps) {
   const [certInput, setCertInput] = useState("");
+  const [experienceDraft, setExperienceDraft] = useState<{ type: ExperienceType; title: string; description: string }>(
+    { type: "INTERNSHIP", title: "", description: "" },
+  );
   const onboardPct = step === 0 ? "50%" : "100%";
   const onboardCta = step === 0 ? "다음" : "분석 시작하기";
 
@@ -117,6 +125,21 @@ export function OnboardingScreen({
     if (!value || spec.certs.includes(value)) return;
     onAddCert(value);
     setCertInput("");
+  }
+
+  // 제목이 비어있으면 추가하지 않는다(경험은 선택 입력이지만, 추가할 땐 제목이 필수).
+  // 설명이 비어있으면 필드 자체를 넣지 않는다 — description은 optional이라
+  // ""를 보내는 대신 아예 생략해야 계약(빈 값 = 미기입)과 일치한다.
+  function submitExperienceInput() {
+    const title = experienceDraft.title.trim();
+    if (!title) return;
+    const description = experienceDraft.description.trim();
+    onAddExperience({
+      type: experienceDraft.type,
+      title,
+      ...(description ? { description } : {}),
+    });
+    setExperienceDraft((d) => ({ ...d, title: "", description: "" }));
   }
 
   return (
@@ -258,7 +281,7 @@ export function OnboardingScreen({
             </div>
           </div>
 
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
+          <div style={cardStyle}>
             <label style={{ ...fieldLabelStyle, marginBottom: 4 }}>보유 자격증</label>
             <p style={{ fontSize: 12, color: "#B0B0BA", margin: "0 0 12px" }}>자격증 이름을 직접 입력해 추가하세요</p>
             <div style={{ display: "flex", gap: 8, marginBottom: spec.certs.length ? 12 : 0 }}>
@@ -306,6 +329,126 @@ export function OnboardingScreen({
                 <Chip key={c} selected onClick={() => onRemoveCert(c)}>
                   {c} ✕
                 </Chip>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <label style={{ ...fieldLabelStyle, marginBottom: 4 }}>경험</label>
+            <p style={{ fontSize: 12, color: "#B0B0BA", margin: "0 0 12px" }}>
+              인턴·프로젝트 등 경험을 추가하세요 (선택)
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+              {EXPERIENCE_TYPE_OPTIONS.map(({ code, label }) => (
+                <Chip
+                  key={code}
+                  selected={experienceDraft.type === code}
+                  onClick={() => setExperienceDraft((d) => ({ ...d, type: code }))}
+                  style={{ height: 34, fontSize: 12.5 }}
+                >
+                  {label}
+                </Chip>
+              ))}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+              <input
+                value={experienceDraft.title}
+                onChange={(e) => setExperienceDraft((d) => ({ ...d, title: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    submitExperienceInput();
+                  }
+                }}
+                type="text"
+                placeholder="경험 제목 (예: OO 서비스 백엔드 인턴)"
+                style={{
+                  height: 42,
+                  padding: "0 14px",
+                  borderRadius: 12,
+                  border: "1px solid #E1E0EA",
+                  fontSize: 14,
+                  outline: "none",
+                }}
+              />
+              <input
+                value={experienceDraft.description}
+                onChange={(e) => setExperienceDraft((d) => ({ ...d, description: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    submitExperienceInput();
+                  }
+                }}
+                type="text"
+                placeholder="간단한 설명 (선택)"
+                style={{
+                  height: 42,
+                  padding: "0 14px",
+                  borderRadius: 12,
+                  border: "1px solid #E1E0EA",
+                  fontSize: 14,
+                  outline: "none",
+                }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={submitExperienceInput}
+              style={{
+                width: "100%",
+                height: 42,
+                borderRadius: 12,
+                border: "none",
+                background: PRIMARY,
+                color: "#fff",
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: "pointer",
+                marginBottom: spec.experiences.length ? 12 : 0,
+              }}
+            >
+              추가
+            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {spec.experiences.map((exp, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    background: "#F6F5FA",
+                    border: "1px solid #EAE9F1",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: PRIMARY, marginBottom: 2 }}>
+                      {experienceTypeLabel(exp.type)}
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#15141B" }}>{exp.title}</div>
+                    {exp.description && (
+                      <div style={{ fontSize: 12.5, color: "#61616C", marginTop: 2 }}>{exp.description}</div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onRemoveExperience(idx)}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: "#9797A1",
+                      fontSize: 14,
+                      cursor: "pointer",
+                      flexShrink: 0,
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
               ))}
             </div>
           </div>

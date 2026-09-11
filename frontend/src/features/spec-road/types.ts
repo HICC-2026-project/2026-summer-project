@@ -13,6 +13,17 @@ export interface Spec {
   grade: number | null; // 학년 (1~4)
   langScores: Record<string, string>;
   certs: string[];
+  experiences: Experience[];
+}
+
+// 경험(인턴·프로젝트 등) 한 건. PUT /users/me/spec의 experiences, GET /users/me의
+// spec.experiences와 정확히 같은 모양이어야 한다(백엔드와 병행 개발 중인 계약).
+export type ExperienceType = "INTERNSHIP" | "PROJECT" | "COMPETITION" | "EXTERNAL" | "EDUCATION" | "ETC";
+
+export interface Experience {
+  type: ExperienceType;
+  title: string;
+  description?: string;
 }
 
 // Shape expected by PUT /users/me/spec's languageScores field (API 명세서 기준).
@@ -50,6 +61,7 @@ export interface UserSpecResponse {
   grade: number | null;
   languageScores: LanguageScorePayload[] | null;
   certifications: string[] | null;
+  experiences?: Experience[] | null;
 }
 
 export interface TargetJobResponse {
