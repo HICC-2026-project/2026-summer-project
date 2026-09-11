@@ -174,6 +174,96 @@ class UserSpecRequestValidationTest {
                 .contains("어학점수 항목은 null일 수 없습니다.");
     }
 
+    // --- 경험 ---
+
+    @Test
+    void 경험이_없으면_필드_자체가_없어도_검증을_통과한다() {
+        // 경험은 과거/외부 클라이언트 호환을 위해 optional이다 — languageScores·certifications와
+        // 달리 @NotNull이 없어 null(필드 미전송)이어도 통과해야 한다.
+        UserSpecRequest request = validRequest();
+        request.setExperiences(null);
+
+        Set<ConstraintViolation<UserSpecRequest>> violations = validator.validate(request);
+
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void 경험_제목이_비어있으면_검증에_실패한다() {
+        UserSpecRequest request = validRequest();
+        request.setExperiences(List.of(experience("PROJECT", " ", null)));
+
+        assertThat(validationMessages(request))
+                .contains("경험 제목은 필수입니다.");
+    }
+
+    @Test
+    void 경험_제목이_100자를_초과하면_검증에_실패한다() {
+        UserSpecRequest request = validRequest();
+        request.setExperiences(List.of(experience("PROJECT", "가".repeat(101), null)));
+
+        assertThat(validationMessages(request))
+                .contains("경험 제목은 100자 이하여야 합니다.");
+    }
+
+    @Test
+    void 경험_설명이_500자를_초과하면_검증에_실패한다() {
+        UserSpecRequest request = validRequest();
+        request.setExperiences(List.of(experience("PROJECT", "제목", "가".repeat(501))));
+
+        assertThat(validationMessages(request))
+                .contains("경험 설명은 500자 이하여야 합니다.");
+    }
+
+    @Test
+    void 경험_유형이_올바르지_않으면_검증에_실패한다() {
+        UserSpecRequest request = validRequest();
+        request.setExperiences(List.of(experience("INVALID_TYPE", "제목", null)));
+
+        assertThat(validationMessages(request))
+                .contains("올바른 경험 유형이 아닙니다.");
+    }
+
+    @Test
+    void 경험_유형이_없어도_제목만_있으면_검증을_통과한다() {
+        UserSpecRequest request = validRequest();
+        request.setExperiences(List.of(experience(null, "제목", null)));
+
+        Set<ConstraintViolation<UserSpecRequest>> violations = validator.validate(request);
+
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void 경험_목록에_null_항목이_있으면_검증에_실패한다() {
+        UserSpecRequest request = validRequest();
+        request.setExperiences(Collections.singletonList(null));
+
+        assertThat(validationMessages(request))
+                .contains("경험 항목은 null일 수 없습니다.");
+    }
+
+    @Test
+    void 경험이_20개를_초과하면_검증에_실패한다() {
+        UserSpecRequest request = validRequest();
+        request.setExperiences(
+                java.util.stream.IntStream.range(0, 21)
+                        .mapToObj(i -> experience("ETC", "경험 " + i, null))
+                        .collect(Collectors.toList())
+        );
+
+        assertThat(validationMessages(request))
+                .contains("경험은 최대 20개까지 저장할 수 있습니다.");
+    }
+
+    private ExperienceRequest experience(String type, String title, String description) {
+        ExperienceRequest request = new ExperienceRequest();
+        request.setType(type);
+        request.setTitle(title);
+        request.setDescription(description);
+        return request;
+    }
+
     private Set<String> validationMessages(UserSpecRequest request) {
         return validator.validate(request).stream()
                 .map(ConstraintViolation::getMessage)

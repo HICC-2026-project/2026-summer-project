@@ -1,5 +1,6 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.dto.user.ExperienceRequest;
 import com.career.recommendation.dto.user.LanguageScoreRequest;
 import com.career.recommendation.dto.user.UserSpecRequest;
 import com.career.recommendation.entity.User;
@@ -192,6 +193,120 @@ class UserSpecServiceTest {
         UserSpec savedUserSpec = captor.getValue();
         assertThat(savedUserSpec.getLanguageScores()).isEmpty();
         assertThat(savedUserSpec.getCertifications()).isEmpty();
+    }
+
+    // --- 경험 ---
+
+    @Test
+    void 경험을_저장하면_toMap_형식으로_변환된다() {
+        UUID userId = UUID.randomUUID();
+        User user = createUser(userId);
+        UserSpecRequest request = createRequest();
+        request.setExperiences(List.of(
+                experience("project", " 토이 프로젝트 ", " 팀 프로젝트 설명 "),
+                experience(null, "인턴", null) // type 미입력 → ETC로 기본값 처리
+        ));
+
+        stubTransactionManager();
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+        when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(userSpecRepository.saveAndFlush(any(UserSpec.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        userSpecService.saveOrUpdateMySpec(authentication, request);
+
+        ArgumentCaptor<UserSpec> captor = ArgumentCaptor.forClass(UserSpec.class);
+        verify(userSpecRepository).saveAndFlush(captor.capture());
+
+        assertThat(captor.getValue().getExperiences()).containsExactly(
+                Map.of("type", "PROJECT", "title", "토이 프로젝트", "description", "팀 프로젝트 설명"),
+                Map.of("type", "ETC", "title", "인턴")
+        );
+    }
+
+    @Test
+    void 경험_필드가_없으면_null로_저장되어_미입력을_유지한다() {
+        UUID userId = UUID.randomUUID();
+        User user = createUser(userId);
+        UserSpecRequest request = createRequest(); // experiences 미설정 → null
+
+        stubTransactionManager();
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+        when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(userSpecRepository.saveAndFlush(any(UserSpec.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        userSpecService.saveOrUpdateMySpec(authentication, request);
+
+        ArgumentCaptor<UserSpec> captor = ArgumentCaptor.forClass(UserSpec.class);
+        verify(userSpecRepository).saveAndFlush(captor.capture());
+
+        assertThat(captor.getValue().getExperiences()).isNull();
+    }
+
+    @Test
+    void 경험이_빈_배열이면_null이_아닌_빈_배열로_저장된다() {
+        UUID userId = UUID.randomUUID();
+        User user = createUser(userId);
+        UserSpecRequest request = createRequest();
+        request.setExperiences(List.of());
+
+        stubTransactionManager();
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+        when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(userSpecRepository.saveAndFlush(any(UserSpec.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        userSpecService.saveOrUpdateMySpec(authentication, request);
+
+        ArgumentCaptor<UserSpec> captor = ArgumentCaptor.forClass(UserSpec.class);
+        verify(userSpecRepository).saveAndFlush(captor.capture());
+
+        assertThat(captor.getValue().getExperiences()).isNotNull().isEmpty();
+    }
+
+    /**
+     * 미입력(null) → 0개([])는 실제 값의 변화이므로 저장을 생략하면 안 된다.
+     * Objects.equals(null, List.of())는 false이므로 hasChanges가 이를 변경으로 판정해야 한다.
+     */
+    @Test
+    void 경험이_미입력에서_빈_배열로_바뀌면_변경으로_판정해_저장한다() {
+        UUID userId = UUID.randomUUID();
+        User user = createUser(userId);
+        UserSpec existingUserSpec = UserSpec.builder()
+                .id(UUID.randomUUID())
+                .user(user)
+                .gpa(new BigDecimal("3.80"))
+                .gpaMax(new BigDecimal("4.50"))
+                .grade(3)
+                .languageScores(List.of(
+                        Map.of("type", "TOEIC", "score", 850, "maxScore", 990),
+                        Map.of("type", "OPIC", "grade", "IH")
+                ))
+                .certifications(new String[]{"SQLD", "정보처리기사"})
+                .experiences(null) // 기존은 미입력
+                .build();
+        UserSpecRequest request = createRequest();
+        request.setExperiences(List.of()); // 요청은 0개
+
+        stubTransactionManager();
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+        when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.of(existingUserSpec));
+        when(userSpecRepository.saveAndFlush(any(UserSpec.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        userSpecService.saveOrUpdateMySpec(authentication, request);
+
+        verify(userSpecRepository).saveAndFlush(same(existingUserSpec));
+        assertThat(existingUserSpec.getExperiences()).isNotNull().isEmpty();
+    }
+
+    private ExperienceRequest experience(String type, String title, String description) {
+        ExperienceRequest request = new ExperienceRequest();
+        request.setType(type);
+        request.setTitle(title);
+        request.setDescription(description);
+        return request;
     }
 
     private User createUser(UUID userId) {

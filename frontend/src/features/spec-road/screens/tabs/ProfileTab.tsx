@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { DEMO_USER_NAME, PRIMARY } from "../../data";
-import { hasMeaningfulLangScore, jobLabel } from "../../helpers";
+import { experienceTypeLabel, hasMeaningfulLangScore, jobLabel } from "../../helpers";
 import type { Spec, Target } from "../../types";
 
 interface ProfileTabProps {
@@ -100,6 +100,31 @@ export function ProfileTab({
           <span style={{ fontSize: 14, color: "#61616C", fontWeight: 500, flexShrink: 0 }}>자격증</span>
           <span style={{ fontSize: 14, fontWeight: 600, color: "#15141B", textAlign: "right", lineHeight: 1.5 }}>{certLabel}</span>
         </div>
+      </div>
+
+      <div style={{ background: "#fff", border: "1px solid #EDEDF2", borderRadius: 20, padding: "16px 18px", marginBottom: 16 }}>
+        <div style={{ fontSize: 14, color: "#61616C", fontWeight: 500, marginBottom: spec.experiences.length ? 12 : 0 }}>
+          경험
+        </div>
+        {spec.experiences.length ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {spec.experiences.map((exp, idx) => (
+              <div key={idx}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: PRIMARY, marginBottom: 2 }}>
+                  {experienceTypeLabel(exp.type)}
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#15141B" }}>{exp.title}</div>
+                {exp.description && (
+                  <div style={{ fontSize: 12.5, color: "#61616C", marginTop: 2, lineHeight: 1.5 }}>
+                    {exp.description}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#9797A1" }}>경험 미입력</div>
+        )}
       </div>
 
       {/* 예시 화면은 저장할 계정이 없어 수정 대신 로그인을 안내한다. */}
