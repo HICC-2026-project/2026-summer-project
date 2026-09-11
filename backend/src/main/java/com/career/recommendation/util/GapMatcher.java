@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 갭(합격자 다수 보유·사용자 미보유 항목)과 활동을 잇는 규칙. Gemini에 의존하지 않는 결정적 로직이다.
@@ -44,6 +45,21 @@ public final class GapMatcher {
     );
 
     private GapMatcher() {
+    }
+
+    /** 2글자 이하 영문 약어(ai·ml·ui·pm)는 단어 경계가 필요하다 — "html"의 "ml", "email"의 "ai"처럼
+     *  더 긴 영문 단어 안에 부분문자열로 걸리는 오매칭을 막는다. 한글·3글자 이상 영문은 부분문자열 유지. */
+    public static boolean needsWordBoundary(String keyword) {
+        return keyword != null && keyword.length() <= 2
+                && keyword.chars().allMatch(c -> c < 128 && Character.isLetterOrDigit(c));
+    }
+
+    /** corpus 안에 keyword가 있는지. 짧은 영문 약어는 단어 경계(\b)로 감싸 부분문자열 오매칭을 막는다. */
+    private static boolean corpusMatches(String corpus, String keyword) {
+        if (needsWordBoundary(keyword)) {
+            return Pattern.compile("\\b" + Pattern.quote(keyword) + "\\b").matcher(corpus).find();
+        }
+        return corpus.contains(keyword);
     }
 
     /** 직무 코드에 대응하는 활동 태그 키워드(소문자). 활동 검색의 jobType 필터도 같은 표를 쓴다. */
@@ -115,7 +131,7 @@ public final class GapMatcher {
     private static Optional<String> matchGap(String corpus, List<Gap> knownGaps) {
         for (Gap gap : knownGaps) {
             for (String keyword : gap.keywords()) {
-                if (corpus.contains(keyword)) {
+                if (corpusMatches(corpus, keyword)) {
                     return Optional.of(gap.name());
                 }
             }
@@ -139,7 +155,7 @@ public final class GapMatcher {
             }
             String corpus = corpus(a);
             Optional<String> gap = matchGap(corpus, knownGaps);
-            boolean jobMatch = jobKeywords.stream().anyMatch(corpus::contains);
+            boolean jobMatch = jobKeywords.stream().anyMatch(kw -> corpusMatches(corpus, kw));
             int score = (jobMatch ? 2 : 0) + (gap.isPresent() ? 3 : 0);
             ranked.add(new Ranked(a, score, gap.orElse(null)));
         }

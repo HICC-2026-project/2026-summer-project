@@ -73,6 +73,21 @@ class GapMatcherTest {
     }
 
     @Test
+    void 짧은_영문_약어_직무_키워드는_단어_경계로만_매칭되고_긴_단어_속_부분문자열은_피한다() {
+        List<GapMatcher.Gap> known = List.of();
+        // "HTML"에 "ml"이 부분문자열로 들어있지만 단어가 아니므로 AI_ML 직무 매칭이 아니어야 한다
+        Activity htmlActivity = activity("HTML 기초 강의", null, new String[]{"웹개발"});
+        // "email"에 "ai"가 부분문자열로 들어있지만 단어가 아니므로 AI_ML 직무 매칭이 아니어야 한다
+        Activity emailActivity = activity("email 마케팅 캠페인", null, null);
+        // "AI"가 독립된 토큰으로 태그에 있으면 매칭돼야 한다
+        Activity aiActivity = activity("AI 부트캠프", null, new String[]{"AI"});
+
+        assertThat(GapMatcher.rankForFallback(List.of(htmlActivity), "AI_ML", known, 5).get(0).score()).isZero();
+        assertThat(GapMatcher.rankForFallback(List.of(emailActivity), "AI_ML", known, 5).get(0).score()).isZero();
+        assertThat(GapMatcher.rankForFallback(List.of(aiActivity), "AI_ML", known, 5).get(0).score()).isEqualTo(2);
+    }
+
+    @Test
     void 폴백_순위는_limit만큼만_돌려주고_중복_id는_제거한다() {
         Activity a = activity("A", null, null);
         List<GapMatcher.Ranked> ranked = GapMatcher.rankForFallback(List.of(a, a, activity("B", null, null)), null, List.of(), 1);

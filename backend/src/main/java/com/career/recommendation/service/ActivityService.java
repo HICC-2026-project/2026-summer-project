@@ -51,7 +51,11 @@ public class ActivityService {
         String jobPattern = filter.jobType() == null
                 ? ""
                 : GapMatcher.jobKeywords(filter.jobType()).stream()
-                        .map(ActivityService::escapePosixRegex)
+                        .map(kw -> {
+                            String esc = escapePosixRegex(kw);
+                            // 짧은 영문 약어(ai·ml 등)는 \y로 감싸 "html"의 "ml" 같은 태그 내 부분문자열 오매칭을 막는다.
+                            return GapMatcher.needsWordBoundary(kw) ? "\\y" + esc + "\\y" : esc;
+                        })
                         .collect(Collectors.joining("|"));
 
         return activityRepository

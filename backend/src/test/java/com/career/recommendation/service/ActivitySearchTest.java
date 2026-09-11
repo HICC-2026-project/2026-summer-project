@@ -44,6 +44,8 @@ class ActivitySearchTest {
         save("데이터 인턴 " + MARK, "INTERNSHIP", "토스", null, "데이터");
         save("마감 지난 백엔드 " + MARK, "EDUCATION", "삼성", LocalDate.now().minusDays(1), "백엔드");
         save("100% 특가 " + MARK, "EDUCATION", "기타", far);
+        save("HTML 기초반 " + MARK, "EDUCATION", "위코드", far, "HTML");
+        save("AI 부트캠프 " + MARK, "EDUCATION", "업스테이지", far, "AI");
     }
 
     @Test
@@ -60,6 +62,13 @@ class ActivitySearchTest {
         assertThat(names(new ActivityFilter(null, JobType.FRONTEND, null, MARK)))
                 .containsExactly("프론트 해커톤 " + MARK);
         assertThat(names(new ActivityFilter(null, JobType.SECURITY, null, MARK))).isEmpty();
+    }
+
+    @Test
+    void jobType_AI_ML은_태그의_긴_영문_단어_속_부분문자열이_아니라_독립된_토큰만_잡는다() {
+        // "HTML" 태그에 "ml"이 부분문자열로 들어있지만 단어 경계가 아니므로 매칭되면 안 된다
+        assertThat(names(new ActivityFilter(null, JobType.AI_ML, null, MARK)))
+                .containsExactly("AI 부트캠프 " + MARK);
     }
 
     @Test
