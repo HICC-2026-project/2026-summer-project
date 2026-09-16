@@ -205,17 +205,17 @@ public class SpecPositionCalculator {
         }
 
         // --- 경험 ---
-        // UserSpec에는 아직 경험 필드가 없어 사용자 쪽은 항상 "미입력"이다. 그래도 축을
-        // 보여주는 이유: "이 직무 합격자는 경험이 중앙값 N개"라는 정보 자체가 사용자에게
-        // 유효하고, 경험 입력 기능이 붙는 순간 여기 percentile만 연결하면 끝나는 구조를
-        // 미리 잡아두기 위함이다.
+        // experiences가 null이면 미입력(기존 스펙/필드 미전송), 비어있지 않은 리스트든 빈 리스트든
+        // 값이 있으면 개수로 비교한다 — 자격증 축과 같이 0개도 실제 값으로 본다(분포에 0 경험 합격자 포함).
         int[] expCounts = profile.getExperienceCounts();
         if (expCounts.length > 0) {
+            boolean hasExp = userSpec != null && userSpec.getExperiences() != null;
+            int userExpCount = hasExp ? userSpec.getExperiences().size() : 0;
             axes.add(AxisPosition.builder()
                     .axis("EXPERIENCE").label("경험")
-                    .myValue("미입력")
+                    .myValue(hasExp ? String.format("%d개", userExpCount) : "미입력")
                     .medianValue(String.format("%.1f개", median(expCounts)))
-                    .percentile(null)
+                    .percentile(hasExp ? percentileOf(expCounts, userExpCount) : null)
                     .coverage(expCounts.length)
                     .build());
         }

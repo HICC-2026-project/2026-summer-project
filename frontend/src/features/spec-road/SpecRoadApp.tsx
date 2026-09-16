@@ -6,6 +6,7 @@ import { clearTokens, getAccessToken, onSessionExpired } from "@/lib/auth";
 import { deleteMe, getMe, getRecommendations, getRoadmap, patchNickname, postLogout, postPasserReport, putSpec, putTarget } from "./api";
 import { RECOMMENDATIONS, ROADMAP } from "./data";
 import {
+  fromExperiencesPayload,
   fromLanguageScoresPayload,
   fromRecommendationsResponse,
   fromRoadmapResponse,
@@ -21,6 +22,7 @@ import { LoginScreen } from "./screens/LoginScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { PasserReportScreen } from "./screens/PasserReportScreen";
 import type {
+  Experience,
   OnboardStep,
   Recommendation,
   RecommendationMeta,
@@ -38,6 +40,7 @@ const INITIAL_SPEC: Spec = {
   grade: 3,
   langScores: { TOEIC: "850" },
   certs: ["정보처리기사", "SQLD"],
+  experiences: [],
 };
 
 const EMPTY_SPEC: Spec = {
@@ -46,6 +49,7 @@ const EMPTY_SPEC: Spec = {
   grade: null,
   langScores: {},
   certs: [],
+  experiences: [],
 };
 
 const INITIAL_TARGET: Target = {
@@ -270,6 +274,7 @@ export function SpecRoadApp() {
             grade: me.spec.grade ?? null,
             langScores: fromLanguageScoresPayload(me.spec.languageScores ?? []),
             certs: me.spec.certifications ?? [],
+            experiences: fromExperiencesPayload(me.spec.experiences),
           });
         }
         // 직무 코드 도입 전 저장된 한글 직무명은 미선택으로 떨어져 온보딩에서 다시 고르게 된다.
@@ -310,6 +315,14 @@ export function SpecRoadApp() {
 
   function removeCert(value: string) {
     setSpec((s) => ({ ...s, certs: s.certs.filter((c) => c !== value) }));
+  }
+
+  function addExperience(experience: Experience) {
+    setSpec((s) => ({ ...s, experiences: [...s.experiences, experience] }));
+  }
+
+  function removeExperience(index: number) {
+    setSpec((s) => ({ ...s, experiences: s.experiences.filter((_, i) => i !== index) }));
   }
 
   // 온보딩 완료 시 스펙·목표 직무를 저장한다. 둘러보기(비로그인) 모드는 API 없이 화면만 진행.
@@ -419,6 +432,8 @@ export function SpecRoadApp() {
             }
             onAddCert={addCert}
             onRemoveCert={removeCert}
+            onAddExperience={addExperience}
+            onRemoveExperience={removeExperience}
             onSetJob={(v) => setTarget((t) => ({ ...t, job: v }))}
             onSetSize={(v) => setTarget((t) => ({ ...t, size: v }))}
             onSetIndustry={(v) => setTarget((t) => ({ ...t, industry: v }))}

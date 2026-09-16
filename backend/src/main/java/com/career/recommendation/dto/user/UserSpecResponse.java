@@ -26,6 +26,8 @@ public class UserSpecResponse {
 
     private String[] certifications;
 
+    private List<Map<String, Object>> experiences;
+
     private Integer grade;
 
     private LocalDateTime updatedAt;
@@ -38,6 +40,7 @@ public class UserSpecResponse {
                 .gpaMax(userSpec.getGpaMax())
                 .languageScores(userSpec.getLanguageScores())
                 .certifications(userSpec.getCertifications())
+                .experiences(userSpec.getExperiences())
                 .grade(userSpec.getGrade())
                 .updatedAt(userSpec.getUpdatedAt())
                 .build();

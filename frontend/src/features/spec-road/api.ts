@@ -50,7 +50,7 @@ export function getRoadmap(): Promise<RoadmapResponse> {
 }
 
 // 화면 state → 백엔드 필드명(gpaMax, certifications)으로 변환해 저장한다.
-// 어학·자격증이 없으면 null이 아니라 빈 배열을 보낸다 (BE-2 계약).
+// 어학·자격증·경험이 없으면 null이 아니라 빈 배열을 보낸다 (BE-2 계약).
 export function putSpec(spec: Spec): Promise<UserSpecResponse> {
   return apiFetch<UserSpecResponse>("/api/v1/users/me/spec", {
     method: "PUT",
@@ -60,6 +60,7 @@ export function putSpec(spec: Spec): Promise<UserSpecResponse> {
       grade: spec.grade,
       languageScores: toLanguageScoresPayload(spec.langScores),
       certifications: spec.certs,
+      experiences: spec.experiences,
     }),
   });
 }

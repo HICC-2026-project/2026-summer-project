@@ -2,6 +2,7 @@
 
 기준 커밋: `306657c` (PR #53 머지, 2026-08-22).
 목적: "현재 스펙 → 목표 직무 합격자 분포 내 위치·갭 → 활동 추천·로드맵" 루프를 완성하고, 데이터가 실제로 축적되는 구조를 만든다.
+2026-09-16부터 **1인 개발 전환** — 아래 "팀 결정 사항"은 단독 결정으로 대체하고, 노션 회의록·명세서 갱신 절차는 생략한다.
 
 표기
 - 담당: BE-1(AI/추천) · BE-2(DB/데이터) · BE-3(API/인프라) · FE
@@ -56,8 +57,10 @@
 현재: `PasserData.experienceCount`는 있음. `UserSpec`에는 경험 필드 없음. calculator는 합격자 중앙값만 보여주고 사용자 쪽은 항상 "미입력".
 **결정 번복 필요**: 노션 7/14 회의 안건 1에서 "경험은 스펙으로 저장하지 않고 합격자 경험을 보여주는 방식 + 로드맵(F-05)으로 대체"로 확정했고, 기능 명세서 F-04에도 "경험 항목 제외, 가중치 25%를 나머지에 분배"로 기록돼 있다. v9에서 가중 총점이 사라지고 합격자 경험 중앙값을 이미 보여주고 있으므로 "사용자 쪽만 입력받자"는 제안이지만, 회의록·기능 명세서 갱신이 선행돼야 한다. 하위 선택지: 정수 카운트 vs 항목 리스트.
 
+> **2026-09-16 현행화**: PR #55 머지로 1차 구현 완료(1인 개발 전환으로 합의 절차 생략). `{type, title(≤100), description?(≤500)}` 단순 리스트(V26, 최대 20개)로 수집, EXPERIENCE 축은 실측 percentile(0개=실값, null=미입력). E1-1의 심화 항목 스키마(months·areas·stack·evidence)와 "경험 1개 기준" 문서화는 E11로 이월.
+
 ### E1-1. 스키마 (BE-2)
-- [ ] `V10__add_user_spec_experiences.sql` — `user_specs.experiences JSONB DEFAULT '[]'` (**리스트 구조 확정**, 정수 카운트 옵션 폐기). 카운트는 리스트 길이로 파생
+- [x] `V26__add_user_specs_experiences.sql` — `user_specs.experiences` jsonb nullable (**리스트 구조 확정**, 정수 카운트 옵션 폐기). 카운트는 리스트 길이로 파생 (PR #55)
 - [ ] 항목 스키마 (E11 기여 프로필과 공유):
   ```
   { id, type: INTERNSHIP|PROJECT|COMPETITION|CLUB|BOOTCAMP|OTHER,
@@ -70,26 +73,26 @@
     source: MANUAL|GITHUB|ACTIVITY_MATCH }
   ```
 - [ ] "경험 1개로 세는 기준" 문서화 (인턴십·공모전·대외활동·결과물 있는 프로젝트·학회/동아리 활동. 수강 과제·튜토리얼 제외) — 제보 폼과 온보딩에 동일 문구
-- [ ] `UserSpec` 엔티티 필드 추가 + `updatedAt` 갱신 확인
-- [ ] **가중치 없음 원칙**: EXPERIENCE 축은 개수만 percentile. `areas`/`stack`/`verification`은 점수에 반영하지 않고 E11 커버리지·추천 프롬프트에만 사용
+- [x] `UserSpec` 엔티티 필드 추가 + `updatedAt` 갱신 확인
+- [x] **가중치 없음 원칙**: EXPERIENCE 축은 개수만 percentile. `areas`/`stack`/`verification`은 점수에 반영하지 않고 E11 커버리지·추천 프롬프트에만 사용
 
 ### E1-2. API (BE-3)
-- [ ] `UserSpecRequest`에 `experienceCount` / `experiences` 추가, `@Min(0)`, 리스트 최대 길이(예: 30) 검증
-- [ ] `UserSpecResponse`, `UserMeResponse` 반영
-- [ ] `UserControllerValidationTest`에 경계값 케이스 추가
+- [x] `UserSpecRequest`에 `experiences` 추가(최대 20개, 항목 검증) — `experienceCount`는 리스트 길이 파생이라 미도입
+- [x] `UserSpecResponse`, `UserMeResponse` 반영
+- [x] 경계값 검증 테스트 — `UserSpecRequestValidationTest` 8건
 - [ ] Swagger 설명 갱신
 
 ### E1-3. 계산 (BE-1)
-- [ ] `SpecPositionCalculator` EXPERIENCE 축: `percentile(null)` → `percentileOf(expCounts, userExp)`, `myValue` = "N개"
-- [ ] 사용자 0개는 "미입력"이 아니라 **0개로 percentile 계산**할지 결정 (GPA/TOEIC은 0 → 미입력 처리 중. 경험은 "없음"이 유효한 값이므로 `null`일 때만 미입력 권장)
-- [ ] `SpecPositionCalculatorTest`: 경험 있음/0개/null/동률 케이스
-- [ ] `PromptDataBuilder`에 경험 리스트가 Gemini 프롬프트로 들어가도록 연결 + 테스트
+- [x] `SpecPositionCalculator` EXPERIENCE 축: `percentile(null)` → `percentileOf(expCounts, userExp)`, `myValue` = "N개"
+- [x] 결정: 0개는 **0개로 percentile 계산**, `null`일 때만 미입력 (자격증 축과 동일 방식)
+- [x] `SpecPositionCalculatorTest`: 경험 있음/0개/null/동률 케이스
+- [x] `PromptDataBuilder`에 경험 리스트가 Gemini 프롬프트로 들어가도록 연결(F-03·F-05) + 테스트
 - [ ] `OldVsNewScoreComparisonDemo` 갱신 또는 삭제
 
 ### E1-4. 프론트 (FE)
-- [ ] `types.ts` Spec에 experiences 추가, `api.ts putSpec` 직렬화
-- [ ] `OnboardingScreen` 경험 입력 스텝 (항목 추가/삭제, 유형 선택, 개월 수)
-- [ ] `ProfileTab` 수정 UI
+- [x] `types.ts` Spec에 experiences 추가, `api.ts putSpec` 직렬화 (`null→[]` 정규화)
+- [x] `OnboardingScreen` 경험 입력 섹션 (항목 추가/삭제, 유형 선택 — 개월 수는 E11 심화 스키마와 함께)
+- [x] `ProfileTab` 수정 UI
 - [ ] `CompareTab` 경험 막대가 실제로 그려지는지 확인 (현재 미입력이면 막대 없음 로직 그대로 동작)
 - [ ] 로컬 캐시(`recommendationCache.ts`)가 스펙 변경 시 무효화되는지 확인
 
@@ -112,7 +115,7 @@
   - APPROVE: `is_verified=true`, 검수자/시각 기록 → `JobSpecProfileService` 캐시 무효화 호출
   - REJECT: `is_verified=false` 유지 + `rejected_at`, `reject_reason` (삭제하지 않음)
 - [x] `V21__add_passer_data_review_columns.sql` — `reviewed_at`, `reviewed_by_user_id`, `reject_reason` + 대기 목록 부분 인덱스
-- [ ] 승인 시 증빙 파일 보존/삭제 정책 결정 (개인정보 최소 보관: 승인 후 N일 뒤 삭제 권장)
+- [x] 승인 시 증빙 파일 보존/삭제 정책 — E7 `ProofRetentionScheduler`(검수 완료 후 `PASSER_PROOF_RETENTION_DAYS`=30일 뒤 삭제)로 해결
 - [x] `AdminPasserReportServiceTest` 5건(승인 evict·반려 no-evict·승인→반려 evict·DEMO 제외·응답에 제보자 없음), `PasserReviewRequestValidationTest` 3건
 
 ### E2-3. 제보 품질 (BE-2)

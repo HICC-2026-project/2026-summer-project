@@ -1,5 +1,6 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.dto.user.ExperienceRequest;
 import com.career.recommendation.dto.user.LanguageScoreRequest;
 import com.career.recommendation.dto.user.UserSpecRequest;
 import com.career.recommendation.dto.user.UserSpecResponse;
@@ -123,6 +124,7 @@ public class UserSpecService {
         userSpec.setGrade(request.getGrade());
         userSpec.setLanguageScores(convertLanguageScores(request));
         userSpec.setCertifications(convertCertifications(request));
+        userSpec.setExperiences(convertExperiences(request));
     }
 
     /**
@@ -145,6 +147,13 @@ public class UserSpecService {
         List<Map<String, Object>> oldLang = existing.getLanguageScores();
         List<Map<String, Object>> newLang = convertLanguageScores(request);
         if (!Objects.equals(oldLang, newLang)) return true;
+
+        // convertExperiences는 request.experiences가 null이면 null을 그대로 반환한다
+        // (미입력↔0개 구분 유지). 따라서 여기서도 Objects.equals로 null과 빈 리스트를
+        // 다르게 판정해야 한다 — "미입력 → []"도 실제 변경이다.
+        List<Map<String, Object>> oldExp = existing.getExperiences();
+        List<Map<String, Object>> newExp = convertExperiences(request);
+        if (!Objects.equals(oldExp, newExp)) return true;
 
         return false;
     }
@@ -178,5 +187,16 @@ public class UserSpecService {
                 .filter(certification -> !certification.isBlank())
                 .distinct()
                 .toArray(String[]::new);
+    }
+
+    private List<Map<String, Object>> convertExperiences(UserSpecRequest request) {
+        if (request.getExperiences() == null) {
+            return null; // null을 유지해 "미입력"과 "0개"를 구분한다(빈 배열이면 0개).
+        }
+        return request.getExperiences().stream()
+                .filter(Objects::nonNull)
+                .filter(e -> e.getTitle() != null && !e.getTitle().isBlank())
+                .map(ExperienceRequest::toMap)
+                .collect(Collectors.toList());
     }
 }

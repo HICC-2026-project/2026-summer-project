@@ -1,5 +1,6 @@
-import { JOB_OPTIONS, LANG_MAX, PRIMARY } from "./data";
+import { EXPERIENCE_TYPE_OPTIONS, JOB_OPTIONS, LANG_MAX, PRIMARY } from "./data";
 import type {
+  Experience,
   JobCode,
   LanguageScorePayload,
   Priority,
@@ -110,6 +111,24 @@ export function toLanguageScoresPayload(langScores: Spec["langScores"]): Languag
       const maxScore = LANG_MAX[type] ?? null;
       return maxScore == null ? { type: apiType, grade: value } : { type: apiType, score: Number(value), maxScore };
     });
+}
+
+// 경험 type 코드(INTERNSHIP 등)를 화면 라벨(인턴 등)로 바꾼다.
+// 매핑에 없는 값은 원본을 그대로 보여준다(신규 type 추가 시에도 화면이 깨지지 않도록).
+export function experienceTypeLabel(type: string): string {
+  return EXPERIENCE_TYPE_OPTIONS.find((option) => option.code === type)?.label ?? type;
+}
+
+// GET /users/me 응답의 spec.experiences 배열을 화면 state로 되돌린다.
+// 미입력(null/undefined)은 빈 배열로 떨어뜨리고, description은 백엔드가 null로 줄 수 있어
+// undefined로 정규화한다(Experience.description은 optional string이라 null이 그대로 들어오면
+// 화면에서 "null" 문자열처럼 취급될 위험이 있다).
+export function fromExperiencesPayload(payload: Experience[] | null | undefined): Experience[] {
+  return (payload ?? []).map((item) => ({
+    type: item.type,
+    title: item.title,
+    description: item.description ?? undefined,
+  }));
 }
 
 // 백엔드 활동 type 코드(INTERNSHIP 등)를 화면 라벨(인턴십 등)로 바꾼다.

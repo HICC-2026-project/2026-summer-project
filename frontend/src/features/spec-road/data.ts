@@ -1,4 +1,4 @@
-import type { JobCode, Recommendation, RoadmapMilestone, SpecPosition } from "./types";
+import type { ExperienceType, JobCode, Recommendation, RoadmapMilestone, SpecPosition } from "./types";
 
 export const PRIMARY = "#2F6FED";
 
@@ -189,6 +189,16 @@ export const SIZE_OPTIONS: [string, string][] = [
 ];
 export const INDUSTRY_OPTIONS = ["IT·플랫폼", "금융", "제조", "게임"];
 export const LANG_TYPES = ["TOEIC", "OPIc", "TOEFL"];
+
+// 경험(인턴·프로젝트 등) 타입 코드와 화면 라벨 쌍. 저장은 코드로, 표시는 라벨로 한다.
+export const EXPERIENCE_TYPE_OPTIONS: { code: ExperienceType; label: string }[] = [
+  { code: "INTERNSHIP", label: "인턴" },
+  { code: "PROJECT", label: "프로젝트" },
+  { code: "COMPETITION", label: "공모전" },
+  { code: "EXTERNAL", label: "대외활동" },
+  { code: "EDUCATION", label: "교육/부트캠프" },
+  { code: "ETC", label: "기타" },
+];
 
 // 로드맵 구간 계산(학기/방학 구분)에 쓰이는 학년 선택지 (7/14 회의 결정).
 export const GRADE_OPTIONS = [1, 2, 3, 4];

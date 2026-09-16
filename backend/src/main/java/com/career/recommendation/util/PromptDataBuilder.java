@@ -63,7 +63,7 @@ public class PromptDataBuilder {
 
     /**
      * 유저 스펙을 Gemini 프롬프트용 JSON 문자열로 직렬화한다.
-     * 추천(F-03)용 — 학점, 학점 만점, 어학, 자격증, 학년 모두 포함.
+     * 추천(F-03)용 — 학점, 학점 만점, 어학, 자격증, 경험, 학년 모두 포함.
      */
     public String serializeSpecForRecommendation(UserSpec userSpec) {
         if (userSpec == null) return "{}";
@@ -73,6 +73,7 @@ public class PromptDataBuilder {
                     "gpaMax", userSpec.getGpaMax() != null ? userSpec.getGpaMax() : 4.5,
                     "languageScores", userSpec.getLanguageScores() != null ? userSpec.getLanguageScores() : List.of(),
                     "certifications", userSpec.getCertifications() != null ? userSpec.getCertifications() : new String[]{},
+                    "experiences", userSpec.getExperiences() != null ? userSpec.getExperiences() : List.of(),
                     "grade", userSpec.getGrade() != null ? userSpec.getGrade() : "미입력"
             ));
         } catch (Exception e) {
@@ -82,7 +83,7 @@ public class PromptDataBuilder {
 
     /**
      * 유저 스펙을 Gemini 프롬프트용 JSON 문자열로 직렬화한다.
-     * 로드맵(F-05)용 — 학점, 학년, 자격증, 어학 성적 포함.
+     * 로드맵(F-05)용 — 학점, 학년, 자격증, 어학 성적, 경험 포함.
      *
      * ⚠️ 어학 성적(languageScores)을 반드시 포함한다. 예전엔 학점·학년·자격증만 보내서
      * Gemini가 사용자의 어학 보유 여부를 알 수 없었고, 이미 토익 900을 가진 사용자에게
@@ -97,7 +98,8 @@ public class PromptDataBuilder {
                     "gpa", userSpec.getGpa() != null ? userSpec.getGpa() : "없음",
                     "grade", userSpec.getGrade() != null ? userSpec.getGrade() : "미입력",
                     "certifications", userSpec.getCertifications() != null ? userSpec.getCertifications() : new String[]{},
-                    "languageScores", userSpec.getLanguageScores() != null ? userSpec.getLanguageScores() : List.of()
+                    "languageScores", userSpec.getLanguageScores() != null ? userSpec.getLanguageScores() : List.of(),
+                    "experiences", userSpec.getExperiences() != null ? userSpec.getExperiences() : List.of()
             ));
         } catch (Exception e) {
             return "{}";

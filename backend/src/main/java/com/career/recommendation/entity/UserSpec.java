@@ -43,6 +43,10 @@ public class UserSpec {
     @Column(columnDefinition = "text[]")
     private String[] certifications;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "experiences", columnDefinition = "jsonb")
+    private List<Map<String, Object>> experiences;
+
     @Column(name = "grade")
     private Integer grade;
 
