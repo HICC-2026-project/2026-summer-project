@@ -73,6 +73,25 @@ class TokenServiceTest {
     }
 
     @Test
+    void reissue_이미_교체된_리프레시_토큰을_다시_쓰면_그_사용자의_모든_세션을_폐기한다() {
+        // 탈취 시나리오: 정상 사용자가 로테이션을 마친 뒤 탈취자가 옛 토큰을 제시하면(또는 그 반대),
+        // 현재 유효한 새 토큰까지 함께 폐기돼 양쪽 모두 재로그인해야 한다.
+        User user = createUser();
+        TokenService.TokenPair original = tokenService.issueTokens(user);
+        TokenService.TokenPair rotated = tokenService.reissue(original.refreshToken());
+        assertThat(refreshTokenRepository.findByToken(rotated.refreshToken())).isPresent();
+
+        assertThatThrownBy(() -> tokenService.reissue(original.refreshToken()))
+                .isInstanceOf(InvalidTokenException.class)
+                .hasMessageContaining("재사용");
+
+        // 교체된 새 토큰도 더 이상 쓸 수 없다
+        assertThat(refreshTokenRepository.findByToken(rotated.refreshToken())).isEmpty();
+        assertThatThrownBy(() -> tokenService.reissue(rotated.refreshToken()))
+                .isInstanceOf(InvalidTokenException.class);
+    }
+
+    @Test
     void reissue_변조된_토큰이면_예외() {
         assertThatThrownBy(() -> tokenService.reissue("not-a-jwt"))
                 .isInstanceOf(InvalidTokenException.class);

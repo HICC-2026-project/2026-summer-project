@@ -1,19 +1,34 @@
 "use client";
 
-import type { CSSProperties } from "react";
-import { DEMO_USER_NAME, PRIMARY } from "../../data";
+import { useEffect, useState, type CSSProperties } from "react";
+import Link from "next/link";
+import { getMyPasserReports } from "../../api";
+import { BADGE, DEMO_USER_NAME, PRIMARY } from "../../data";
 import { experienceTypeLabel, hasMeaningfulLangScore, jobLabel } from "../../helpers";
-import type { Spec, Target } from "../../types";
+import type { MyPasserReport, ReviewStatus, Spec, Target } from "../../types";
+
+// 검수 상태 → 배지. 관리자 화면 탭 라벨과 같은 말을 쓴다.
+const REVIEW_BADGE: Record<ReviewStatus, { color: string; bg: string; text: string }> = {
+  PENDING: { ...BADGE.warn, text: "검수 대기" },
+  VERIFIED: { ...BADGE.ok, text: "반영 완료" },
+  REJECTED: { ...BADGE.bad, text: "반려됨" },
+};
 
 interface ProfileTabProps {
   spec: Spec;
   target: Target;
   nickname: string | null;
+  /** 관리자(검수자) 계정이면 검수 화면 링크를 보여준다. */
+  isAdmin?: boolean;
   /** 비로그인 예시 화면 여부. 저장할 계정이 없어 수정 대신 로그인을 유도한다. */
   isDemo: boolean;
   onEditSpec: () => void;
   onOpenPasserReport: () => void;
   onLogout: () => void;
+  /** 회원 탈퇴. 예시 화면에서는 없다. */
+  onWithdraw?: () => void;
+  /** 닉네임 수정. 예시 화면에서는 없다. */
+  onEditNickname?: () => void;
 }
 
 function rowStyle(hasBorder: boolean): CSSProperties {
@@ -30,10 +45,13 @@ export function ProfileTab({
   spec,
   target,
   nickname,
+  isAdmin = false,
   isDemo,
   onEditSpec,
   onOpenPasserReport,
   onLogout,
+  onWithdraw,
+  onEditNickname,
 }: ProfileTabProps) {
   const displayName = nickname ?? DEMO_USER_NAME;
   const targetSummary = `${target.size} ${jobLabel(target.job)}`;
@@ -41,6 +59,22 @@ export function ProfileTab({
   // 0점 입력은 미입력으로 취급한다 — "TOEIC 0"이 프로필에 보이면 없는 성적이 있는 것처럼 보인다.
   const langEntries = Object.entries(spec.langScores).filter(([type, score]) => hasMeaningfulLangScore(type, score));
   const langLabel = langEntries.length ? langEntries.map(([type, score]) => `${type} ${score}`).join(", ") : "없음";
+
+  // 내 제보 검수 상태. 제보 직후엔 "검수 대기"만 보이므로, 사용자가 "반영됐나?"를 여기서 확인한다.
+  // 실패는 조용히 비운다 — 프로필 화면의 본 기능이 아니라서 오류 카드까지 띄우지 않는다.
+  const [myReports, setMyReports] = useState<MyPasserReport[]>([]);
+  useEffect(() => {
+    if (isDemo) return;
+    let cancelled = false;
+    getMyPasserReports()
+      .then((list) => {
+        if (!cancelled) setMyReports(list);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isDemo]);
 
   return (
     <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
@@ -63,7 +97,19 @@ export function ProfileTab({
           {displayName.slice(0, 1)}
         </div>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: "#15141B", letterSpacing: "-0.02em" }}>{displayName}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#15141B", letterSpacing: "-0.02em" }}>{displayName}</div>
+            {!isDemo && onEditNickname && (
+              <button
+                type="button"
+                onClick={onEditNickname}
+                aria-label="닉네임 수정"
+                style={{ border: "1px solid #E1E0EA", background: "#fff", borderRadius: 8, padding: "3px 8px", fontSize: 11.5, color: "#61616C", cursor: "pointer" }}
+              >
+                수정
+              </button>
+            )}
+          </div>
           <div style={{ fontSize: 13.5, color: "#61616C", marginTop: 2 }}>{targetSummary} 준비 중</div>
         </div>
       </div>
@@ -169,6 +215,61 @@ export function ProfileTab({
           <p style={{ margin: "9px 8px 0", fontSize: 11.5, color: "#9797A1", lineHeight: 1.5, textAlign: "center" }}>
             제보 내용은 익명으로 저장되며, 검수 완료 후 비교 데이터에 반영됩니다.
           </p>
+
+          {isAdmin && (
+            <Link
+              href="/admin"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginTop: 12,
+                height: 46,
+                border: "1px dashed #C9C7D6",
+                borderRadius: 14,
+                color: "#4A4954",
+                fontSize: 13.5,
+                fontWeight: 700,
+                textDecoration: "none",
+              }}
+            >
+              🛠 제보 검수 화면 (관리자)
+            </Link>
+          )}
+
+          {myReports.length > 0 && (
+            <div style={{ marginTop: 16, background: "#fff", border: "1px solid #EDEDF2", borderRadius: 18, padding: "6px 18px" }}>
+              <div style={{ fontSize: 12, color: "#9797A1", fontWeight: 600, padding: "12px 0 4px" }}>내 제보 {myReports.length}건</div>
+              {myReports.map((r, i) => {
+                const badge = REVIEW_BADGE[r.status] ?? REVIEW_BADGE.PENDING;
+                return (
+                  <div key={r.reportId} style={rowStyle(i < myReports.length - 1)}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#15141B" }}>
+                        {r.jobTypeLabel} · {r.year}년 합격
+                      </div>
+                      <div style={{ fontSize: 11.5, color: "#9797A1", marginTop: 2 }}>
+                        {r.createdAt.slice(0, 10)} 제보
+                      </div>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: badge.color,
+                        background: badge.bg,
+                        padding: "4px 10px",
+                        borderRadius: 999,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {badge.text}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
 
@@ -184,6 +285,20 @@ export function ProfileTab({
           {isDemo ? "처음 화면으로" : "로그아웃"}
         </a>
       </p>
+      {!isDemo && onWithdraw && (
+        <p style={{ textAlign: "center", fontSize: 11.5, color: "#C9C7D6", margin: "10px 0 0" }}>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              onWithdraw();
+            }}
+            style={{ color: "#C9C7D6" }}
+          >
+            회원 탈퇴
+          </a>
+        </p>
+      )}
     </div>
   );
 }

@@ -122,7 +122,7 @@ public class PromptDataBuilder {
         sb.append(position.getBasisMessage()).append('\n');
         if (position.getAxes() != null) {
             for (SpecPositionResult.AxisPosition axis : position.getAxes()) {
-                sb.append(String.format("- %s: 내 값 %s / 합격자 중앙값 %s%s%n",
+                sb.append(String.format("- %s: 내 값 %s / 합격자 중앙값 %s%s\n",
                         axis.getLabel(), axis.getMyValue(), axis.getMedianValue(),
                         axis.getPercentile() != null
                                 ? String.format(" (합격자 분포에서 percentile %d)", axis.getPercentile())
@@ -132,9 +132,18 @@ public class PromptDataBuilder {
         if (position.getGaps() != null && !position.getGaps().isEmpty()) {
             sb.append("부족한 항목(갭 — 합격자 다수 보유, 사용자 미보유):\n");
             for (SpecPositionResult.SpecGap gap : position.getGaps()) {
-                sb.append(String.format("- %s (합격자 %d%% 보유)%n",
+                sb.append(String.format("- %s (합격자 %d%% 보유)\n",
                         gap.getName(), gap.getHolderRatePercent()));
             }
+        }
+        // targetGap에 쓸 수 있는 이름을 닫힌 목록으로 준다 — 추천 카드와 비교 탭이 같은 갭 이름을 쓰게 하기 위함.
+        // 순서가 곧 우선순위(자격증 갭은 보유율 내림차순, 그 뒤 어학·경험 축).
+        List<String> gapNames = GapMatcher.names(GapMatcher.knownGaps(position));
+        if (!gapNames.isEmpty()) {
+            sb.append("targetGap에 쓸 수 있는 갭 이름(우선순위 순): ")
+                    .append(String.join(", ", gapNames)).append('\n');
+        } else {
+            sb.append("targetGap에 쓸 수 있는 갭 이름: 없음\n");
         }
         return sb.toString();
     }

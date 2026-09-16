@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -50,10 +51,17 @@ class RecommendationServiceLegacyCacheTest {
     @Mock private RecommendationCacheService recommendationCacheService;
     @Mock private GeminiService geminiService;
     @Mock private SpecPositionService specPositionService;
+    @Mock private AiDailyAttemptLimiter aiDailyAttemptLimiter;
     @Mock private Authentication authentication;
     @Mock private User user;
 
     @InjectMocks private RecommendationService recommendationService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void allowDailyAttempts() {
+        // 이 테스트들은 캐시·폴백 동작이 관심사다. 하루 시도 상한은 항상 통과시킨다.
+        lenient().when(aiDailyAttemptLimiter.tryAcquire(any(), any())).thenReturn(true);
+    }
 
     @Test
     void legacy_캐시여도_하루_갱신_제한에_도달하면_Gemini를_다시_호출하지_않는다() {
@@ -73,9 +81,10 @@ class RecommendationServiceLegacyCacheTest {
                 .resultJson("{\"activities\":[]}")
                 .createdAt(LocalDateTime.now())
                 .lastUpdatedDate(today)
-                .dailyUpdateCount(3) // 이미 하루 한도(3회)를 다 씀
                 .build();
         when(recommendationRepository.findByUser_Id(userId)).thenReturn(Optional.of(cached));
+        // 하루 시도 상한 도달 — 게이트는 AiDailyAttemptLimiter가 판정한다(예전 dailyUpdateCount 판정은 폐기).
+        when(aiDailyAttemptLimiter.tryAcquire(userId, AiDailyAttemptLimiter.KIND_RECOMMENDATION)).thenReturn(false);
         when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
         when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
 

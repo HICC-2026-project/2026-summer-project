@@ -79,7 +79,7 @@ public class RecommendationResponse {
     private Integer scoreFormulaVersion;
 
     @Getter
-    @Builder
+    @Builder(toBuilder = true)
     @Jacksonized
     public static class ActivityRecommendation {
 
@@ -94,5 +94,13 @@ public class RecommendationResponse {
         private String reason;
 
         private LocalDate deadline;
+
+        /**
+         * 이 활동이 메우는 갭. specPosition.gaps의 name(자격증) 또는 축 라벨("어학"·"경험") 중 하나,
+         * 해당 없으면 null. 추천 화면과 비교 탭이 같은 갭 이름을 쓰게 해서 "두 화면이 같은 갭을
+         * 보고 말한다"는 v9 약속을 추천 카드 단위까지 확장한다. Gemini 응답값은 알려진 갭
+         * 목록에 있을 때만 채우고, 폴백 추천은 규칙 매칭으로 채운다.
+         */
+        private String targetGap;
     }
 }

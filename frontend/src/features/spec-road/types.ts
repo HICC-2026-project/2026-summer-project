@@ -50,8 +50,21 @@ export interface PasserReportRequest {
 
 export interface PasserReportResponse {
   reportId: string;
-  status: "PENDING";
+  status: ReviewStatus;
   message: string;
+}
+
+// GET /passers/reports/me — 내가 제보한 합격자 데이터의 검수 상태.
+// 합격자 제보 검수 상태 — 백엔드 domain.ReviewStatus와 같은 세 값.
+export type ReviewStatus = "PENDING" | "VERIFIED" | "REJECTED";
+
+export interface MyPasserReport {
+  reportId: string;
+  jobType: string;
+  jobTypeLabel: string;
+  year: number;
+  status: ReviewStatus;
+  createdAt: string;
 }
 
 // GET /users/me response shape.
@@ -75,6 +88,7 @@ export interface UserMeResponse {
   email: string | null;
   nickname: string | null;
   provider: string;
+  role?: "USER" | "ADMIN";
   spec: UserSpecResponse | null;
   target: TargetJobResponse | null;
 }
@@ -97,6 +111,8 @@ export interface Recommendation {
   name: string;
   deadline: string;
   reason: string;
+  // 이 활동이 메우는 갭(비교 탭의 갭 이름과 동일). 없으면 undefined.
+  targetGap?: string | null;
   org?: string;
   score?: number;
   passers?: number;
@@ -112,6 +128,7 @@ export interface ApiRecommendationItem {
   name: string;
   reason: string;
   deadline: string;
+  targetGap?: string | null;
 }
 
 // specPosition의 축 하나 — 합격자 분포 내 내 위치.
@@ -139,6 +156,13 @@ export interface SpecPosition {
   basis: "JOB" | "OVERALL" | "NONE" | string;
   basisMessage: string;
   sampleSize: number;
+  // 목표 직무 코드·라벨(미설정이면 null)과 그 직무의 실제 합격자 수.
+  // basis가 OVERALL/NONE일 때 "백엔드 합격자 1명 (3명부터 비교 가능)"으로 부족한 정도를
+  // 보여주고 제보를 유도한다 — basisMessage를 파싱하지 않도록 백엔드가 명시 필드로 준다.
+  targetJobType?: string | null;
+  targetJobLabel?: string | null;
+  jobSampleSize?: number;
+  minSampleSize?: number;
   demoDataIncluded?: boolean;
   axes: AxisPosition[];
   gaps: SpecGap[];

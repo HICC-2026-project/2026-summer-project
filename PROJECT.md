@@ -104,21 +104,22 @@ Frontend
 
 ```text
 사용자 스펙·목표 직무 조회
-  → 유사 합격자 탐색 및 Match Score 계산
+  → 직무 요구 프로필(JobSpecProfile, 1시간 캐시) 안에서 축별 percentile 위치·갭 계산 (SpecPositionCalculator, v9)
+     · 직무 합격자 3명 미만이면 전체 합격자 프로필로 폴백, 그래도 미달이면 NONE
   → 신청 가능한 DB 활동 조회
-  → 사용자·합격자·활동 데이터를 Gemini 프롬프트에 포함
-  → Gemini가 반환한 활동 UUID를 DB와 대조
-  → 실제 활동만 추천 응답으로 반환
+  → 스펙·위치·갭(targetGap 허용 목록 포함)·활동 데이터를 Gemini 프롬프트에 포함
+  → Gemini가 반환한 활동 UUID를 DB와 대조, targetGap은 비교 탭의 갭 이름일 때만 수용
+  → 실제 활동만 추천 응답으로 반환 (specPosition 동봉)
   → 성공 결과 캐시 저장
 ```
 
-Gemini 호출이나 파싱이 실패하면 DB 활동 기반 기본 추천을 반환합니다.
+Gemini 호출·파싱이 실패하거나 전역 일일 상한(`GEMINI_DAILY_LIMIT`)에 닿으면, 갭 키워드·직무 태그로 순위를 매긴 DB 활동 기반 폴백 추천을 반환합니다(`isAiRecommendation=false`, 캐시하지 않음).
 
 ### 커리어 로드맵
 
 ```text
 사용자 스펙·목표 직무·학년 조회
-  → 유사 합격자와 추천 활동 데이터 구성
+  → 같은 위치·갭 계산(SpecPositionService — 추천과 같은 진입점)과 추천 활동 데이터 구성
   → Gemini가 시기별 타임라인 생성
   → 반환된 활동 UUID를 DB와 대조
   → 유효한 활동을 matchedActivities에 포함
@@ -133,10 +134,17 @@ Frontend
   → 합격자 스펙 JSON + 증빙 이미지 제출
   → 이미지 형식·크기 검증
   → 파일 시스템에 이미지 저장
-  → passer_data에 USER_REPORT / is_verified=false 저장
+  → 같은 직무·연도 검수 대기 건 존재 또는 24시간 5건 초과면 409
+  → passer_data에 USER_REPORT / is_verified=false / reporter_user_id 저장
+
+검수(관리자, ADMIN_PROVIDER_IDS)
+  → GET /api/v1/admin/passers/reports?status=PENDING
+  → GET /api/v1/admin/passers/reports/{id}/proof 로 증빙 확인
+  → PATCH /api/v1/admin/passers/reports/{id} {action: APPROVE|REJECT}
+  → 승인 시 is_verified=true + 직무 프로필 캐시 즉시 무효화 → 다음 비교부터 반영
 ```
 
-검수 전 제보는 추천과 합격자 비교 계산에서 제외됩니다. 현재 증빙 이미지는 로컬 파일 시스템에 임시 저장하며, 실제 운영 전 비공개 객체 저장소 적용이 필요합니다.
+검수 전 제보는 추천과 합격자 비교 계산에서 제외됩니다. 제보자는 프로필 탭에서 검수 상태(대기/반영/반려)를 볼 수 있습니다. 현재 증빙 이미지는 로컬 파일 시스템에 임시 저장하며, 실제 운영 전 비공개 객체 저장소 적용이 필요합니다.
 
 ## 5. 백엔드 패키지 구조
 
@@ -225,13 +233,18 @@ DB_PASSWORD=...
 FRONTEND_REDIRECT_URI=...
 CORS_ALLOWED_ORIGINS=...
 PASSER_PROOF_STORAGE_PATH=...
+ADMIN_PROVIDER_IDS=KAKAO:<회원번호>,...   # 제보 검수 관리자. 로그인 시 역할 동기화
+GEMINI_DAILY_LIMIT=500                    # Gemini 서비스 전역 일일 호출 상한
+AI_DAILY_ATTEMPTS_PER_USER=3              # 사용자별 하루 Gemini 호출 시도 상한(추천·로드맵 각각)
+GEMINI_API_KEY_IN_HEADER=true             # x-goog-api-key 헤더 사용(false면 ?key= 쿼리)
+PASSER_PROOF_RETENTION_DAYS=30            # 검수 완료 후 증빙 보관 일수
 ```
 
 ## 9. 현재 운영 범위와 주의사항
 
 - 합격자 데모 데이터는 발표와 기능 검증을 위해 만든 가상 데이터입니다.
 - 사용자 제보 데이터는 검수 전 추천과 비교에 사용하지 않습니다.
-- 합격자 제보의 관리자 승인·반려 화면과 전용 검수 API는 아직 구현되지 않았습니다.
-- 증빙 이미지는 현재 로컬 파일 시스템에 저장되며 컨테이너 재배포 시 보존이 보장되지 않습니다.
-- Gemini 실패 시 서비스 중단 대신 DB 활동 기반 기본 추천과 기본 로드맵을 반환합니다.
-- 실제 운영 전 HTTPS, 운영용 JWT 비밀키, 비공개 증빙 저장소와 관리자 검수 기능을 적용해야 합니다.
+- 합격자 제보 검수는 `/admin` 화면과 `/api/v1/admin/passers/reports` API로 한다. 관리자는 `ADMIN_PROVIDER_IDS`로 지정하며 재로그인 시 반영된다.
+- 증빙 이미지는 현재 로컬 파일 시스템에 저장되며 컨테이너 재배포 시 보존이 보장되지 않습니다. 검수 완료 후 `PASSER_PROOF_RETENTION_DAYS`가 지나면 자동 삭제된다.
+- Gemini 실패·일일 상한 도달 시 서비스 중단 대신 갭 키워드·직무 태그로 순위를 매긴 DB 활동 폴백 추천과 기본 로드맵을 반환한다. 상태는 `GET /api/v1/admin/ops/summary`에서 본다.
+- 실제 운영 전 HTTPS, 운영용 JWT 비밀키, 비공개 증빙 저장소(S3)를 적용해야 한다. 배포는 `/actuator/health` 실패 시 이전 커밋으로 자동 롤백된다.

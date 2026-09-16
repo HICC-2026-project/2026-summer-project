@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, KAKAO_LOGIN_URL } from "@/lib/api";
 import { clearTokens, getAccessToken, onSessionExpired } from "@/lib/auth";
-import { getMe, getRecommendations, getRoadmap, postLogout, postPasserReport, putSpec, putTarget } from "./api";
+import { deleteMe, getMe, getRecommendations, getRoadmap, patchNickname, postLogout, postPasserReport, putSpec, putTarget } from "./api";
 import { RECOMMENDATIONS, ROADMAP } from "./data";
 import {
   fromExperiencesPayload,
@@ -85,6 +85,8 @@ export function SpecRoadApp() {
   const [spec, setSpec] = useState<Spec>(INITIAL_SPEC);
   const [target, setTarget] = useState<Target>(INITIAL_TARGET);
   const [nickname, setNickname] = useState<string | null>(null);
+  // 관리자 여부 — 프로필 탭에 검수 화면 링크를 보여줄지만 결정한다(권한 판정은 서버).
+  const [isAdmin, setIsAdmin] = useState(false);
   // 저장된 직전 결과가 다른 계정 것과 섞이지 않도록 사용자 식별자를 함께 보관한다.
   const [userId, setUserId] = useState<string | null>(null);
   // 비로그인 예시 화면 여부. 저장할 계정이 없으므로 프로필에서 수정 대신 로그인을 유도한다.
@@ -115,6 +117,7 @@ export function SpecRoadApp() {
     clearLastResult();
     setUserId(null);
     setNickname(null);
+    setIsAdmin(false);
     setDetailId(null);
     setRecommendations([]);
     setRecMeta(null);
@@ -262,6 +265,7 @@ export function SpecRoadApp() {
       .then((me) => {
         setNickname(me.nickname);
         setUserId(me.id);
+        setIsAdmin(me.role === "ADMIN");
 
         if (me.spec) {
           setSpec({
@@ -457,6 +461,7 @@ export function SpecRoadApp() {
             spec={spec}
             target={target}
             nickname={nickname}
+            isAdmin={isAdmin}
             recommendations={isDemo ? RECOMMENDATIONS : recommendations}
             recMeta={isDemo ? null : recMeta}
             recLoading={isDemo ? false : recLoading}
@@ -485,6 +490,28 @@ export function SpecRoadApp() {
               void postLogout().catch(() => {});
               clearTokens();
               resetToLogin();
+            }}
+            onEditNickname={() => {
+              // 입력 한 칸짜리 변경이라 별도 화면 대신 브라우저 프롬프트로 받는다. 검증(길이·제어문자)은 서버가 한다.
+              const next = window.prompt("새 닉네임을 입력하세요 (50자 이내)", nickname ?? "");
+              if (next == null) return;
+              const trimmed = next.trim();
+              if (trimmed === "" || trimmed === nickname) return;
+              patchNickname(trimmed)
+                .then((me) => setNickname(me.nickname))
+                .catch((e) => window.alert(e instanceof ApiError ? e.message : "닉네임을 바꾸지 못했어요."));
+            }}
+            onWithdraw={() => {
+              // 되돌릴 수 없는 동작이라 브라우저 확인창을 한 번 거친다.
+              if (!window.confirm("정말 탈퇴할까요? 스펙·목표·추천 기록이 모두 삭제되며 되돌릴 수 없어요.\n(제보한 합격자 데이터는 익명으로 남아요)")) return;
+              deleteMe()
+                .then(() => {
+                  clearTokens();
+                  resetToLogin();
+                })
+                .catch(() => {
+                  window.alert("탈퇴 처리에 실패했어요. 잠시 후 다시 시도해 주세요.");
+                });
             }}
           />
         )}

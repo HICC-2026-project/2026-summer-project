@@ -3,6 +3,7 @@ import { getRefreshToken } from "@/lib/auth";
 import { toLanguageScoresPayload } from "./helpers";
 import type {
   ActivityDetailResponse,
+  MyPasserReport,
   PasserReportRequest,
   PasserReportResponse,
   RecommendationsResponse,
@@ -88,5 +89,23 @@ export function postPasserReport(request: PasserReportRequest, proof: File): Pro
   return apiFetch<PasserReportResponse>("/api/v1/passers/reports", {
     method: "POST",
     body: formData,
+  });
+}
+
+// 내 제보 목록(최신순). 검수 전(PENDING)인지 반영됐는지(VERIFIED) 확인용.
+export function getMyPasserReports(): Promise<MyPasserReport[]> {
+  return apiFetch<MyPasserReport[]>("/api/v1/passers/reports/me");
+}
+
+// 회원 탈퇴. 서버가 스펙·목표·추천·로드맵·리프레시 토큰을 함께 지운다(제보한 합격자 데이터는 익명으로 남음).
+export function deleteMe(): Promise<void> {
+  return apiFetch<void>("/api/v1/users/me", { method: "DELETE" });
+}
+
+// 닉네임 변경. 앱에서 바꾼 닉네임은 이후 카카오 로그인이 덮어쓰지 않는다(서버 nickname_overridden).
+export function patchNickname(nickname: string): Promise<UserMeResponse> {
+  return apiFetch<UserMeResponse>("/api/v1/users/me/nickname", {
+    method: "PATCH",
+    body: JSON.stringify({ nickname }),
   });
 }

@@ -50,6 +50,18 @@ public class GlobalExceptionHandler {
                 .body(errorBody("ACTIVITY_NOT_FOUND", e.getMessage()));
     }
 
+    @ExceptionHandler(DuplicatePasserReportException.class)
+    public ResponseEntity<Map<String, Object>> handleDuplicatePasserReportException(DuplicatePasserReportException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(errorBody("DUPLICATE_PASSER_REPORT", e.getMessage()));
+    }
+
+    @ExceptionHandler(PasserReportNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handlePasserReportNotFoundException(PasserReportNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(errorBody("PASSER_REPORT_NOT_FOUND", e.getMessage()));
+    }
+
     @ExceptionHandler(InvalidProofFileException.class)
     public ResponseEntity<Map<String, Object>> handleInvalidProofFileException(InvalidProofFileException e) {
         return ResponseEntity.badRequest()

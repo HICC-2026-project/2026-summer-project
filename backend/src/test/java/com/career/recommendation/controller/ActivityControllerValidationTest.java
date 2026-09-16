@@ -132,4 +132,44 @@ class ActivityControllerValidationTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("사용자가 존재하지 않습니다."));
     }
+
+    @Test
+    void jobType이_지원_직무가_아니면_400() throws Exception {
+        mockMvc.perform(get("/api/v1/activities").param("jobType", "DEVOPS"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(activityService);
+    }
+
+    @Test
+    void keyword가_2자_미만이면_400() throws Exception {
+        mockMvc.perform(get("/api/v1/activities").param("keyword", "a"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(activityService);
+    }
+
+    @Test
+    void deadlineAfter가_날짜_형식이_아니면_400() throws Exception {
+        mockMvc.perform(get("/api/v1/activities").param("deadlineAfter", "next-week"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(activityService);
+    }
+
+    @Test
+    void 필터가_서비스에_그대로_전달된다() throws Exception {
+        when(activityService.getActivities(any(), any())).thenReturn(Page.empty());
+
+        mockMvc.perform(get("/api/v1/activities")
+                        .param("type", "INTERNSHIP").param("jobType", "backend")
+                        .param("deadlineAfter", "2026-09-01").param("keyword", "토스"))
+                .andExpect(status().isOk());
+
+        org.mockito.ArgumentCaptor<ActivityService.ActivityFilter> captor =
+                org.mockito.ArgumentCaptor.forClass(ActivityService.ActivityFilter.class);
+        org.mockito.Mockito.verify(activityService).getActivities(captor.capture(), any());
+        ActivityService.ActivityFilter f = captor.getValue();
+        org.assertj.core.api.Assertions.assertThat(f.type()).isEqualTo("INTERNSHIP");
+        org.assertj.core.api.Assertions.assertThat(f.jobType()).isEqualTo(com.career.recommendation.domain.JobType.BACKEND);
+        org.assertj.core.api.Assertions.assertThat(f.deadlineAfter()).isEqualTo(java.time.LocalDate.of(2026, 9, 1));
+        org.assertj.core.api.Assertions.assertThat(f.keyword()).isEqualTo("토스");
+    }
 }
