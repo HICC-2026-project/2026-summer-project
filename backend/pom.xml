@@ -132,6 +132,13 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- GithubClientTest 전용 — GitHub REST API 호출(404·레이트리밋·의존성 파일 등)을 실제 네트워크 없이 검증 -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>mockwebserver</artifactId>
+            <version>4.12.0</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

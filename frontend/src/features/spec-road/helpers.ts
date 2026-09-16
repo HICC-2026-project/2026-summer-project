@@ -128,6 +128,8 @@ export function fromExperiencesPayload(payload: Experience[] | null | undefined)
     type: item.type,
     title: item.title,
     description: item.description ?? undefined,
+    // source도 그대로 보존한다 — 미기재(undefined)는 곧 MANUAL과 같으므로 굳이 채우지 않는다.
+    source: item.source ?? undefined,
   }));
 }
 

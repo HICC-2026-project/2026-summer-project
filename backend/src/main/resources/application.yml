@@ -87,6 +87,17 @@ gemini:
     # 서비스 전역 일일 호출 상한(성공·실패 무관한 시도 수). 0 이하면 상한 없음. GeminiDailyQuota 참고.
     daily-limit: ${GEMINI_DAILY_LIMIT:500}
 
+github:
+  api:
+    base-url: ${GITHUB_API_BASE_URL:https://api.github.com}
+    # 공개 레포 분석용 PAT(선택). 미설정 시 시간당 60회 제한(레포 10개 분석), 설정 시 5,000회(레포 30개).
+    # 로그에는 절대 남기지 않는다(GithubClient) — 값 자체를 로그·에러 메시지에 싣지 않도록 주의.
+    token: ${GITHUB_TOKEN:}
+    max-repos-with-token: ${GITHUB_MAX_REPOS_WITH_TOKEN:30}
+    max-repos-without-token: ${GITHUB_MAX_REPOS_WITHOUT_TOKEN:10}
+    # 레포당 조회할 최대 커밋 수(author 필터). 레이트리밋 보호를 위해 페이지네이션은 하지 않는다.
+    commits-per-repo: ${GITHUB_COMMITS_PER_REPO:50}
+
 management:
   endpoints:
     web:

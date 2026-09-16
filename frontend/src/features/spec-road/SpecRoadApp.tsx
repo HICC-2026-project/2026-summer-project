@@ -317,6 +317,27 @@ export function SpecRoadApp() {
     setSpec((s) => ({ ...s, certs: s.certs.filter((c) => c !== value) }));
   }
 
+  // GitHub 분석 완료·연결 해제 뒤 경험이 바뀐 스펙을 서버에서 다시 불러온다.
+  // 온보딩 화면과 달리 여기서는 target·화면 전환을 건드리지 않는다 — 프로필 탭에 머문 채
+  // 경험 목록만 최신화하면 된다(실패해도 다음 진입에서 다시 시도되므로 조용히 무시한다).
+  async function refreshSpec() {
+    try {
+      const me = await getMe();
+      if (me.spec) {
+        setSpec({
+          gpa: me.spec.gpa != null ? String(me.spec.gpa) : "",
+          gpaScale: me.spec.gpaMax ?? 4.5,
+          grade: me.spec.grade ?? null,
+          langScores: fromLanguageScoresPayload(me.spec.languageScores ?? []),
+          certs: me.spec.certifications ?? [],
+          experiences: fromExperiencesPayload(me.spec.experiences),
+        });
+      }
+    } catch {
+      // 프로필 탭의 부가 기능이라 오류 카드까지 띄우지 않는다(getMyPasserReports와 동일한 정책).
+    }
+  }
+
   function addExperience(experience: Experience) {
     setSpec((s) => ({ ...s, experiences: [...s.experiences, experience] }));
   }
@@ -473,6 +494,7 @@ export function SpecRoadApp() {
             isDemo={isDemo}
             onOpenDetail={setDetailId}
             onOpenPasserReport={() => setScreen("passer-report")}
+            onSpecRefresh={refreshSpec}
             onEditSpec={() => {
               // 예시 화면에는 저장할 계정이 없어, 수정 대신 로그인으로 보낸다.
               if (isDemo) {

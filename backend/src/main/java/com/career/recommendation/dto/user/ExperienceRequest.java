@@ -28,6 +28,14 @@ public class ExperienceRequest {
     @Size(max = 500, message = "경험 설명은 500자 이하여야 합니다.")
     private String description;
 
+    // source도 type과 같은 이유로 선택 입력이다 — 미기재/blank는 toMap()에서 "MANUAL" 기본값으로
+    // 채운다. GithubAnalysisService가 자동 생성하는 항목만 "GITHUB"를 명시적으로 채워 넣는다.
+    @Pattern(
+            regexp = "(?i)(MANUAL|GITHUB)",
+            message = "올바른 경험 출처가 아닙니다."
+    )
+    private String source;
+
     public Map<String, Object> toMap() {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("type", (type == null || type.isBlank())
@@ -38,6 +46,10 @@ public class ExperienceRequest {
         if (description != null && !description.isBlank()) {
             result.put("description", description.trim());
         }
+
+        result.put("source", (source == null || source.isBlank())
+                ? "MANUAL"
+                : source.trim().toUpperCase(Locale.ROOT));
 
         return result;
     }
