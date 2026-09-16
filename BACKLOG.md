@@ -226,7 +226,7 @@
 ## E7. 인프라·운영 — 담당 BE-3, 규모 M
 
 - [x] 프론트 CI: `.github/workflows/frontend-ci.yml` — Node 22, tsc/lint/build, `frontend/**` 경로 트리거
-- [ ] 탄력적 IP 고정, 카카오 리다이렉트 URI 운영값 반영 (메모리상 미완)
+- [x] 탄력적 IP 고정(13.124.80.94, 2026-07-20)·카카오 리다이렉트 URI 운영값 반영(2026-07-21) — 이미 완료된 항목이었음을 확인하고 표기 정정 (2026-09-16)
 - [x] `backend-deploy.yml` — `/actuator/health`로 부팅 판정, 실패 시 이전 커밋으로 자동 롤백(detached HEAD 복귀 포함)
 - [x] `GeminiCallStats` + `GET /api/v1/admin/ops/summary`(검수 대기·직무별 합격자 수·Gemini 사용량/성공/실패/지연). 구조화 로깅·CloudWatch는 미적용
 - [x] `GeminiDailyQuota` — 전역 일일 시도 상한(`GEMINI_DAILY_LIMIT`, 기본 500), 초과 시 폴백
