@@ -3,9 +3,11 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { getMyPasserReports } from "../../api";
+import { GithubExperienceBadge } from "../../components/ExperienceBadge";
 import { BADGE, DEMO_USER_NAME, PRIMARY } from "../../data";
 import { experienceTypeLabel, hasMeaningfulLangScore, jobLabel } from "../../helpers";
 import type { MyPasserReport, ReviewStatus, Spec, Target } from "../../types";
+import { GithubSection } from "./GithubSection";
 
 // 검수 상태 → 배지. 관리자 화면 탭 라벨과 같은 말을 쓴다.
 const REVIEW_BADGE: Record<ReviewStatus, { color: string; bg: string; text: string }> = {
@@ -29,6 +31,8 @@ interface ProfileTabProps {
   onWithdraw?: () => void;
   /** 닉네임 수정. 예시 화면에서는 없다. */
   onEditNickname?: () => void;
+  /** GitHub 분석 완료·연결 해제 뒤 경험이 포함된 스펙을 다시 불러온다. 예시 화면에서는 없다. */
+  onSpecRefresh?: () => void;
 }
 
 function rowStyle(hasBorder: boolean): CSSProperties {
@@ -52,6 +56,7 @@ export function ProfileTab({
   onLogout,
   onWithdraw,
   onEditNickname,
+  onSpecRefresh,
 }: ProfileTabProps) {
   const displayName = nickname ?? DEMO_USER_NAME;
   const targetSummary = `${target.size} ${jobLabel(target.job)}`;
@@ -159,7 +164,10 @@ export function ProfileTab({
                 <div style={{ fontSize: 12, fontWeight: 700, color: PRIMARY, marginBottom: 2 }}>
                   {experienceTypeLabel(exp.type)}
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#15141B" }}>{exp.title}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#15141B" }}>
+                  {exp.title}
+                  {exp.source === "GITHUB" && <GithubExperienceBadge />}
+                </div>
                 {exp.description && (
                   <div style={{ fontSize: 12.5, color: "#61616C", marginTop: 2, lineHeight: 1.5 }}>
                     {exp.description}
@@ -172,6 +180,9 @@ export function ProfileTab({
           <div style={{ fontSize: 14, fontWeight: 600, color: "#9797A1" }}>경험 미입력</div>
         )}
       </div>
+
+      {/* GitHub 공개 레포 분석(E3 1단계). 예시 화면은 저장할 계정이 없어 섹션 자체를 숨긴다. */}
+      {!isDemo && onSpecRefresh && <GithubSection onSpecRefresh={onSpecRefresh} />}
 
       {/* 예시 화면은 저장할 계정이 없어 수정 대신 로그인을 안내한다. */}
       <button

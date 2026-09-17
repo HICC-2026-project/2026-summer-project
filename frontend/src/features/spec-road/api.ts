@@ -3,6 +3,8 @@ import { getRefreshToken } from "@/lib/auth";
 import { toLanguageScoresPayload } from "./helpers";
 import type {
   ActivityDetailResponse,
+  GithubAnalysisAccepted,
+  GithubProfile,
   MyPasserReport,
   PasserReportRequest,
   PasserReportResponse,
@@ -108,4 +110,23 @@ export function patchNickname(nickname: string): Promise<UserMeResponse> {
     method: "PATCH",
     body: JSON.stringify({ nickname }),
   });
+}
+
+// E3 1단계: GitHub 공개 레포 분석. 미등록이면 connected:false, 등록됐으면 진행 상태·결과를 받는다.
+export function getGithubProfile(): Promise<GithubProfile> {
+  return apiFetch<GithubProfile>("/api/v1/users/me/github");
+}
+
+// 분석 시작(최초) 또는 재분석. 202로 PENDING만 돌아오고, 실제 결과는 폴링으로 받는다.
+// 진행 중이거나 24시간 재분석 쿨다운이면 409 — 호출부가 ApiError.message를 그대로 보여준다.
+export function postGithubAnalysis(url: string): Promise<GithubAnalysisAccepted> {
+  return apiFetch<GithubAnalysisAccepted>("/api/v1/users/me/github", {
+    method: "POST",
+    body: JSON.stringify({ url }),
+  });
+}
+
+// 연결 해제. 서버가 분석 결과와 GitHub 파생 경험(Experience.source === "GITHUB")을 함께 지운다.
+export function deleteGithubProfile(): Promise<void> {
+  return apiFetch<void>("/api/v1/users/me/github", { method: "DELETE" });
 }

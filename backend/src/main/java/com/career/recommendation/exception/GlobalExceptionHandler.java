@@ -68,6 +68,24 @@ public class GlobalExceptionHandler {
                 .body(errorBody("INVALID_PROOF_FILE", e.getMessage()));
     }
 
+    @ExceptionHandler(GithubUsernameInvalidException.class)
+    public ResponseEntity<Map<String, Object>> handleGithubUsernameInvalidException(GithubUsernameInvalidException e) {
+        return ResponseEntity.badRequest()
+                .body(errorBody("INVALID_GITHUB_USERNAME", e.getMessage()));
+    }
+
+    @ExceptionHandler(GithubAnalysisInProgressException.class)
+    public ResponseEntity<Map<String, Object>> handleGithubAnalysisInProgressException(GithubAnalysisInProgressException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(errorBody("GITHUB_ANALYSIS_IN_PROGRESS", e.getMessage()));
+    }
+
+    @ExceptionHandler(GithubAnalysisCooldownException.class)
+    public ResponseEntity<Map<String, Object>> handleGithubAnalysisCooldownException(GithubAnalysisCooldownException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(errorBody("GITHUB_ANALYSIS_COOLDOWN", e.getMessage()));
+    }
+
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Map<String, Object>> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)

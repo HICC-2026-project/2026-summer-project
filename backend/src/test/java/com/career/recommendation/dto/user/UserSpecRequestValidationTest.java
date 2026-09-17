@@ -256,6 +256,44 @@ class UserSpecRequestValidationTest {
                 .contains("경험은 최대 20개까지 저장할 수 있습니다.");
     }
 
+    // --- 경험 출처(source) ---
+
+    @Test
+    void 경험_출처가_없어도_제목만_있으면_검증을_통과하고_toMap은_MANUAL이_된다() {
+        UserSpecRequest request = validRequest();
+        ExperienceRequest exp = experience("PROJECT", "제목", null);
+        request.setExperiences(List.of(exp));
+
+        Set<ConstraintViolation<UserSpecRequest>> violations = validator.validate(request);
+
+        assertThat(violations).isEmpty();
+        assertThat(exp.toMap()).containsEntry("source", "MANUAL");
+    }
+
+    @Test
+    void 경험_출처로_GITHUB를_대소문자_구분없이_받을_수_있다() {
+        UserSpecRequest request = validRequest();
+        ExperienceRequest exp = experience("PROJECT", "제목", null);
+        exp.setSource("github");
+        request.setExperiences(List.of(exp));
+
+        Set<ConstraintViolation<UserSpecRequest>> violations = validator.validate(request);
+
+        assertThat(violations).isEmpty();
+        assertThat(exp.toMap()).containsEntry("source", "GITHUB");
+    }
+
+    @Test
+    void 경험_출처가_올바르지_않으면_검증에_실패한다() {
+        UserSpecRequest request = validRequest();
+        ExperienceRequest exp = experience("PROJECT", "제목", null);
+        exp.setSource("CRAWLED");
+        request.setExperiences(List.of(exp));
+
+        assertThat(validationMessages(request))
+                .contains("올바른 경험 출처가 아닙니다.");
+    }
+
     private ExperienceRequest experience(String type, String title, String description) {
         ExperienceRequest request = new ExperienceRequest();
         request.setType(type);

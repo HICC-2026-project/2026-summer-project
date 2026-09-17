@@ -24,6 +24,9 @@ export interface Experience {
   type: ExperienceType;
   title: string;
   description?: string;
+  // 이 경험이 어떻게 추가됐는지. 미기재(undefined)면 수동 입력(MANUAL)과 같다 —
+  // GET /users/me · PUT /users/me/spec 왕복에서 그대로 보존해야 한다(E3 1단계 계약).
+  source?: "MANUAL" | "GITHUB";
 }
 
 // Shape expected by PUT /users/me/spec's languageScores field (API 명세서 기준).
@@ -248,4 +251,50 @@ export interface ActivityDetailResponse {
   deadline: string;
   tags: string[] | null;
   url: string | null;
+}
+
+// GET /api/v1/users/me/github의 status. PENDING(분석 중)·DONE(완료)·
+// FAILED(분석 실패)·RATE_LIMITED(GitHub API 호출 한도 초과)의 네 값.
+export type GithubAnalysisStatus = "PENDING" | "DONE" | "FAILED" | "RATE_LIMITED";
+
+// GET 응답 jobRatios · repos의 primaryJob은 JobCode 대부분과 겹치지만 "OTHER"(기타)도
+// 올 수 있어 유니온에 string을 더해 미래에 늘어날 값에도 화면이 깨지지 않게 한다.
+export type GithubJobCode = JobCode | "OTHER" | string;
+
+export interface GithubJobRatio {
+  jobType: GithubJobCode;
+  label: string;
+  ratio: number;
+}
+
+export interface GithubRepoSummary {
+  name: string;
+  primaryJob: GithubJobCode;
+  primaryJobLabel: string;
+  commits: number;
+  firstCommitAt: string;
+  lastCommitAt: string;
+  mainLanguage: string;
+}
+
+// GET /api/v1/users/me/github — 미연결(connected:false) 또는 등록된 분석 상태.
+export type GithubProfile =
+  | { connected: false }
+  | {
+      connected: true;
+      username: string;
+      status: GithubAnalysisStatus;
+      failureReason: string | null;
+      analyzedAt: string | null;
+      commitTotal: number | null;
+      activeMonths: number | null;
+      jobRatios: GithubJobRatio[] | null;
+      targetJobMatchRatio: number | null;
+      repos: GithubRepoSummary[] | null;
+    };
+
+// POST /api/v1/users/me/github 202 응답.
+export interface GithubAnalysisAccepted {
+  username: string;
+  status: "PENDING";
 }

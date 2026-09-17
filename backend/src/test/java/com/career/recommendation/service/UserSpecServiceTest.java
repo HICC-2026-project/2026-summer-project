@@ -219,8 +219,8 @@ class UserSpecServiceTest {
         verify(userSpecRepository).saveAndFlush(captor.capture());
 
         assertThat(captor.getValue().getExperiences()).containsExactly(
-                Map.of("type", "PROJECT", "title", "토이 프로젝트", "description", "팀 프로젝트 설명"),
-                Map.of("type", "ETC", "title", "인턴")
+                Map.of("type", "PROJECT", "title", "토이 프로젝트", "description", "팀 프로젝트 설명", "source", "MANUAL"),
+                Map.of("type", "ETC", "title", "인턴", "source", "MANUAL")
         );
     }
 

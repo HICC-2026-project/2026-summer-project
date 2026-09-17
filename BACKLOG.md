@@ -139,6 +139,8 @@
 
 목표: GitHub 사용자명/URL → 직무별(BE/FE/보안/인프라/데이터·AI) 기여 비율·커밋 수·활동 개월 → `UserSpec.experiences`에 "GitHub 추정" 항목으로 채움. 사용자가 수정·삭제 가능.
 
+> **2026-09-16 현행화 — 1단계(공개 레포, OAuth 없음) 구현 완료.** POST/GET/DELETE `/users/me/github`, V27 `github_profiles`, `GithubClient`(레이트리밋 처리, 트리 API 기반 신호 수집, `GITHUB_TOKEN` 선택 — 미설정 시 레포 10개로 축소), `JobSignalClassifier`(경로 토큰 단위 매칭·고정 가중 투표, 인프라 신호=BACKEND×0.5), `@Async` 분석(24h 쿨다운, stale PENDING 15분 자동 복구), 파생 경험 자동 반영(source=GITHUB, 커밋 상위 5개 레포, 전체 20개 상한, 수동 항목 우선), FE 프로필 탭 분석 섹션·"GitHub 추정" 배지. **2단계로 남긴 것**: E3-0 OAuth `repo` 연결(비공개 레포 — GitHub OAuth App 등록 필요), 커밋 상세(diff) 기반 경로 신호 고도화, Gemini 레포 요약(E3-4 선택), 합격자 제보 측 GitHub 수집(E11-5).
+
 ### E3-0. GitHub OAuth 연동 (BE-3) — **스코프 `repo` 확정** (비공개·조직 레포 포함)
 - [ ] Spring Security OAuth2 Client에 `github` registration 추가 — 로그인용이 아니라 **계정 연결용**(카카오 로그인 유지). 별도 엔드포인트 `/oauth2/authorization/github-connect` 또는 커스텀 authorize URL
 - [ ] 콜백에서 access token을 **암호화 저장**(`V12 github_connections`: `user_id, github_login, access_token_enc, scopes, connected_at`). 키는 환경변수(AES-GCM), 로그 마스킹

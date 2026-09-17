@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties } from "react";
 import { Chip } from "../components/Chip";
+import { GithubExperienceBadge } from "../components/ExperienceBadge";
 import {
   EXPERIENCE_TYPE_OPTIONS,
   GPA_SCALE_OPTIONS,
@@ -429,7 +430,10 @@ export function OnboardingScreen({
                     <div style={{ fontSize: 12, fontWeight: 700, color: PRIMARY, marginBottom: 2 }}>
                       {experienceTypeLabel(exp.type)}
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#15141B" }}>{exp.title}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#15141B" }}>
+                      {exp.title}
+                      {exp.source === "GITHUB" && <GithubExperienceBadge />}
+                    </div>
                     {exp.description && (
                       <div style={{ fontSize: 12.5, color: "#61616C", marginTop: 2 }}>{exp.description}</div>
                     )}
