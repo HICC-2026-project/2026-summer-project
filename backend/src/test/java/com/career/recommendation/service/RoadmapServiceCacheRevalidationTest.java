@@ -30,6 +30,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -137,6 +138,167 @@ class RoadmapServiceCacheRevalidationTest {
         assertThat(response.getTimeline().get(2).getMatchedActivities()).isEmpty();
 
         // 남은 활동(keepId)이 있어 캐시가 여전히 유효 판정되므로 Gemini를 다시 부르지 않는다.
+        verify(geminiService, never()).generateRoadmap(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    /**
+     * 실사용 확인: 캐시된 로드맵의 matchedActivities가 전부 마감·비활성화·삭제돼 필터 후 모든
+     * 스텝에서 0건이 되면(원래는 매칭이 있었음) 스텝만 유지한 채 영원히 낡은 캐시를 주지 않고
+     * 재생성 경로(하루 상한 통과 시 Gemini 재호출)로 들어가야 한다.
+     */
+    @Test
+    void 매칭_활동이_전부_사라지면_재생성_경로로_진입한다() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(user.getId()).thenReturn(userId);
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+        when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(recommendationRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+
+        LocalDate today = LocalDate.now(KST);
+        UUID expiredId = UUID.randomUUID();
+
+        RoadmapResponse cachedRoadmap = RoadmapResponse.builder()
+                .aiRoadmap(true)
+                .timeline(List.of(
+                        TimelineStep.builder()
+                                .period("1학년 1학기 (3~6월)").priority("HIGH")
+                                .activity("정보처리기사 취득").reason("서류 가점")
+                                .matchedActivities(List.of(matched(expiredId)))
+                                .build()
+                ))
+                .build();
+
+        ObjectMapper realMapper = new ObjectMapper().findAndRegisterModules();
+        String json = realMapper.writeValueAsString(cachedRoadmap);
+        RoadmapCache cached = RoadmapCache.builder()
+                .id(UUID.randomUUID())
+                .resultJson(json)
+                .createdAt(LocalDateTime.now())
+                .lastUpdatedDate(today)
+                .build();
+        when(roadmapCacheRepository.findByUser_Id(userId)).thenReturn(Optional.of(cached));
+
+        // 유일한 매칭 활동(expiredId)이 마감 지나 필터 후 0건이 된다.
+        when(activityRepository.findAllById(List.of(expiredId)))
+                .thenReturn(List.of(dbActivity(expiredId, true, today.minusDays(1))));
+
+        when(aiDailyAttemptLimiter.tryAcquire(eq(userId), any())).thenReturn(true);
+        when(activityRepository.findRecommendableActivities(any(), any())).thenReturn(List.of());
+        when(promptDataBuilder.serializeSpecForRoadmap(any())).thenReturn("{}");
+        when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
+        when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
+        when(promptDataBuilder.buildAvailableActivitiesJsonForRoadmap(any(), any())).thenReturn("[]");
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn("{\"timeline\":[{\"period\":\"3학년 2학기\",\"priority\":\"HIGH\","
+                        + "\"activity\":\"새로 생성된 활동\",\"reason\":\"새 사유\",\"activityIds\":[]}]}");
+
+        ReflectionTestUtils.setField(roadmapService, "objectMapper", realMapper);
+
+        RoadmapResponse response = roadmapService.getRoadmap(authentication);
+
+        verify(geminiService).generateRoadmap(any(), any(), any(), any(), any(), any(), any());
+        assertThat(response.getTimeline()).hasSize(1);
+        assertThat(response.getTimeline().get(0).getActivity()).isEqualTo("새로 생성된 활동");
+    }
+
+    /**
+     * 원래부터 matchedActivities가 하나도 없던 캐시(activity 텍스트 가이드만 있는 스텝)는
+     * 필터를 거쳐도 항상 0건이므로, 이 사실만으로 재생성을 트리거하면 안 된다 — 불필요한
+     * Gemini 재호출을 막는다.
+     */
+    @Test
+    void 원래_매칭_활동이_없던_캐시는_재생성하지_않고_그대로_반환한다() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(user.getId()).thenReturn(userId);
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+        when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+
+        LocalDate today = LocalDate.now(KST);
+        RoadmapResponse cachedRoadmap = RoadmapResponse.builder()
+                .aiRoadmap(true)
+                .timeline(List.of(
+                        TimelineStep.builder()
+                                .period("1학년 1학기 (3~6월)").priority("HIGH")
+                                .activity("자격증 취득 가이드").reason("가이드")
+                                .matchedActivities(List.of())
+                                .build()
+                ))
+                .build();
+
+        ObjectMapper realMapper = new ObjectMapper().findAndRegisterModules();
+        String json = realMapper.writeValueAsString(cachedRoadmap);
+        RoadmapCache cached = RoadmapCache.builder()
+                .id(UUID.randomUUID())
+                .resultJson(json)
+                .createdAt(LocalDateTime.now())
+                .lastUpdatedDate(today)
+                .build();
+        when(roadmapCacheRepository.findByUser_Id(userId)).thenReturn(Optional.of(cached));
+
+        ReflectionTestUtils.setField(roadmapService, "objectMapper", realMapper);
+
+        RoadmapResponse response = roadmapService.getRoadmap(authentication);
+
+        assertThat(response.getTimeline()).hasSize(1);
+        assertThat(response.getTimeline().get(0).getActivity()).isEqualTo("자격증 취득 가이드");
+        verify(geminiService, never()).generateRoadmap(any(), any(), any(), any(), any(), any(), any());
+        // matchedActivities가 원래부터 비어 있어 필터 대상 id 자체가 없으므로 DB 대조도 생략된다.
+        verify(activityRepository, never()).findAllById(any());
+    }
+
+    /**
+     * 매칭 활동이 전부 사라져 재생성이 필요한 상황이라도, 하루 시도 상한(AiDailyAttemptLimiter)에
+     * 막히면 Gemini를 다시 부르지 않고 "필터된(빈 matchedActivities) 캐시"를 dailyLimitReached
+     * 플래그와 함께 그대로 반환해야 한다.
+     */
+    @Test
+    void 하루_상한_초과시_필터된_캐시를_그대로_반환한다() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(user.getId()).thenReturn(userId);
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+        when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+
+        LocalDate today = LocalDate.now(KST);
+        UUID expiredId = UUID.randomUUID();
+
+        RoadmapResponse cachedRoadmap = RoadmapResponse.builder()
+                .aiRoadmap(true)
+                .timeline(List.of(
+                        TimelineStep.builder()
+                                .period("1학년 1학기 (3~6월)").priority("HIGH")
+                                .activity("정보처리기사 취득").reason("서류 가점")
+                                .matchedActivities(List.of(matched(expiredId)))
+                                .build()
+                ))
+                .build();
+
+        ObjectMapper realMapper = new ObjectMapper().findAndRegisterModules();
+        String json = realMapper.writeValueAsString(cachedRoadmap);
+        RoadmapCache cached = RoadmapCache.builder()
+                .id(UUID.randomUUID())
+                .resultJson(json)
+                .createdAt(LocalDateTime.now())
+                .lastUpdatedDate(today)
+                .build();
+        when(roadmapCacheRepository.findByUser_Id(userId)).thenReturn(Optional.of(cached));
+
+        when(activityRepository.findAllById(List.of(expiredId)))
+                .thenReturn(List.of(dbActivity(expiredId, true, today.minusDays(1))));
+
+        when(aiDailyAttemptLimiter.tryAcquire(eq(userId), any())).thenReturn(false);
+
+        ReflectionTestUtils.setField(roadmapService, "objectMapper", realMapper);
+
+        RoadmapResponse response = roadmapService.getRoadmap(authentication);
+
+        assertThat(response.getDailyLimitReached()).isTrue();
+        assertThat(response.getTimeline()).hasSize(1);
+        assertThat(response.getTimeline().get(0).getMatchedActivities())
+                .as("필터된(빈) matchedActivities라도 캐시를 그대로 반환한다")
+                .isEmpty();
         verify(geminiService, never()).generateRoadmap(any(), any(), any(), any(), any(), any(), any());
     }
 }

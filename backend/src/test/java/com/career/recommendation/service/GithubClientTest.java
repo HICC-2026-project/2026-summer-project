@@ -182,6 +182,42 @@ class GithubClientTest {
         assertThat(takeRequest().getPath()).startsWith("/repos/hicc-org/2026-summer-project/git/trees/main");
     }
 
+    /**
+     * 운영 로그 실측: "GitHub 커밋 검색 실패: author:... - status=200" — HTTP 200인데 파싱 중
+     * 예외(DataBufferLimitException). /search/commits 응답이 WebClient 기본 maxInMemorySize
+     * (256KB)를 넘으면 discoverContributedRepos의 catch(Exception)가 조용히 삼켜, 실제로 존재하는
+     * 기여 레포를 발견하지 못했다. buildClients()가 10MB로 올린 뒤에는 300KB급 응답도 정상
+     * 파싱되어 발견에 성공해야 한다.
+     */
+    @Test
+    void 대형_커밋_검색_응답도_기본_버퍼_크기를_넘어_파싱과_발견에_성공한다() {
+        server.enqueue(jsonResponse(Map.of("login", "octocat", "type", "User"))
+                .setHeader("X-RateLimit-Remaining", "100"));
+        server.enqueue(jsonResponse(List.of())); // 소유 레포 0개
+
+        // 실제 매칭되는 레포 1건 + GitHub 검색 응답 특유의 부가 필드를 흉내 낸 대량 패딩으로
+        // 응답 전체를 300KB 이상으로 부풀린다(기본 256KB 버퍼를 확실히 넘기기 위함).
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("total_count", 1);
+        body.put("items", List.of(
+                Map.of("repository", Map.of("full_name", "hicc-org/2026-summer-project", "fork", false))));
+        body.put("_padding_to_exceed_default_buffer", "x".repeat(300_000));
+        server.enqueue(jsonResponse(body));
+
+        server.enqueue(jsonResponse(orgRepo("2026-summer-project", "hicc-org", false, false)));
+        server.enqueue(jsonResponse(Map.of("Java", 500)));
+        server.enqueue(jsonResponse(List.of()));
+        server.enqueue(jsonResponse(Map.of("tree", List.of())));
+
+        GithubClient.GithubAnalysisRawResult result = client.analyze("octocat");
+
+        assertThat(result.rateLimited()).isFalse();
+        assertThat(result.repos())
+                .as("기본 버퍼 크기(256KB)를 넘는 검색 응답도 파싱되어 기여 레포가 발견돼야 한다")
+                .extracting(GithubClient.RepoRawData::name)
+                .containsExactly("2026-summer-project");
+    }
+
     @Test
     void 검색_결과의_fork_레포는_메타데이터_조회_없이_제외된다() throws InterruptedException {
         server.enqueue(jsonResponse(Map.of("login", "octocat", "type", "User"))
