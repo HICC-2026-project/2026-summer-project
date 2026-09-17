@@ -335,7 +335,7 @@ public class GithubClient {
             logSkip("GitHub languages 조회 (무시)", fullName, e);
         }
 
-        int commitCount = 0;
+        int sampleCommitCount = 0;
         LocalDate first = null;
         LocalDate last = null;
         try {
@@ -354,7 +354,7 @@ public class GithubClient {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> commits = resp != null ? (List<Map<String, Object>>) (List<?>) resp.getBody() : null;
             if (commits != null) {
-                commitCount = commits.size();
+                sampleCommitCount = commits.size();
                 for (Map<String, Object> commit : commits) {
                     LocalDate date = extractCommitDate(commit);
                     if (date != null) {
@@ -372,6 +372,46 @@ public class GithubClient {
                 logSkip("GitHub commits 조회 (0건 취급)", fullName, e);
             }
         }
+
+        // 정확한 author 커밋 총수 — GitHub Link 헤더 페이지네이션 트릭. per_page=1로 요청하면
+        // 응답 Link 헤더의 rel="last"에 담긴 page=N이 곧 전체 페이지 수(=페이지당 1건이므로
+        // 총 커밋 수)다. 위 sampleCommitCount는 per_page=50 한 페이지뿐이라 50건에서 포화되므로
+        // (198커밋 레포도 "50"으로 보임) 커밋 가중치·상위 5개 레포 선정이 왜곡됐다 — 레포당
+        // 요청 비용 +1로 이 값을 정확히 구한다. Link 헤더가 없으면 커밋이 0~1개라는 뜻이라
+        // 응답 배열 크기를 그대로 쓴다. 이 호출이 실패하면(레이트리밋 제외) 분석 전체를
+        // 실패시키지 않고 위에서 구한 샘플 개수로 조용히 폴백한다.
+        Integer exactCommitCount = null;
+        try {
+            ResponseEntity<List> countResp = requestWithAnonymousFallback(client, anonymousClient, fullName,
+                    c -> c.get()
+                            .uri(uriBuilder -> uriBuilder.path("/repos/{owner}/{repo}/commits")
+                                    .queryParam("author", authorUsername)
+                                    .queryParam("per_page", 1)
+                                    .build(repoOwnerLogin, repoName))
+                            .retrieve()
+                            .toEntity(List.class)
+                            .block(CALL_TIMEOUT));
+            if (countResp != null && isRateLimited(countResp.getHeaders(), countResp.getStatusCode())) {
+                return RepoFetchOutcome.blocked();
+            }
+            if (countResp != null) {
+                Integer lastPage = parseLastPageFromLinkHeader(countResp.getHeaders().getFirst(HttpHeaders.LINK));
+                if (lastPage != null) {
+                    exactCommitCount = lastPage;
+                } else {
+                    List<?> body = countResp.getBody();
+                    exactCommitCount = body != null ? body.size() : 0;
+                }
+            }
+        } catch (WebClientResponseException e) {
+            if (isRateLimitStatus(e)) {
+                return RepoFetchOutcome.blocked();
+            }
+            if (e.getStatusCode().value() != 409) {
+                logSkip("GitHub 정확한 커밋 총수 조회 (샘플 개수로 폴백)", fullName, e);
+            }
+        }
+        int commitCount = exactCommitCount != null ? exactCommitCount : sampleCommitCount;
 
         List<String> filePaths = new ArrayList<>();
         try {
@@ -548,6 +588,28 @@ public class GithubClient {
     private String extractDateField(Object authorOrCommitter) {
         if (authorOrCommitter instanceof Map<?, ?> m && m.get("date") != null) {
             return String.valueOf(m.get("date"));
+        }
+        return null;
+    }
+
+    /**
+     * Link 헤더 예시: {@code <...?page=2>; rel="next", <...?page=198>; rel="last"}.
+     * rel="last" 항목의 URL에서 page 쿼리 파라미터 값을 뽑는다 — per_page=1 요청이므로 이 값이
+     * 곧 전체 커밋 수다. 매칭되는 rel="last"가 없으면(커밋 0~1개) null을 돌려줘 호출부가
+     * 응답 배열 크기로 대체하게 한다.
+     */
+    private static final java.util.regex.Pattern LINK_LAST_PAGE_PATTERN =
+            java.util.regex.Pattern.compile("<[^>]*[?&]page=(\\d+)[^>]*>\\s*;\\s*rel=\"last\"");
+
+    private static Integer parseLastPageFromLinkHeader(String linkHeader) {
+        if (linkHeader == null || linkHeader.isBlank()) return null;
+        var matcher = LINK_LAST_PAGE_PATTERN.matcher(linkHeader);
+        if (matcher.find()) {
+            try {
+                return Integer.parseInt(matcher.group(1));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
         }
         return null;
     }

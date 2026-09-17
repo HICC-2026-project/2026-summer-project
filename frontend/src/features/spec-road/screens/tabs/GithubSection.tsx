@@ -163,6 +163,9 @@ export function GithubSectionView({
 
       {ratios.length > 0 && (
         <div style={{ marginBottom: 14 }}>
+          <p style={{ fontSize: 12.5, color: INK_MUTED, margin: "0 0 8px", lineHeight: 1.5 }}>
+            공개 레포 활동을 커밋 수 기준으로 직무별 분류한 비율이에요. 목표 직무와 얼마나 맞는지 보여줘요.
+          </p>
           {ratios.map((r) => {
             const percent = Math.round(r.ratio * 100);
             return (
