@@ -36,6 +36,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * BE-1 담당 — F-05 커리어 로드맵 비즈니스 로직.
@@ -87,6 +88,11 @@ public class RoadmapService {
             try {
                 RoadmapResponse deserialized = objectMapper.readValue(cached.getResultJson(), RoadmapResponse.class);
                 if (deserialized != null && deserialized.getTimeline() != null && !deserialized.getTimeline().isEmpty()) {
+                    // 캐시는 스펙이 바뀔 때만 재생성되는데, 생성 후 스케줄러가 마감 활동을
+                    // 비활성화하거나 관리자가 활동을 내리면 캐시가 그 활동을 로드맵 스텝에
+                    // 계속 노출한다(RecommendationService.filterStaleActivities와 같은 문제).
+                    // 스텝 자체는 유지하고, 스텝 안의 matchedActivities만 DB와 대조해 걸러낸다.
+                    deserialized = filterStaleMatchedActivities(deserialized, today);
                     boolean isSpecChanged = isSpecModifiedSince(userSpec, targetJob, cached.getCreatedAt());
                     // 마감이 지난 활동이 캐시에 남아 있으면 스펙이 그대로여도 다시 만든다.
                     // 그러지 않으면 이미 마감된 활동을 로드맵에 무기한 보여주게 된다.
@@ -436,6 +442,67 @@ public class RoadmapService {
      * 같은 자가회복 불가 상태가 "텍스트는 있지만 매칭된 활동이 하나도 없는" 케이스에도
      * 똑같이 존재했다.
      */
+    /**
+     * 캐시된 로드맵의 각 스텝 matchedActivities를 DB와 대조해 비활성화(is_active=false)·
+     * 삭제·마감(deadline < today)된 활동을 제거한다. 마감일이 null(상시 모집)인 활동은
+     * 유지한다. 스텝 자체(period·activity 텍스트·reason)는 그대로 두고 matchedActivities만
+     * 걸러낸다 — 전부 제거돼 빈 배열이 되어도 스텝은 남는다.
+     * 타임라인은 최대 3스텝·스텝당 소수의 활동이라 전체 distinct id에 대해 findAllById 1회면 충분하다.
+     */
+    private RoadmapResponse filterStaleMatchedActivities(RoadmapResponse response, LocalDate today) {
+        if (response == null || response.getTimeline() == null || response.getTimeline().isEmpty()) {
+            return response;
+        }
+
+        List<UUID> ids = response.getTimeline().stream()
+                .filter(step -> step != null && step.getMatchedActivities() != null)
+                .flatMap(step -> step.getMatchedActivities().stream())
+                .map(MatchedActivity::getActivityId)
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return response;
+        }
+
+        Map<UUID, Activity> dbActivities = activityRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Activity::getId, a -> a));
+
+        int[] removed = {0};
+        List<TimelineStep> filteredSteps = response.getTimeline().stream()
+                .map(step -> {
+                    if (step == null || step.getMatchedActivities() == null || step.getMatchedActivities().isEmpty()) {
+                        return step;
+                    }
+                    List<MatchedActivity> filtered = step.getMatchedActivities().stream()
+                            .filter(ma -> {
+                                Activity db = (ma.getActivityId() != null) ? dbActivities.get(ma.getActivityId()) : null;
+                                if (db == null) return false; // DB에 없음(삭제됨)
+                                if (!Boolean.TRUE.equals(db.getIsActive())) return false; // 비활성화됨
+                                return db.getDeadline() == null || !db.getDeadline().isBefore(today); // 마감 지남
+                            })
+                            .toList();
+                    if (filtered.size() == step.getMatchedActivities().size()) {
+                        return step;
+                    }
+                    removed[0] += step.getMatchedActivities().size() - filtered.size();
+                    return TimelineStep.builder()
+                            .period(step.getPeriod())
+                            .priority(step.getPriority())
+                            .activity(step.getActivity())
+                            .reason(step.getReason())
+                            .matchedActivities(filtered)
+                            .build();
+                })
+                .toList();
+
+        if (removed[0] == 0) {
+            return response;
+        }
+        log.info("로드맵 캐시 재검증: 비활성/마감/삭제된 활동 {}건 제거", removed[0]);
+        return response.toBuilder().timeline(filteredSteps).build();
+    }
+
     private boolean hasUsableCachedActivities(RoadmapResponse response, LocalDate today) {
         if (response == null || response.getTimeline() == null) {
             return false;

@@ -238,6 +238,81 @@ class GithubClientTest {
         assertThat(server.getRequestCount()).isEqualTo(6);
     }
 
+    // --- 조직의 fine-grained PAT 차단 시 익명 폴백 ---
+
+    @Test
+    void 메타_조회가_403이면_익명으로_재시도하고_성공하면_레포가_분석에_포함된다() throws InterruptedException {
+        ReflectionTestUtils.setField(client, "token", "test-token");
+
+        server.enqueue(jsonResponse(Map.of("login", "octocat", "type", "User"))
+                .setHeader("X-RateLimit-Remaining", "100"));
+        server.enqueue(jsonResponse(List.of())); // 소유 레포 0개
+        server.enqueue(searchResponse(Map.of("full_name", "hicc-org/2026-summer-project", "fork", false)));
+        server.enqueue(new MockResponse().setResponseCode(403).setBody(
+                "{\"message\":\"The 'hicc-org' organization forbids access via a fine-grained personal access token.\"}"));
+        server.enqueue(jsonResponse(orgRepo("2026-summer-project", "hicc-org", false, false)));
+        server.enqueue(jsonResponse(Map.of("Java", 500)));
+        server.enqueue(jsonResponse(List.of()));
+        server.enqueue(jsonResponse(Map.of("tree", List.of())));
+
+        GithubClient.GithubAnalysisRawResult result = client.analyze("octocat");
+
+        assertThat(result.rateLimited()).isFalse();
+        assertThat(result.repos()).extracting(GithubClient.RepoRawData::name).containsExactly("2026-summer-project");
+
+        takeRequest(); // user
+        takeRequest(); // owned repos
+        takeRequest(); // search
+        RecordedRequest metaFirst = takeRequest(); // meta - 인증 요청, 403
+        assertThat(metaFirst.getHeader("Authorization")).isEqualTo("Bearer test-token");
+        RecordedRequest metaRetry = takeRequest(); // meta - 익명 재시도, 200
+        assertThat(metaRetry.getHeader("Authorization")).isNull();
+        assertThat(metaRetry.getPath()).startsWith("/repos/hicc-org/2026-summer-project");
+
+        assertThat(server.getRequestCount()).isEqualTo(8);
+    }
+
+    @Test
+    void 메타_조회_403_후_익명_재시도도_403이면_해당_레포만_건너뛰고_나머지는_정상_수집된다() {
+        ReflectionTestUtils.setField(client, "token", "test-token");
+
+        server.enqueue(jsonResponse(Map.of("login", "octocat", "type", "User"))
+                .setHeader("X-RateLimit-Remaining", "100"));
+        server.enqueue(jsonResponse(List.of(repo("owned-repo", false, false))));
+        server.enqueue(searchResponse(Map.of("full_name", "blocked-org/blocked-repo", "fork", false)));
+        server.enqueue(new MockResponse().setResponseCode(403).setBody(
+                "{\"message\":\"The 'blocked-org' organization forbids access via a fine-grained personal access token.\"}"));
+        server.enqueue(new MockResponse().setResponseCode(403).setBody("{\"message\":\"Not Found\"}"));
+        // owned-repo는 인증 요청으로 정상 처리된다.
+        server.enqueue(jsonResponse(Map.of()));
+        server.enqueue(jsonResponse(List.of()));
+        server.enqueue(jsonResponse(Map.of("tree", List.of())));
+
+        GithubClient.GithubAnalysisRawResult result = client.analyze("octocat");
+
+        assertThat(result.rateLimited()).isFalse();
+        assertThat(result.repos()).extracting(GithubClient.RepoRawData::name).containsExactly("owned-repo");
+        // 유저(1)+소유(1)+검색(1)+meta 인증(1)+meta 익명(1)+owned-repo 후속 3건 = 8.
+        assertThat(server.getRequestCount()).isEqualTo(8);
+    }
+
+    @Test
+    void 토큰이_없으면_메타_조회_403에서_익명_재시도를_하지_않고_1회만_호출한다() {
+        // setUp()에서 token은 이미 ""로 설정됨.
+        server.enqueue(jsonResponse(Map.of("login", "octocat", "type", "User"))
+                .setHeader("X-RateLimit-Remaining", "100"));
+        server.enqueue(jsonResponse(List.of()));
+        server.enqueue(searchResponse(Map.of("full_name", "org/repo", "fork", false)));
+        server.enqueue(new MockResponse().setResponseCode(403).setBody("{\"message\":\"Not Found\"}"));
+
+        GithubClient.GithubAnalysisRawResult result = client.analyze("octocat");
+
+        assertThat(result.rateLimited()).isFalse();
+        assertThat(result.repos()).isEmpty();
+        // 유저(1)+소유(1)+검색(1)+meta(1, 재시도 없음) = 4.
+        assertThat(server.getRequestCount()).isEqualTo(4);
+    }
+
     private RecordedRequest takeRequest() throws InterruptedException {
         return server.takeRequest();
     }
