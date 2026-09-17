@@ -19,6 +19,7 @@ import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
 import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.repository.RecommendationRepository;
+import com.career.recommendation.util.GraduateOnlyActivityFilter;
 import com.career.recommendation.util.PromptDataBuilder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -92,11 +93,21 @@ public class RoadmapService {
                     // 비활성화하거나 관리자가 활동을 내리면 캐시가 그 활동을 로드맵 스텝에
                     // 계속 노출한다(RecommendationService.filterStaleActivities와 같은 문제).
                     // 스텝 자체는 유지하고, 스텝 안의 matchedActivities만 DB와 대조해 걸러낸다.
+                    // ⚠️ 필터링 전 "원래 매칭이 있었는지"를 먼저 기록해 둔다 — 실사용 확인: 매칭
+                    // 활동이 전부 마감·비활성화돼 필터 후 모든 스텝이 0건이 되어도(추천은 이 경우
+                    // 재생성이 발동하는데) 로드맵은 스텝을 유지한 채 영원히 낡은 채로 남아 있었다.
+                    // 반대로 원래부터 매칭이 하나도 없던 캐시(activity 텍스트만 있는 스텝)까지
+                    // 매번 재생성 대상으로 잡으면 불필요한 Gemini 재호출만 늘어난다 — 두 경우를
+                    // 구분하려면 필터 "전" 상태를 따로 봐야 한다.
+                    boolean originallyHadMatchedActivities = hasAnyMatchedActivities(deserialized);
                     deserialized = filterStaleMatchedActivities(deserialized, today);
                     boolean isSpecChanged = isSpecModifiedSince(userSpec, targetJob, cached.getCreatedAt());
                     // 마감이 지난 활동이 캐시에 남아 있으면 스펙이 그대로여도 다시 만든다.
-                    // 그러지 않으면 이미 마감된 활동을 로드맵에 무기한 보여주게 된다.
-                    boolean hasUsableActivities = hasUsableCachedActivities(deserialized, today);
+                    // 그러지 않으면 이미 마감된 활동을 로드맵에 무기한 보여주게 된다. 단, 원래부터
+                    // 매칭 활동이 없던 캐시는 "필터 후 0건"이 항상 참이라 이 규칙에서 제외한다
+                    // (불필요 재생성 방지 — hasAnyMatchedActivities 주석 참고).
+                    boolean invalidatedByFilter = originallyHadMatchedActivities && !hasUsableCachedActivities(deserialized, today);
+                    boolean hasUsableActivities = !invalidatedByFilter;
 
                     if (!isSpecChanged && hasUsableActivities) {
                         return deserialized;
@@ -119,6 +130,7 @@ public class RoadmapService {
         if (!attemptAcquired && !aiDailyAttemptLimiter.tryAcquire(user.getId(), AiDailyAttemptLimiter.KIND_ROADMAP)) {
             List<Activity> openForFallback = activityRepository.findRecommendableActivities(today, PageRequest.of(0, MAX_RECOMMENDABLE_ACTIVITIES));
             Integer gradeForFallback = (userSpec != null) ? userSpec.getGrade() : null;
+            openForFallback = GraduateOnlyActivityFilter.filterForGrade(openForFallback, gradeForFallback);
             return buildFallbackRoadmap(gradeForFallback, openForFallback, today).toBuilder().dailyLimitReached(true).build();
         }
 
@@ -173,6 +185,9 @@ public class RoadmapService {
                 today,
                 PageRequest.of(0, MAX_RECOMMENDABLE_ACTIVITIES)
         );
+        // 재학생(1~3학년)은 "학사 학위 이상/졸업예정자 전용" 대졸 공채에 지원할 수 없다 — 후보 선정
+        // 단계에서 미리 제외한다(추천과 공통 헬퍼, GraduateOnlyActivityFilter 참고).
+        activeActivities = GraduateOnlyActivityFilter.filterForGrade(activeActivities, grade);
         String availableActivitiesJson = promptDataBuilder.buildAvailableActivitiesJsonForRoadmap(activeActivities, topRecommendedIds);
 
         // 4. Gemini API 호출 (최대 2회 시도)
@@ -508,6 +523,20 @@ public class RoadmapService {
         }
         log.info("로드맵 캐시 재검증: 비활성/마감/삭제된 활동 {}건 제거", removed[0]);
         return response.toBuilder().timeline(filteredSteps).build();
+    }
+
+    /**
+     * 스텝 어딘가에 matchedActivities가 하나라도 있는지만 본다(마감일 등 신선도는 보지 않음).
+     * "필터링 전 원래 매칭이 있었는가"를 판단하는 용도 — hasUsableCachedActivities와 달리 빈
+     * 목록/전부 빈 스텝이면 그냥 false를 반환하면 되므로 vacuous truth 문제가 없다.
+     */
+    private boolean hasAnyMatchedActivities(RoadmapResponse response) {
+        if (response == null || response.getTimeline() == null) {
+            return false;
+        }
+        return response.getTimeline().stream()
+                .filter(step -> step != null && step.getMatchedActivities() != null)
+                .anyMatch(step -> !step.getMatchedActivities().isEmpty());
     }
 
     private boolean hasUsableCachedActivities(RoadmapResponse response, LocalDate today) {

@@ -12,6 +12,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
@@ -61,6 +62,15 @@ public class GithubClient {
     private static final Duration CALL_TIMEOUT = Duration.ofSeconds(15);
     /** 응답의 X-RateLimit-Remaining이 이 값 미만이면 그 즉시 분석을 중단한다. */
     private static final int RATE_LIMIT_STOP_THRESHOLD = 5;
+    /**
+     * WebClient 기본 maxInMemorySize(256KB)로는 /search/commits?per_page=100나 큰 레포의
+     * /git/trees?recursive=1 응답(수백 KB)을 파싱하다 DataBufferLimitException이 난다 — 운영
+     * 로그에는 "status=200"으로 찍혀 마치 정상 응답인데 실패한 것처럼 보였다(실제로는 예외가
+     * HTTP 상태와 무관하게 버퍼 크기 초과로 발생). 10MB면 사실상 모든 응답을 수용한다.
+     */
+    private static final int MAX_IN_MEMORY_SIZE_BYTES = 10 * 1024 * 1024;
+    /** 커밋 검색 후보 상한(30)이면 50건으로 충분하고, 100 대비 응답 크기를 절반으로 줄인다. */
+    private static final int COMMIT_SEARCH_PER_PAGE = 50;
 
     /** 트리에 있을 때만 조회하는 루트 의존성 파일. 순서는 우선순위와 무관 — 존재하는 것만 조회. */
     private static final List<String> DEPENDENCY_FILE_NAMES =
@@ -217,7 +227,7 @@ public class GithubClient {
                             .queryParam("q", "author:" + username)
                             .queryParam("sort", "committer-date")
                             .queryParam("order", "desc")
-                            .queryParam("per_page", 100)
+                            .queryParam("per_page", COMMIT_SEARCH_PER_PAGE)
                             .build())
                     .retrieve()
                     .toEntity(Map.class)
@@ -459,8 +469,14 @@ public class GithubClient {
     private record Clients(WebClient authClient, WebClient anonymousClient) {}
 
     private Clients buildClients() {
+        // 기본 256KB로는 /search/commits·/git/trees의 큰 응답을 못 받아 DataBufferLimitException이
+        // 났다(위 MAX_IN_MEMORY_SIZE_BYTES 주석 참고) — 인증·익명 클라이언트 둘 다 적용해야 한다.
+        ExchangeStrategies largeBufferStrategies = ExchangeStrategies.builder()
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(MAX_IN_MEMORY_SIZE_BYTES))
+                .build();
         WebClient.Builder builder = webClientBuilder
                 .baseUrl(baseUrl)
+                .exchangeStrategies(largeBufferStrategies)
                 .defaultHeader("Accept", "application/vnd.github+json")
                 .defaultHeader("X-GitHub-Api-Version", "2022-11-28");
         WebClient anonymous = builder.build();
@@ -493,12 +509,22 @@ public class GithubClient {
         }
     }
 
-    /** 실패를 조용히 건너뛰는 지점의 로그를 운영(INFO)에서도 보이도록 warn으로 남긴다. 상태코드·대상만 남기고 토큰 등 민감정보는 남기지 않는다. */
+    /**
+     * 실패를 조용히 건너뛰는 지점의 로그를 운영(INFO)에서도 보이도록 warn으로 남긴다. 상태코드·대상만
+     * 남기고 토큰 등 민감정보는 남기지 않는다.
+     *
+     * ⚠️ 예전엔 WebClientResponseException이 아닌 예외(DataBufferLimitException 등)도
+     * "status=200"처럼 실제 HTTP 응답 상태만 보이는 형태로 찍혀, 마치 정상 응답을 받고도 실패한
+     * 것처럼 오독됐다(운영에서 실측: "GitHub 커밋 검색 실패: author:... - status=200"). 예외
+     * 클래스명을 항상 함께 남기고, status는 실제로 HTTP 응답에서 온 WebClientResponseException일
+     * 때만 붙인다.
+     */
     private void logSkip(String action, String targetFullName, Exception e) {
         if (e instanceof WebClientResponseException wcre) {
-            log.warn("{} 실패: {} - status={}", action, targetFullName, wcre.getStatusCode().value());
+            log.warn("{} 실패: {} - {} status={}", action, targetFullName,
+                    e.getClass().getSimpleName(), wcre.getStatusCode().value());
         } else {
-            log.warn("{} 실패: {} - {}", action, targetFullName, e.getMessage());
+            log.warn("{} 실패: {} - {} {}", action, targetFullName, e.getClass().getSimpleName(), e.getMessage());
         }
     }
 

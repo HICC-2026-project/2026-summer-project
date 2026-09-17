@@ -16,6 +16,7 @@ import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
 import com.career.recommendation.util.GapMatcher;
+import com.career.recommendation.util.GraduateOnlyActivityFilter;
 import com.career.recommendation.util.PromptDataBuilder;
 import com.career.recommendation.util.SpecPositionCalculator;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -141,6 +142,10 @@ public class RecommendationService {
                 today,
                 PageRequest.of(0, MAX_RECOMMENDABLE_ACTIVITIES)
         );
+        // 재학생(1~3학년)은 "학사 학위 이상/졸업예정자 전용" 대졸 공채에 지원할 수 없다 — 후보 선정
+        // 단계에서 미리 제외한다(로드맵과 공통 헬퍼, GraduateOnlyActivityFilter 참고).
+        activeActivities = GraduateOnlyActivityFilter.filterForGrade(
+                activeActivities, userSpec != null ? userSpec.getGrade() : null);
         String availableActivitiesJson = promptDataBuilder.buildAvailableActivitiesJson(activeActivities);
 
         // 5. Gemini API 호출 (최대 2회 시도) — 프롬프트에도 화면과 같은 위치·갭 데이터를 준다.
