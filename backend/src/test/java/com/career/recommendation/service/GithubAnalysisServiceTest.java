@@ -13,6 +13,7 @@ import com.career.recommendation.exception.GithubAnalysisInProgressException;
 import com.career.recommendation.repository.GithubProfileRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
+import com.career.recommendation.util.ServiceTime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -103,7 +104,7 @@ class GithubAnalysisServiceTest {
                 .user(user)
                 .username("octocat")
                 .status(GithubProfileStatus.PENDING.name())
-                .requestedAt(LocalDateTime.now())
+                .requestedAt(LocalDateTime.now(ServiceTime.ZONE_ID))
                 .build();
 
         stubTransactionManager();
@@ -134,7 +135,7 @@ class GithubAnalysisServiceTest {
                 .user(user)
                 .username("octocat")
                 .status(GithubProfileStatus.PENDING.name())
-                .requestedAt(LocalDateTime.now().minusMinutes(16))
+                .requestedAt(LocalDateTime.now(ServiceTime.ZONE_ID).minusMinutes(16))
                 .build();
 
         stubTransactionManager();
@@ -145,7 +146,7 @@ class GithubAnalysisServiceTest {
 
         GithubConnectRequest request = new GithubConnectRequest();
         request.setUrl("octocat");
-        LocalDateTime beforeCall = LocalDateTime.now();
+        LocalDateTime beforeCall = LocalDateTime.now(ServiceTime.ZONE_ID);
 
         GithubConnectResponse response = githubAnalysisService.connect(authentication, request);
 
@@ -164,7 +165,7 @@ class GithubAnalysisServiceTest {
                 .user(user)
                 .username("octocat")
                 .status(GithubProfileStatus.PENDING.name())
-                .requestedAt(LocalDateTime.now().minusMinutes(1))
+                .requestedAt(LocalDateTime.now(ServiceTime.ZONE_ID).minusMinutes(1))
                 .build();
 
         stubTransactionManager();
@@ -225,8 +226,8 @@ class GithubAnalysisServiceTest {
                 .user(user)
                 .username("octocat")
                 .status(GithubProfileStatus.DONE.name())
-                .analyzedAt(LocalDateTime.now().minusHours(1))
-                .requestedAt(LocalDateTime.now().minusHours(1))
+                .analyzedAt(LocalDateTime.now(ServiceTime.ZONE_ID).minusHours(1))
+                .requestedAt(LocalDateTime.now(ServiceTime.ZONE_ID).minusHours(1))
                 .build();
 
         stubTransactionManager();
@@ -251,8 +252,8 @@ class GithubAnalysisServiceTest {
                 .user(user)
                 .username("octocat")
                 .status(GithubProfileStatus.DONE.name())
-                .analyzedAt(LocalDateTime.now().minusHours(25))
-                .requestedAt(LocalDateTime.now().minusHours(25))
+                .analyzedAt(LocalDateTime.now(ServiceTime.ZONE_ID).minusHours(25))
+                .requestedAt(LocalDateTime.now(ServiceTime.ZONE_ID).minusHours(25))
                 .build();
 
         stubTransactionManager();
