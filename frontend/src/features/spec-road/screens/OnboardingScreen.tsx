@@ -2,7 +2,7 @@
 
 import { useState, type CSSProperties } from "react";
 import { Chip } from "../components/Chip";
-import { GithubExperienceBadge } from "../components/ExperienceBadge";
+import { ExperienceCard } from "../components/ExperienceCard";
 import {
   EXPERIENCE_TYPE_OPTIONS,
   GPA_SCALE_OPTIONS,
@@ -15,7 +15,7 @@ import {
   PRIMARY,
   SIZE_OPTIONS,
 } from "../data";
-import { chipStyle, experienceTypeLabel } from "../helpers";
+import { chipStyle, parseStackInput } from "../helpers";
 import type { Experience, ExperienceType, JobCode, OnboardStep, Spec, Target } from "../types";
 
 interface OnboardingScreenProps {
@@ -102,9 +102,17 @@ export function OnboardingScreen({
   onSetIndustry,
 }: OnboardingScreenProps) {
   const [certInput, setCertInput] = useState("");
-  const [experienceDraft, setExperienceDraft] = useState<{ type: ExperienceType; title: string; description: string }>(
-    { type: "INTERNSHIP", title: "", description: "" },
-  );
+  const [experienceDraft, setExperienceDraft] = useState<{
+    type: ExperienceType;
+    title: string;
+    description: string;
+    months: string;
+    role: string;
+    stackInput: string;
+  }>({ type: "INTERNSHIP", title: "", description: "", months: "", role: "", stackInput: "" });
+  // 기간·역할·기술은 선택 입력이라 기본은 접어 두고, 필요할 때만 펼친다
+  // (경험 입력 UI가 무거워지지 않도록 — E11 1단계).
+  const [showExperienceDetail, setShowExperienceDetail] = useState(false);
   const onboardPct = step === 0 ? "50%" : "100%";
   const onboardCta = step === 0 ? "다음" : "분석 시작하기";
 
@@ -129,18 +137,29 @@ export function OnboardingScreen({
   }
 
   // 제목이 비어있으면 추가하지 않는다(경험은 선택 입력이지만, 추가할 땐 제목이 필수).
-  // 설명이 비어있으면 필드 자체를 넣지 않는다 — description은 optional이라
-  // ""를 보내는 대신 아예 생략해야 계약(빈 값 = 미기입)과 일치한다.
+  // description·role·months·stack이 비어있으면 필드 자체를 넣지 않는다 — 전부 optional이라
+  // 빈 값을 보내는 대신 아예 생략해야 계약(빈 값 = 미기입)과 일치한다.
   function submitExperienceInput() {
     const title = experienceDraft.title.trim();
     if (!title) return;
     const description = experienceDraft.description.trim();
+    const role = experienceDraft.role.trim();
+    const stack = parseStackInput(experienceDraft.stackInput);
+    // months는 1~120 정수만 유효하다(계약) — 범위를 벗어나거나 비어있으면 생략한다.
+    const monthsNum = Number(experienceDraft.months);
+    const months =
+      experienceDraft.months !== "" && Number.isInteger(monthsNum) && monthsNum >= 1 && monthsNum <= 120
+        ? monthsNum
+        : undefined;
     onAddExperience({
       type: experienceDraft.type,
       title,
       ...(description ? { description } : {}),
+      ...(months != null ? { months } : {}),
+      ...(role ? { role } : {}),
+      ...(stack.length > 0 ? { stack } : {}),
     });
-    setExperienceDraft((d) => ({ ...d, title: "", description: "" }));
+    setExperienceDraft((d) => ({ ...d, title: "", description: "", months: "", role: "", stackInput: "" }));
   }
 
   return (
@@ -392,6 +411,89 @@ export function OnboardingScreen({
                   outline: "none",
                 }}
               />
+              <button
+                type="button"
+                onClick={() => setShowExperienceDetail((v) => !v)}
+                style={{
+                  alignSelf: "flex-start",
+                  border: "none",
+                  background: "transparent",
+                  color: PRIMARY,
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  padding: "2px 0",
+                }}
+              >
+                {showExperienceDetail ? "상세 입력 접기 ▲" : "상세 입력 (기간·역할·기술) ▼"}
+              </button>
+              {showExperienceDetail && (
+                <>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                    <input
+                      value={experienceDraft.months}
+                      onChange={(e) => {
+                        const sanitized = clampToMax(sanitizeNumericInput(e.target.value, false), 120);
+                        setExperienceDraft((d) => ({ ...d, months: sanitized }));
+                      }}
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="활동 기간 (선택)"
+                      style={{
+                        flex: 1,
+                        height: 42,
+                        padding: "0 14px",
+                        borderRadius: 12,
+                        border: "1px solid #E1E0EA",
+                        fontSize: 14,
+                        outline: "none",
+                      }}
+                    />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#9797A1", flexShrink: 0 }}>개월</span>
+                  </div>
+                  <input
+                    value={experienceDraft.role}
+                    onChange={(e) => setExperienceDraft((d) => ({ ...d, role: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        submitExperienceInput();
+                      }
+                    }}
+                    type="text"
+                    maxLength={100}
+                    placeholder="역할 한 줄 (선택, 예: 백엔드 API 설계·구현)"
+                    style={{
+                      height: 42,
+                      padding: "0 14px",
+                      borderRadius: 12,
+                      border: "1px solid #E1E0EA",
+                      fontSize: 14,
+                      outline: "none",
+                    }}
+                  />
+                  <input
+                    value={experienceDraft.stackInput}
+                    onChange={(e) => setExperienceDraft((d) => ({ ...d, stackInput: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        submitExperienceInput();
+                      }
+                    }}
+                    type="text"
+                    placeholder="사용 기술 (콤마로 구분, 선택, 예: Spring Boot, JPA, MySQL)"
+                    style={{
+                      height: 42,
+                      padding: "0 14px",
+                      borderRadius: 12,
+                      border: "1px solid #E1E0EA",
+                      fontSize: 14,
+                      outline: "none",
+                    }}
+                  />
+                </>
+              )}
             </div>
             <button
               type="button"
@@ -426,18 +528,7 @@ export function OnboardingScreen({
                     border: "1px solid #EAE9F1",
                   }}
                 >
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: PRIMARY, marginBottom: 2 }}>
-                      {experienceTypeLabel(exp.type)}
-                    </div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#15141B" }}>
-                      {exp.title}
-                      {exp.source === "GITHUB" && <GithubExperienceBadge />}
-                    </div>
-                    {exp.description && (
-                      <div style={{ fontSize: 12.5, color: "#61616C", marginTop: 2 }}>{exp.description}</div>
-                    )}
-                  </div>
+                  <ExperienceCard experience={exp} />
                   <button
                     type="button"
                     onClick={() => onRemoveExperience(idx)}

@@ -1,4 +1,4 @@
-import type { ExperienceType, JobCode, Recommendation, RoadmapMilestone, SpecPosition } from "./types";
+import type { AreaCode, ExperienceDepth, ExperienceType, JobCode, Recommendation, RoadmapMilestone, SpecPosition } from "./types";
 
 export const PRIMARY = "#2F6FED";
 
@@ -199,6 +199,31 @@ export const EXPERIENCE_TYPE_OPTIONS: { code: ExperienceType; label: string }[] 
   { code: "EDUCATION", label: "교육/부트캠프" },
   { code: "ETC", label: "기타" },
 ];
+
+// 경험·GitHub 레포 자동 태그(area) 코드 → 한글 라벨(E11 1단계). 사용자가 직접 입력하지
+// 않는 자동 태그 전용 필드라 여기서는 표시만 담당한다.
+export const AREA_LABELS: Record<AreaCode, string> = {
+  AUTH: "인증",
+  API: "API 개발",
+  DB: "데이터베이스",
+  CI_CD: "CI/CD",
+  TEST: "테스트",
+  UI: "UI 구현",
+  STATE_MGMT: "상태 관리",
+  DATA_PIPELINE: "데이터 파이프라인",
+  ML_MODEL: "ML 모델",
+  INFRA: "인프라/배포",
+  DOCS: "문서화",
+  SECURITY: "보안 분석",
+  PLANNING: "기획",
+};
+
+// 경험 깊이 코드 → 한글 라벨(E11 1단계). 값은 2차에서 AI가 채운다 — 1차는 표시만 준비.
+export const DEPTH_LABELS: Record<ExperienceDepth, string> = {
+  IMPLEMENTED: "직접 구현",
+  CONFIGURED: "설정·조립",
+  BOILERPLATE: "튜토리얼 수준",
+};
 
 // 로드맵 구간 계산(학기/방학 구분)에 쓰이는 학년 선택지 (7/14 회의 결정).
 export const GRADE_OPTIONS = [1, 2, 3, 4];

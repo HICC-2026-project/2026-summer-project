@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { deleteGithubProfile, getGithubProfile, postGithubAnalysis } from "../../api";
+import { AreaChips } from "../../components/AreaChips";
 import { BADGE, PRIMARY } from "../../data";
 import type { GithubProfile } from "../../types";
 
@@ -202,6 +203,11 @@ export function GithubSectionView({
             >
               <span style={{ fontWeight: 700, color: "#15141B" }}>{repo.name}</span> · {repo.primaryJobLabel} · 커밋{" "}
               {repo.commits}회 · {repo.mainLanguage}
+              {repo.areas && repo.areas.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                  <AreaChips areas={repo.areas} />
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -20,6 +20,27 @@ export interface Spec {
 // spec.experiences와 정확히 같은 모양이어야 한다(백엔드와 병행 개발 중인 계약).
 export type ExperienceType = "INTERNSHIP" | "PROJECT" | "COMPETITION" | "EXTERNAL" | "EDUCATION" | "ETC";
 
+// 자동 태그(area) 코드. AREA_LABELS(data.ts)의 키 전체를 나열한다 — 라벨 맵을
+// 빠짐없이 채우기 위한 용도이고, 실제 필드 타입은 GithubJobCode처럼 string[]로 둔다
+// (신규 코드가 늘어나도 화면이 깨지지 않도록).
+export type AreaCode =
+  | "AUTH"
+  | "API"
+  | "DB"
+  | "CI_CD"
+  | "TEST"
+  | "UI"
+  | "STATE_MGMT"
+  | "DATA_PIPELINE"
+  | "ML_MODEL"
+  | "INFRA"
+  | "DOCS"
+  | "SECURITY"
+  | "PLANNING";
+
+// 경험 깊이 — 2차에서 AI가 채운다(E11 1차는 스키마·표시만 준비). 값이 없으면 미분석 상태다.
+export type ExperienceDepth = "IMPLEMENTED" | "CONFIGURED" | "BOILERPLATE";
+
 export interface Experience {
   type: ExperienceType;
   title: string;
@@ -27,6 +48,15 @@ export interface Experience {
   // 이 경험이 어떻게 추가됐는지. 미기재(undefined)면 수동 입력(MANUAL)과 같다 —
   // GET /users/me · PUT /users/me/spec 왕복에서 그대로 보존해야 한다(E3 1단계 계약).
   source?: "MANUAL" | "GITHUB";
+  // 아래 5개는 E11 1단계에서 추가된 선택 필드(깊이 신호). 백엔드와 병행 개발 중인 계약이라
+  // 임의로 모양을 바꾸지 않는다.
+  months?: number; // 활동 개월수 (1~120)
+  role?: string; // 역할 한 줄 (≤100자)
+  stack?: string[]; // 사용 기술 (최대 10개, 각 ≤50자)
+  // 자동 태그 전용 — 사용자가 직접 입력하지 않는다. 신규 코드에도 화면이 깨지지 않도록
+  // AreaCode로 제한하지 않고 string[]로 둔다(GithubJobCode와 같은 이유).
+  areas?: string[];
+  depth?: ExperienceDepth; // 2차에서 AI가 채운다 — 1차는 표시만 준비.
 }
 
 // Shape expected by PUT /users/me/spec's languageScores field (API 명세서 기준).
@@ -275,6 +305,8 @@ export interface GithubRepoSummary {
   firstCommitAt: string;
   lastCommitAt: string;
   mainLanguage: string;
+  // E11 1단계: 이 레포에서 감지된 자동 태그(area). areas와 같은 이유로 string[]로 둔다.
+  areas?: string[];
 }
 
 // GET /api/v1/users/me/github — 미연결(connected:false) 또는 등록된 분석 상태.

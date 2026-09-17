@@ -33,3 +33,47 @@ https://linkareer.com/activity/340351
 
 # 사용자 검수 제외: 국립대구과학관 전국청소년 과학신문공모전
 https://linkareer.com/activity/340300
+
+# --- 2026-09-17 재수집 검수 (30건 중 14건 제외) ---
+
+# 검수 제외: 청소년(중고생) 대상 지역 로봇대회
+https://linkareer.com/activity/350441
+
+# 검수 제외: 관광마케팅 국비과정 — 직무 무관
+https://linkareer.com/activity/351249
+
+# 검수 제외: 고졸개발자취업 광고 — 동일 신청폼(naver.me/xtNRIw7T) 중복 공고
+https://linkareer.com/activity/351268
+
+# 검수 제외: 임베디드&펌웨어 부트캠프 — 서비스 직무 6종 범위 밖
+https://linkareer.com/activity/351277
+
+# 검수 제외: 앱 베타테스터 모집 — 스펙 활동 가치 낮음
+https://linkareer.com/activity/350794
+
+# 검수 제외: 네이버랩스 Generative AI — 석·박사 학위 요건
+https://linkareer.com/activity/351269
+
+# 검수 제외: 틱톡샵 어필리에이트 마케터 — 마케팅 직무
+https://linkareer.com/activity/351279
+
+# 검수 제외: 네이버랩스 로봇 구동팩 임베디드 인턴 — 전기전자/임베디드 직무
+https://linkareer.com/activity/351261
+
+# 검수 제외: 이커머스 MD 전문가 과정 — 개발 직무 무관
+https://linkareer.com/activity/350252
+
+# 검수 제외: 3D모션그래픽 양성과정 — 디자인/영상 직무
+https://linkareer.com/activity/351163
+
+# 검수 제외: AI Shift Track — 3년차 이상 재직 개발자 대상(직무전환 과정)
+https://linkareer.com/activity/351201
+
+# 검수 제외: 씨에스윈드 QA — 경력 8~16년 요건
+https://linkareer.com/activity/351196
+
+# 검수 제외: 씨에스윈드 정보보안 — 경력직 채용
+https://linkareer.com/activity/351213
+
+# 검수 제외: SK키파운드리 정보보안 — 경력 4년 이상 요건
+https://linkareer.com/activity/351217

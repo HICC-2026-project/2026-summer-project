@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -292,6 +293,117 @@ class UserSpecRequestValidationTest {
 
         assertThat(validationMessages(request))
                 .contains("올바른 경험 출처가 아닙니다.");
+    }
+
+    // --- 경험 신규 필드(E11 1단계) ---
+
+    @Test
+    void 경험_months가_0이면_검증에_실패한다() {
+        UserSpecRequest request = validRequest();
+        ExperienceRequest exp = experience("PROJECT", "제목", null);
+        exp.setMonths(0);
+        request.setExperiences(List.of(exp));
+
+        assertThat(validationMessages(request))
+                .contains("활동 기간은 1개월 이상이어야 합니다.");
+    }
+
+    @Test
+    void 경험_months가_121이면_검증에_실패한다() {
+        UserSpecRequest request = validRequest();
+        ExperienceRequest exp = experience("PROJECT", "제목", null);
+        exp.setMonths(121);
+        request.setExperiences(List.of(exp));
+
+        assertThat(validationMessages(request))
+                .contains("활동 기간은 120개월 이하여야 합니다.");
+    }
+
+    @Test
+    void 경험_months가_1과_120이면_검증을_통과한다() {
+        UserSpecRequest request = validRequest();
+        ExperienceRequest exp1 = experience("PROJECT", "제목1", null);
+        exp1.setMonths(1);
+        ExperienceRequest exp2 = experience("PROJECT", "제목2", null);
+        exp2.setMonths(120);
+        request.setExperiences(List.of(exp1, exp2));
+
+        assertThat(validator.validate(request)).isEmpty();
+    }
+
+    @Test
+    void 경험_stack이_11개를_초과하면_검증에_실패한다() {
+        UserSpecRequest request = validRequest();
+        ExperienceRequest exp = experience("PROJECT", "제목", null);
+        exp.setStack(java.util.stream.IntStream.range(0, 11).mapToObj(i -> "lib" + i).collect(Collectors.toList()));
+        request.setExperiences(List.of(exp));
+
+        assertThat(validationMessages(request))
+                .contains("사용 기술은 최대 10개까지 저장할 수 있습니다.");
+    }
+
+    @Test
+    void 경험_role이_100자를_초과하면_검증에_실패한다() {
+        UserSpecRequest request = validRequest();
+        ExperienceRequest exp = experience("PROJECT", "제목", null);
+        exp.setRole("가".repeat(101));
+        request.setExperiences(List.of(exp));
+
+        assertThat(validationMessages(request))
+                .contains("역할은 100자 이하여야 합니다.");
+    }
+
+    @Test
+    void 경험_areas에_미지_코드가_있으면_검증에_실패한다() {
+        UserSpecRequest request = validRequest();
+        ExperienceRequest exp = experience("PROJECT", "제목", null);
+        exp.setAreas(List.of("AUTH", "NOT_A_REAL_AREA"));
+        request.setExperiences(List.of(exp));
+
+        assertThat(validationMessages(request))
+                .contains("올바른 기여 영역 코드가 아닙니다.");
+    }
+
+    @Test
+    void 경험_areas는_대소문자_무시하고_정규화되며_중복이_제거된다() {
+        UserSpecRequest request = validRequest();
+        ExperienceRequest exp = experience("PROJECT", "제목", null);
+        exp.setAreas(List.of("auth", "AUTH", " api "));
+        request.setExperiences(List.of(exp));
+
+        assertThat(validator.validate(request)).isEmpty();
+        assertThat((List<String>) exp.toMap().get("areas")).containsExactly("AUTH", "API");
+    }
+
+    @Test
+    void 경험_depth에_오타가_있으면_검증에_실패한다() {
+        UserSpecRequest request = validRequest();
+        ExperienceRequest exp = experience("PROJECT", "제목", null);
+        exp.setDepth("IMPLEMENTD");
+        request.setExperiences(List.of(exp));
+
+        assertThat(validationMessages(request))
+                .contains("올바른 구현 깊이가 아닙니다.");
+    }
+
+    @Test
+    void 경험_depth를_대소문자_구분없이_받을_수_있다() {
+        UserSpecRequest request = validRequest();
+        ExperienceRequest exp = experience("PROJECT", "제목", null);
+        exp.setDepth("implemented");
+        request.setExperiences(List.of(exp));
+
+        assertThat(validator.validate(request)).isEmpty();
+        assertThat(exp.toMap()).containsEntry("depth", "IMPLEMENTED");
+    }
+
+    @Test
+    void 경험_신규_필드가_모두_없으면_toMap에_담기지_않는다() {
+        ExperienceRequest exp = experience("PROJECT", "제목", null);
+
+        Map<String, Object> map = exp.toMap();
+
+        assertThat(map).doesNotContainKeys("months", "role", "stack", "areas", "depth");
     }
 
     private ExperienceRequest experience(String type, String title, String description) {

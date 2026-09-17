@@ -220,7 +220,7 @@
 
 - [x] `GET /activities` 필터: `jobType`(태그 정규식, GapMatcher 키워드 공유)·`deadlineAfter`(상시 포함)·`keyword`(이름·주최·설명, LIKE 이스케이프). DB 테스트 5건
 - [x] `ActivityDeadlineScheduler` — 매일 00:05 KST `deadline < today` → `is_active=false` (당일 마감 유지), DB 테스트
-- [ ] 크롤러 재수집 파이프라인 문서화 + 증분 시드 생성 (기존 데이터 중복 방지 키 `url`)
+- [x] 크롤러 재수집 파이프라인 + 증분 시드 — 2026-09-17 실행: discover 30건 수집 → 검수 16건 채택(제외 14건은 `excluded_urls.txt`에 사유 기록), `backend/seed/linkareer-activity-seed-2026-09-17.sql` 스냅샷, RDS 반영(활성 활동 5→21). 중복 방지는 sourceUrl 기반 UUID v5 + ON CONFLICT(문서: crawler README)
 - [ ] `targetSpec` JSON 스키마 고정 및 검증 테스트
 
 ---
@@ -247,6 +247,8 @@
 ---
 
 ## E11. 경험 심화 — 기여 프로필·외부 소스·검증 — 담당 BE-1/BE-3/FE, 규모 L, 의존 E1·E3
+
+> **2026-09-17 현행화 — 1차 구현**: 경험 항목 스키마 확장(`months·role·stack·areas(13종)·depth` 전부 선택, JSONB라 마이그레이션 불필요) + GitHub 파생 경험에 areas·stack·months 자동 태그(E11-1 규칙 추출 부분) + FE 카드·온보딩 상세 입력. **2차 진행 중**: 영역 커버리지(E11-2 1차 체크리스트)와 Gemini 심층 질문(E11-6). 원칙 유지: 깊이·영역은 점수(percentile) 미반영.
 
 설계 원칙
 - **두 층 분리**: 층 1 = 경험 개수(합격자와 같은 단위로 percentile, E1). 층 2 = 기여 프로필(`areas`/`stack`/깊이) — 점수화하지 않고 **커버리지·설명·추천**에만 사용.

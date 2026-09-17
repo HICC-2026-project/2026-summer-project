@@ -3,9 +3,9 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { getMyPasserReports } from "../../api";
-import { GithubExperienceBadge } from "../../components/ExperienceBadge";
+import { ExperienceCard } from "../../components/ExperienceCard";
 import { BADGE, DEMO_USER_NAME, PRIMARY } from "../../data";
-import { experienceTypeLabel, hasMeaningfulLangScore, jobLabel } from "../../helpers";
+import { hasMeaningfulLangScore, jobLabel } from "../../helpers";
 import type { MyPasserReport, ReviewStatus, Spec, Target } from "../../types";
 import { GithubSection } from "./GithubSection";
 
@@ -160,20 +160,7 @@ export function ProfileTab({
         {spec.experiences.length ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {spec.experiences.map((exp, idx) => (
-              <div key={idx}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: PRIMARY, marginBottom: 2 }}>
-                  {experienceTypeLabel(exp.type)}
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#15141B" }}>
-                  {exp.title}
-                  {exp.source === "GITHUB" && <GithubExperienceBadge />}
-                </div>
-                {exp.description && (
-                  <div style={{ fontSize: 12.5, color: "#61616C", marginTop: 2, lineHeight: 1.5 }}>
-                    {exp.description}
-                  </div>
-                )}
-              </div>
+              <ExperienceCard key={idx} experience={exp} />
             ))}
           </div>
         ) : (
