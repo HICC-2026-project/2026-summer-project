@@ -29,10 +29,27 @@ public class PromptDataBuilder {
      * 각 활동의 id, type, name, organization, description, deadline, tags 정보를 포함한다.
      */
     public String buildAvailableActivitiesJson(List<Activity> activities) {
+        return buildActivitiesJson(activities, Set.of(), true);
+    }
+
+    /**
+     * 로드맵(F-05) 프롬프트용 "전체 DB 등록 활동 목록"을 만든다. buildAvailableActivitiesJson과 달리:
+     * - excludeIds에 있는 활동(이미 [우선 반영할 AI 추천 활동]에 포함된 활동)은 제외한다 — 같은 활동이
+     *   두 목록에 중복으로 실려 프롬프트 토큰만 낭비하는 것을 막는다.
+     * - targetSpec 필드를 포함하지 않는다 — 크롤 수집 활동은 required_qualifications가 수천 자에
+     *   달할 수 있는데, 로드맵은 시기별 매칭(마감일·직무)만 할 뿐 targetSpec 충족 여부는 따지지
+     *   않는다(그건 추천(F-03) 프롬프트의 역할). description 100자 컷은 그대로 유지한다.
+     */
+    public String buildAvailableActivitiesJsonForRoadmap(List<Activity> activities, Set<UUID> excludeIds) {
+        return buildActivitiesJson(activities, excludeIds != null ? excludeIds : Set.of(), false);
+    }
+
+    private String buildActivitiesJson(List<Activity> activities, Set<UUID> excludeIds, boolean includeTargetSpec) {
         if (activities.isEmpty()) return "[]";
         try {
             List<Map<String, Object>> list = new ArrayList<>();
             for (Activity a : activities) {
+                if (excludeIds.contains(a.getId())) continue;
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("id", a.getId().toString());
                 item.put("type", a.getType());
@@ -49,7 +66,8 @@ public class PromptDataBuilder {
                     item.put("tags", a.getTags());
                 }
                 // 활동 자격 요건(targetSpec)을 포함하여 AI가 유저 스펙과 비교할 수 있도록 전달
-                if (a.getTargetSpec() != null) {
+                // (추천(F-03)에서만 필요 — 로드맵은 includeTargetSpec=false로 호출한다)
+                if (includeTargetSpec && a.getTargetSpec() != null) {
                     item.put("targetSpec", a.getTargetSpec());
                 }
                 list.add(item);
@@ -60,6 +78,11 @@ public class PromptDataBuilder {
             return "[]";
         }
     }
+
+    /** 프롬프트에 실을 경험 description 상한. 저장·API 응답(UserSpecResponse 등)은 이 상한과 무관하다. */
+    private static final int EXPERIENCE_DESCRIPTION_PROMPT_LIMIT = 100;
+    /** 프롬프트에 실을 경험당 stack 상한 개수. */
+    private static final int EXPERIENCE_STACK_PROMPT_LIMIT = 5;
 
     /**
      * 유저 스펙을 Gemini 프롬프트용 JSON 문자열로 직렬화한다.
@@ -73,7 +96,7 @@ public class PromptDataBuilder {
                     "gpaMax", userSpec.getGpaMax() != null ? userSpec.getGpaMax() : 4.5,
                     "languageScores", userSpec.getLanguageScores() != null ? userSpec.getLanguageScores() : List.of(),
                     "certifications", userSpec.getCertifications() != null ? userSpec.getCertifications() : new String[]{},
-                    "experiences", userSpec.getExperiences() != null ? userSpec.getExperiences() : List.of(),
+                    "experiences", truncateExperiencesForPrompt(userSpec.getExperiences()),
                     "grade", userSpec.getGrade() != null ? userSpec.getGrade() : "미입력"
             ));
         } catch (Exception e) {
@@ -99,11 +122,40 @@ public class PromptDataBuilder {
                     "grade", userSpec.getGrade() != null ? userSpec.getGrade() : "미입력",
                     "certifications", userSpec.getCertifications() != null ? userSpec.getCertifications() : new String[]{},
                     "languageScores", userSpec.getLanguageScores() != null ? userSpec.getLanguageScores() : List.of(),
-                    "experiences", userSpec.getExperiences() != null ? userSpec.getExperiences() : List.of()
+                    "experiences", truncateExperiencesForPrompt(userSpec.getExperiences())
             ));
         } catch (Exception e) {
             return "{}";
         }
+    }
+
+    /**
+     * 경험 리스트를 프롬프트 주입용으로 축약한다. 저장 형식(UserSpec.experiences)과 API 응답은
+     * 그대로 두고, Gemini에 보낼 때만 크기를 줄인다 — 경험 최대 20개 × description 500자 +
+     * stack 10개 등을 그대로 넣으면 사용자 1명의 경험만으로 프롬프트가 2만자를 넘을 수 있었다.
+     * - description: 100자로 컷(+"...")
+     * - stack: 앞 5개만
+     * - role/areas/months/type/title/depth 등 그 외 필드는 그대로 둔다(role은 이미 ≤100자,
+     *   areas는 코드 나열이라 원래도 짧다).
+     * 두 직렬화 메서드(추천·로드맵)가 중복 구현하지 않도록 이곳에 단일화한다.
+     */
+    private List<Map<String, Object>> truncateExperiencesForPrompt(List<Map<String, Object>> experiences) {
+        if (experiences == null || experiences.isEmpty()) return List.of();
+        List<Map<String, Object>> result = new ArrayList<>(experiences.size());
+        for (Map<String, Object> experience : experiences) {
+            if (experience == null) continue;
+            Map<String, Object> copy = new LinkedHashMap<>(experience);
+            Object description = copy.get("description");
+            if (description instanceof String desc && desc.length() > EXPERIENCE_DESCRIPTION_PROMPT_LIMIT) {
+                copy.put("description", desc.substring(0, EXPERIENCE_DESCRIPTION_PROMPT_LIMIT) + "...");
+            }
+            Object stack = copy.get("stack");
+            if (stack instanceof List<?> stackList && stackList.size() > EXPERIENCE_STACK_PROMPT_LIMIT) {
+                copy.put("stack", new ArrayList<>(stackList.subList(0, EXPERIENCE_STACK_PROMPT_LIMIT)));
+            }
+            result.add(copy);
+        }
+        return result;
     }
 
     /**

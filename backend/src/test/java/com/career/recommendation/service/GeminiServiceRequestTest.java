@@ -36,6 +36,7 @@ class GeminiServiceRequestTest {
         ReflectionTestUtils.setField(s, "keyInHeader", keyInHeader);
         ReflectionTestUtils.setField(s, "baseUrl", "https://example.test/v1beta");
         ReflectionTestUtils.setField(s, "model", "gemini-test");
+        ReflectionTestUtils.setField(s, "maxOutputTokens", 4096);
         return s;
     }
 

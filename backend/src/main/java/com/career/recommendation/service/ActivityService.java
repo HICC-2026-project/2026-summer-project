@@ -62,7 +62,9 @@ public class ActivityService {
                 .searchOpenActivities(today, type,
                         filter.deadlineAfter() != null ? filter.deadlineAfter() : NO_DEADLINE_FILTER,
                         keywordLike, jobPattern, pageable)
-                .map(ActivityResponse::from);
+                // 목록 응답은 description을 200자로 줄인다(ActivityResponse.fromSummary) — 상세
+                // 조회(getActivity)는 from()으로 전문을 그대로 유지한다.
+                .map(ActivityResponse::fromSummary);
     }
 
     public ActivityResponse getActivity(UUID activityId) {

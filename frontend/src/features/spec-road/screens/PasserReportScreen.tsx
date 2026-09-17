@@ -2,7 +2,7 @@
 
 import { useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { Chip } from "../components/Chip";
-import { GPA_SCALE_OPTIONS, JOB_OPTIONS, LANG_MAX, LANG_TYPES, OPIC_GRADES, PRIMARY } from "../data";
+import { GPA_SCALE_OPTIONS, INK, INK_FAINT, INK_MUTED, JOB_OPTIONS, LANG_MAX, LANG_TYPES, LINE, OPIC_GRADES, PRIMARY } from "../data";
 import { toLanguageScoresPayload } from "../helpers";
 import type { JobCode, PasserReportRequest, PasserReportResponse, Spec } from "../types";
 
@@ -18,7 +18,7 @@ const ALLOWED_PROOF_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const cardStyle: CSSProperties = {
   background: "#fff",
-  border: "1px solid #EDEDF2",
+  border: `1px solid ${LINE}`,
   borderRadius: 20,
   padding: 18,
   marginBottom: 12,
@@ -28,7 +28,7 @@ const fieldLabelStyle: CSSProperties = {
   display: "block",
   fontSize: 13,
   fontWeight: 700,
-  color: "#61616C",
+  color: INK_MUTED,
   marginBottom: 10,
 };
 
@@ -40,7 +40,7 @@ const inputStyle: CSSProperties = {
   borderRadius: 12,
   border: "1px solid #E1E0EA",
   background: "#fff",
-  color: "#15141B",
+  color: INK,
   fontSize: 14,
   outline: "none",
 };
@@ -51,7 +51,7 @@ const scoreInputStyle: CSSProperties = {
   background: "transparent",
   fontSize: 22,
   fontWeight: 800,
-  color: "#15141B",
+  color: INK,
   padding: "2px 0",
   outline: "none",
 };
@@ -204,7 +204,7 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
             border: "none",
             background: "#fff",
             boxShadow: "0 1px 2px rgba(24,22,44,0.06)",
-            color: "#61616C",
+            color: INK_MUTED,
             fontSize: 18,
             cursor: submitting ? "not-allowed" : "pointer",
             flexShrink: 0,
@@ -213,20 +213,20 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
           ‹
         </button>
         <div>
-          <div style={{ fontSize: 17, fontWeight: 800, color: "#15141B", letterSpacing: "-0.02em" }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: INK, letterSpacing: "-0.02em" }}>
             합격자 스펙 제보
           </div>
-          <div style={{ marginTop: 2, fontSize: 11.5, color: "#9797A1" }}>검수 완료 후 비교 데이터에 반영돼요</div>
+          <div style={{ marginTop: 2, fontSize: 11.5, color: INK_FAINT }}>검수 완료 후 비교 데이터에 반영돼요</div>
         </div>
       </header>
 
       <div className="cf-scroll" style={{ flex: 1, overflowY: "auto", padding: "8px 20px 24px", animation: "cfUp .35s ease both" }}>
-        <h1 style={{ margin: "6px 0 7px", fontSize: 24, fontWeight: 800, color: "#15141B", letterSpacing: "-0.02em" }}>
+        <h1 style={{ margin: "6px 0 7px", fontSize: 24, fontWeight: 800, color: INK, letterSpacing: "-0.02em" }}>
           합격 당시 스펙을
           <br />
           알려주세요
         </h1>
-        <p style={{ margin: "0 0 22px", fontSize: 14, color: "#61616C", lineHeight: 1.55 }}>
+        <p style={{ margin: "0 0 22px", fontSize: 14, color: INK_MUTED, lineHeight: 1.55 }}>
           이름과 연락처는 저장하지 않으며, 입력한 스펙만 익명 통계에 활용합니다.
         </p>
 
@@ -253,7 +253,7 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
               maxLength={4}
               style={{ ...scoreInputStyle, width: 92 }}
             />
-            <span style={{ fontSize: 14, fontWeight: 600, color: "#9797A1" }}>년</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: INK_FAINT }}>년</span>
           </div>
         </section>
 
@@ -268,7 +268,7 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
               inputMode="decimal"
               style={{ ...scoreInputStyle, width: 92 }}
             />
-            <span style={{ fontSize: 15, fontWeight: 700, color: "#9797A1" }}>/ {gpaMax}</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: INK_FAINT }}>/ {gpaMax}</span>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
             {GPA_SCALE_OPTIONS.map((scale) => (
@@ -296,7 +296,7 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
               const value = langScores[type] ?? "";
               return (
                 <div key={type}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#15141B" }}>{type}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: INK }}>{type}</span>
                   <div style={{ marginTop: 7 }}>
                     {type === "OPIc" ? (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -324,7 +324,7 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
                           inputMode="numeric"
                           style={{ ...scoreInputStyle, width: 100 }}
                         />
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "#9797A1" }}>/ {maxScore}점</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: INK_FAINT }}>/ {maxScore}점</span>
                       </div>
                     )}
                   </div>
@@ -400,13 +400,13 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
               inputMode="numeric"
               style={{ ...scoreInputStyle, width: 82 }}
             />
-            <span style={{ fontSize: 14, fontWeight: 600, color: "#9797A1" }}>건</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: INK_FAINT }}>건</span>
           </div>
         </section>
 
         <section style={cardStyle}>
           <div style={{ ...fieldLabelStyle, marginBottom: 4 }}>합격 증빙자료</div>
-          <p style={{ margin: "0 0 13px", fontSize: 12, color: "#9797A1", lineHeight: 1.55 }}>
+          <p style={{ margin: "0 0 13px", fontSize: 12, color: INK_FAINT, lineHeight: 1.55 }}>
             합격 안내 화면이나 메일을 첨부해주세요. 이름, 연락처, 수험번호 등 개인정보는 반드시 가려주세요.
           </p>
           <input
@@ -431,10 +431,10 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
             >
               <span aria-hidden="true" style={{ fontSize: 22 }}>🖼️</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13, fontWeight: 700, color: "#15141B" }}>
+                <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13, fontWeight: 700, color: INK }}>
                   {proofFile.name}
                 </div>
-                <div style={{ marginTop: 3, fontSize: 11.5, color: "#9797A1" }}>
+                <div style={{ marginTop: 3, fontSize: 11.5, color: INK_FAINT }}>
                   {(proofFile.size / 1024 / 1024).toFixed(2)}MB · 검수용
                 </div>
               </div>
@@ -506,7 +506,7 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
         {(submitError || validationMessage) && (
           <p
             aria-live="polite"
-            style={{ margin: "0 0 10px", fontSize: 12.5, fontWeight: 600, color: submitError ? "#E5484D" : "#9797A1", textAlign: "center" }}
+            style={{ margin: "0 0 10px", fontSize: 12.5, fontWeight: 600, color: submitError ? "#E5484D" : INK_FAINT, textAlign: "center" }}
           >
             {submitError ?? validationMessage}
           </p>
@@ -567,10 +567,10 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
             >
               ✓
             </div>
-            <h2 id="passer-report-success-title" style={{ margin: "0 0 9px", fontSize: 20, color: "#15141B", fontWeight: 800 }}>
+            <h2 id="passer-report-success-title" style={{ margin: "0 0 9px", fontSize: 20, color: INK, fontWeight: 800 }}>
               제보가 접수되었습니다
             </h2>
-            <p style={{ margin: "0 0 21px", fontSize: 13.5, color: "#61616C", lineHeight: 1.6 }}>
+            <p style={{ margin: "0 0 21px", fontSize: 13.5, color: INK_MUTED, lineHeight: 1.6 }}>
               관리자 검수 완료 후 추천 및 합격자 비교 데이터에 반영됩니다.
             </p>
             <button

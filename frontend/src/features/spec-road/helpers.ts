@@ -1,4 +1,4 @@
-import { AREA_LABELS, DEPTH_LABELS, EXPERIENCE_TYPE_OPTIONS, JOB_OPTIONS, LANG_MAX, PRIMARY } from "./data";
+import { AREA_LABELS, DEPTH_LABELS, EXPERIENCE_TYPE_OPTIONS, INK_FAINT, INK_MUTED, JOB_OPTIONS, LANG_MAX, PRIMARY } from "./data";
 import type {
   Experience,
   JobCode,
@@ -39,7 +39,7 @@ export function dday(dateStr: string): string {
 
 export function ddayColor(dateStr: string): string {
   const diff = Math.ceil((parseLocalDate(dateStr).getTime() - todayMidnight()) / 86400000);
-  return diff <= 30 ? "#E5484D" : "#9797A1";
+  return diff <= 30 ? "#E5484D" : INK_FAINT;
 }
 
 export function fmtDate(dateStr: string): string {
@@ -56,7 +56,7 @@ export interface ChipStyle {
 export function chipStyle(selected: boolean): ChipStyle {
   return selected
     ? { background: `color-mix(in srgb, ${PRIMARY} 10%, #fff)`, color: PRIMARY, borderColor: PRIMARY }
-    : { background: "#F6F5FA", color: "#61616C", borderColor: "#EAE9F1" };
+    : { background: "#F6F5FA", color: INK_MUTED, borderColor: "#EAE9F1" };
 }
 
 // 직무 코드 → 화면 라벨. 저장은 코드로, 표시는 라벨로 한다.

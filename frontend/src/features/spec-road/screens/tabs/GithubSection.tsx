@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { deleteGithubProfile, getGithubProfile, postGithubAnalysis } from "../../api";
 import { AreaChips } from "../../components/AreaChips";
-import { BADGE, PRIMARY } from "../../data";
+import { BADGE, INK, INK_FAINT, INK_MUTED, LINE, PRIMARY, SURFACE_MUTED } from "../../data";
 import type { GithubProfile } from "../../types";
 
 // PENDING 폴링 간격·상한 (E3 1단계 계약: 3초 간격, 최대 2분).
@@ -101,7 +101,7 @@ export function GithubSectionView({
         {submitError && (
           <div style={{ fontSize: 12.5, color: BADGE.bad.color, marginBottom: 8, lineHeight: 1.5 }}>{submitError}</div>
         )}
-        <p style={{ fontSize: 11.5, color: "#9797A1", lineHeight: 1.6, margin: 0 }}>{CONSENT_TEXT}</p>
+        <p style={{ fontSize: 11.5, color: INK_FAINT, lineHeight: 1.6, margin: 0 }}>{CONSENT_TEXT}</p>
       </div>
     );
   }
@@ -109,8 +109,8 @@ export function GithubSectionView({
   if (profile.status === "PENDING") {
     return (
       <div>
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#15141B" }}>{profile.username} 분석 중이에요</div>
-        <p style={{ fontSize: 12, color: "#9797A1", marginTop: 6, lineHeight: 1.55 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: INK }}>{profile.username} 분석 중이에요</div>
+        <p style={{ fontSize: 12, color: INK_FAINT, marginTop: 6, lineHeight: 1.55 }}>
           {pollTimedOut
             ? "시간이 좀 걸리고 있어요. 잠시 후 새로고침해 주세요."
             : "완료되면 자동으로 반영돼요. 이 화면을 열어둔 채 잠시 기다려 주세요."}
@@ -158,7 +158,7 @@ export function GithubSectionView({
   return (
     <div>
       {!hasResults && (
-        <div style={{ fontSize: 13, color: "#61616C", lineHeight: 1.6, marginBottom: 12 }}>{EMPTY_RESULT_MESSAGE}</div>
+        <div style={{ fontSize: 13, color: INK_MUTED, lineHeight: 1.6, marginBottom: 12 }}>{EMPTY_RESULT_MESSAGE}</div>
       )}
 
       {ratios.length > 0 && (
@@ -167,11 +167,11 @@ export function GithubSectionView({
             const percent = Math.round(r.ratio * 100);
             return (
               <div key={r.jobType} style={barRowStyle()}>
-                <span style={{ width: 64, fontSize: 12.5, fontWeight: 700, color: "#15141B", flexShrink: 0 }}>{r.label}</span>
-                <div style={{ flex: 1, height: 8, borderRadius: 999, background: "#F1F0F6", overflow: "hidden" }}>
+                <span style={{ width: 64, fontSize: 12.5, fontWeight: 700, color: INK, flexShrink: 0 }}>{r.label}</span>
+                <div style={{ flex: 1, height: 8, borderRadius: 999, background: SURFACE_MUTED, overflow: "hidden" }}>
                   <div style={{ height: "100%", borderRadius: 999, background: PRIMARY, width: `${percent}%` }} />
                 </div>
-                <span style={{ width: 38, textAlign: "right", fontSize: 12, fontWeight: 700, color: "#61616C", flexShrink: 0 }}>
+                <span style={{ width: 38, textAlign: "right", fontSize: 12, fontWeight: 700, color: INK_MUTED, flexShrink: 0 }}>
                   {percent}%
                 </span>
               </div>
@@ -201,7 +201,7 @@ export function GithubSectionView({
                 lineHeight: 1.5,
               }}
             >
-              <span style={{ fontWeight: 700, color: "#15141B" }}>{repo.name}</span> · {repo.primaryJobLabel} · 커밋{" "}
+              <span style={{ fontWeight: 700, color: INK }}>{repo.name}</span> · {repo.primaryJobLabel} · 커밋{" "}
               {repo.commits}회 · {repo.mainLanguage}
               {repo.areas && repo.areas.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
@@ -232,7 +232,7 @@ export function GithubSectionView({
             borderRadius: 12,
             border: "1px solid #E1E0EA",
             background: "#fff",
-            color: "#15141B",
+            color: INK,
             fontSize: 13.5,
             fontWeight: 700,
             cursor: submitting ? "not-allowed" : "pointer",
@@ -390,8 +390,8 @@ export function GithubSection({ onSpecRefresh }: GithubSectionProps) {
   }
 
   return (
-    <div style={{ background: "#fff", border: "1px solid #EDEDF2", borderRadius: 20, padding: "16px 18px", marginBottom: 16 }}>
-      <div style={{ fontSize: 14, color: "#61616C", fontWeight: 500, marginBottom: 12 }}>GitHub 공개 레포 분석</div>
+    <div style={{ background: "#fff", border: `1px solid ${LINE}`, borderRadius: 20, padding: "16px 18px", marginBottom: 16 }}>
+      <div style={{ fontSize: 14, color: INK_MUTED, fontWeight: 500, marginBottom: 12 }}>GitHub 공개 레포 분석</div>
       <GithubSectionView
         profile={profile}
         urlInput={urlInput}

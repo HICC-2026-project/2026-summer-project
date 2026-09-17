@@ -1,6 +1,6 @@
 "use client";
 
-import { PRIMARY } from "../data";
+import { INK, INK_FAINT, INK_MUTED, PRIMARY } from "../data";
 
 interface LoginScreenProps {
   onLoginKakao: () => void;
@@ -46,7 +46,7 @@ export function LoginScreen({ onLoginKakao, onLoginDemo }: LoginScreenProps) {
             letterSpacing: "-0.03em",
             lineHeight: 1.28,
             margin: "0 0 14px",
-            color: "#15141B",
+            color: INK,
           }}
         >
           합격자 데이터로
@@ -55,7 +55,7 @@ export function LoginScreen({ onLoginKakao, onLoginDemo }: LoginScreenProps) {
           <br />
           스펙 로드맵
         </h1>
-        <p style={{ fontSize: 15, lineHeight: 1.6, color: "#61616C", margin: 0, maxWidth: 300 }}>
+        <p style={{ fontSize: 15, lineHeight: 1.6, color: INK_MUTED, margin: 0, maxWidth: 300 }}>
           내 스펙을 입력하면 익명 합격자 데이터와 비교해, 지금 해야 할 활동을 알려드려요.
         </p>
       </div>
@@ -90,7 +90,7 @@ export function LoginScreen({ onLoginKakao, onLoginDemo }: LoginScreenProps) {
             border: "1px solid #E1E0EA",
             borderRadius: 16,
             background: "transparent",
-            color: "#61616C",
+            color: INK_MUTED,
             fontSize: 15,
             fontWeight: 600,
             cursor: "pointer",
@@ -98,7 +98,7 @@ export function LoginScreen({ onLoginKakao, onLoginDemo }: LoginScreenProps) {
         >
           로그인 없이 둘러보기
         </button>
-        <p style={{ textAlign: "center", fontSize: 12, color: "#9797A1", margin: "6px 0 0", lineHeight: 1.5 }}>
+        <p style={{ textAlign: "center", fontSize: 12, color: INK_FAINT, margin: "6px 0 0", lineHeight: 1.5 }}>
           Google 로그인은 곧 지원될 예정이에요
         </p>
       </div>

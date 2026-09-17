@@ -143,6 +143,7 @@ public class RoadmapService {
         // 보므로 이 로드맵은 "사용 가능"으로 영구 캐시된다(빈 로드맵 영구 캐싱과 같은 형태의
         // 자가회복 불가 상태). 마감 지난 활동은 여기서 미리 걸러낸다.
         String topRecommendedJson = "[]";
+        Set<UUID> topRecommendedIds = Set.of();
         try {
             Recommendation cachedRec = recommendationRepository.findByUser_Id(user.getId()).orElse(null);
             if (cachedRec != null && cachedRec.getResultJson() != null) {
@@ -152,6 +153,12 @@ public class RoadmapService {
                             .filter(a -> a.getDeadline() == null || !a.getDeadline().isBefore(today))
                             .toList();
                     topRecommendedJson = objectMapper.writeValueAsString(stillOpen);
+                    // [전체 DB 등록 활동 목록]에서 제외할 ID — 이미 [우선 반영할 AI 추천 활동]에
+                    // 실린 활동을 두 목록에 중복으로 넣으면 프롬프트 토큰만 낭비한다.
+                    topRecommendedIds = stillOpen.stream()
+                            .map(RecommendationResponse.ActivityRecommendation::getId)
+                            .filter(id -> id != null)
+                            .collect(Collectors.toSet());
                 }
             }
         } catch (Exception e) {
@@ -166,7 +173,7 @@ public class RoadmapService {
                 today,
                 PageRequest.of(0, MAX_RECOMMENDABLE_ACTIVITIES)
         );
-        String availableActivitiesJson = promptDataBuilder.buildAvailableActivitiesJson(activeActivities);
+        String availableActivitiesJson = promptDataBuilder.buildAvailableActivitiesJsonForRoadmap(activeActivities, topRecommendedIds);
 
         // 4. Gemini API 호출 (최대 2회 시도)
         RoadmapResponse response = callGeminiWithRetry(userSpecJson, targetJobStr, grade,

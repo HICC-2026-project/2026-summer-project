@@ -1,6 +1,6 @@
 "use client";
 
-import { PRIMARY } from "../../data";
+import { INK, INK_FAINT, INK_MUTED, LINE, PRIMARY, SURFACE_MUTED } from "../../data";
 import { StateMessage } from "../../components/StateMessage";
 import { dday, ddayColor, jobLabel } from "../../helpers";
 import type { Priority, RoadmapMilestone, Target } from "../../types";
@@ -8,7 +8,7 @@ import type { Priority, RoadmapMilestone, Target } from "../../types";
 const PRIORITY_META: Record<Priority, { label: string; color: string; bg: string }> = {
   HIGH: { label: "지금 집중", color: PRIMARY, bg: `color-mix(in srgb, ${PRIMARY} 12%, #fff)` },
   MEDIUM: { label: "중요", color: "#B45309", bg: "#FBF0E4" },
-  LOW: { label: "준비", color: "#6B7280", bg: "#F1F0F6" },
+  LOW: { label: "준비", color: "#6B7280", bg: SURFACE_MUTED },
 };
 
 interface RoadmapTabProps {
@@ -24,8 +24,8 @@ export function RoadmapTab({ target, roadmap, roadmapLoading, roadmapError, road
 
   return (
     <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
-      <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 6px", color: "#15141B" }}>커리어 로드맵</h1>
-      <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 22px", lineHeight: 1.55 }}>
+      <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 6px", color: INK }}>커리어 로드맵</h1>
+      <p style={{ fontSize: 14, color: INK_MUTED, margin: "0 0 22px", lineHeight: 1.55 }}>
         {targetSummary} 목표까지, 시기별로 해야 할 일을 정리했어요.
       </p>
 
@@ -68,7 +68,7 @@ export function RoadmapTab({ target, roadmap, roadmapLoading, roadmapError, road
           const meta = PRIORITY_META[m.priority];
           const dotBg = m.current ? PRIMARY : "#fff";
           const dotBorder = m.current ? PRIMARY : "#D9D8E4";
-          const cardBorder = m.current ? `color-mix(in srgb, ${PRIMARY} 35%, #fff)` : "#EDEDF2";
+          const cardBorder = m.current ? `color-mix(in srgb, ${PRIMARY} 35%, #fff)` : LINE;
 
           return (
             <div key={i} style={{ position: "relative", paddingLeft: 32, paddingBottom: 20 }}>
@@ -87,10 +87,10 @@ export function RoadmapTab({ target, roadmap, roadmapLoading, roadmapError, road
                 }}
               />
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 800, color: "#15141B" }}>{m.period}</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: INK }}>{m.period}</span>
                 {/* phase는 목업 전용 필드 → 있을 때만 표시 (백엔드 응답엔 없음) */}
                 {m.phase && (
-                  <span style={{ fontSize: 11, fontWeight: 600, color: "#9797A1", background: "#F1F0F6", padding: "3px 8px", borderRadius: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: INK_FAINT, background: SURFACE_MUTED, padding: "3px 8px", borderRadius: 6 }}>
                     {m.phase}
                   </span>
                 )}
@@ -102,10 +102,10 @@ export function RoadmapTab({ target, roadmap, roadmapLoading, roadmapError, road
                   </span>
                   <span style={{ fontSize: 12, fontWeight: 600, color: "#B0B0BA" }}>{m.current ? "진행 중" : ""}</span>
                 </div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#15141B", letterSpacing: "-0.01em", marginBottom: 6, lineHeight: 1.35 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: INK, letterSpacing: "-0.01em", marginBottom: 6, lineHeight: 1.35 }}>
                   {m.activity}
                 </div>
-                <div style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5 }}>{m.reason}</div>
+                <div style={{ fontSize: 13, color: INK_MUTED, lineHeight: 1.5 }}>{m.reason}</div>
 
                 {/* 백엔드가 RAG로 검증해 붙여주는 실제 DB 활동(이름·마감·지원 링크). 있을 때만 표시. */}
                 {m.matchedActivities && m.matchedActivities.length > 0 && (
@@ -114,11 +114,11 @@ export function RoadmapTab({ target, roadmap, roadmapLoading, roadmapError, road
                       const body = (
                         <>
                           <span style={{ minWidth: 0, flex: 1 }}>
-                            <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, color: "#15141B", lineHeight: 1.35 }}>
+                            <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, color: INK, lineHeight: 1.35 }}>
                               {a.name}
                             </span>
                             {a.organization && (
-                              <span style={{ display: "block", fontSize: 12, color: "#9797A1", fontWeight: 500 }}>{a.organization}</span>
+                              <span style={{ display: "block", fontSize: 12, color: INK_FAINT, fontWeight: 500 }}>{a.organization}</span>
                             )}
                           </span>
                           <span style={{ fontSize: 12, fontWeight: 700, color: ddayColor(a.deadline), flexShrink: 0 }}>{dday(a.deadline)}</span>
@@ -131,7 +131,7 @@ export function RoadmapTab({ target, roadmap, roadmapLoading, roadmapError, road
                         gap: 10,
                         padding: "10px 12px",
                         background: "#F8F7FC",
-                        border: "1px solid #EDEDF2",
+                        border: `1px solid ${LINE}`,
                         borderRadius: 12,
                         textDecoration: "none",
                       } as const;

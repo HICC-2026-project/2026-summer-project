@@ -6,7 +6,7 @@ import { ApiError } from "@/lib/api";
 import { getMyPasserReports, putSpec } from "../../api";
 import { ExperienceCard } from "../../components/ExperienceCard";
 import { ExperienceEnrichModal } from "../../components/ExperienceEnrichModal";
-import { BADGE, DEMO_USER_NAME, PRIMARY } from "../../data";
+import { BADGE, DEMO_USER_NAME, INK, INK_FAINT, INK_MUTED, LINE, PRIMARY, SURFACE_MUTED } from "../../data";
 import { hasMeaningfulLangScore, jobLabel } from "../../helpers";
 import type { Experience, ExperienceEnrichResult, MyPasserReport, ReviewStatus, Spec, Target } from "../../types";
 import { GithubSection } from "./GithubSection";
@@ -43,7 +43,7 @@ function rowStyle(hasBorder: boolean): CSSProperties {
     alignItems: "center",
     justifyContent: "space-between",
     padding: "15px 0",
-    borderBottom: hasBorder ? "1px solid #F1F0F6" : "none",
+    borderBottom: hasBorder ? `1px solid ${SURFACE_MUTED}` : "none",
   };
 }
 
@@ -143,19 +143,19 @@ export function ProfileTab({
         </div>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#15141B", letterSpacing: "-0.02em" }}>{displayName}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: INK, letterSpacing: "-0.02em" }}>{displayName}</div>
             {!isDemo && onEditNickname && (
               <button
                 type="button"
                 onClick={onEditNickname}
                 aria-label="닉네임 수정"
-                style={{ border: "1px solid #E1E0EA", background: "#fff", borderRadius: 8, padding: "3px 8px", fontSize: 11.5, color: "#61616C", cursor: "pointer" }}
+                style={{ border: "1px solid #E1E0EA", background: "#fff", borderRadius: 8, padding: "3px 8px", fontSize: 11.5, color: INK_MUTED, cursor: "pointer" }}
               >
                 수정
               </button>
             )}
           </div>
-          <div style={{ fontSize: 13.5, color: "#61616C", marginTop: 2 }}>{targetSummary} 준비 중</div>
+          <div style={{ fontSize: 13.5, color: INK_MUTED, marginTop: 2 }}>{targetSummary} 준비 중</div>
         </div>
       </div>
 
@@ -178,23 +178,23 @@ export function ProfileTab({
         </div>
       )}
 
-      <div style={{ background: "#fff", border: "1px solid #EDEDF2", borderRadius: 20, padding: "6px 18px", marginBottom: 16 }}>
+      <div style={{ background: "#fff", border: `1px solid ${LINE}`, borderRadius: 20, padding: "6px 18px", marginBottom: 16 }}>
         <div style={rowStyle(true)}>
-          <span style={{ fontSize: 14, color: "#61616C", fontWeight: 500 }}>학점</span>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#15141B" }}>{spec.gpa} / {spec.gpaScale}</span>
+          <span style={{ fontSize: 14, color: INK_MUTED, fontWeight: 500 }}>학점</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: INK }}>{spec.gpa} / {spec.gpaScale}</span>
         </div>
         <div style={{ ...rowStyle(true), alignItems: "flex-start", gap: 20 }}>
-          <span style={{ fontSize: 14, color: "#61616C", fontWeight: 500, flexShrink: 0 }}>어학</span>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "#15141B", textAlign: "right", lineHeight: 1.5 }}>{langLabel}</span>
+          <span style={{ fontSize: 14, color: INK_MUTED, fontWeight: 500, flexShrink: 0 }}>어학</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: INK, textAlign: "right", lineHeight: 1.5 }}>{langLabel}</span>
         </div>
         <div style={{ ...rowStyle(false), alignItems: "flex-start", gap: 20 }}>
-          <span style={{ fontSize: 14, color: "#61616C", fontWeight: 500, flexShrink: 0 }}>자격증</span>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "#15141B", textAlign: "right", lineHeight: 1.5 }}>{certLabel}</span>
+          <span style={{ fontSize: 14, color: INK_MUTED, fontWeight: 500, flexShrink: 0 }}>자격증</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: INK, textAlign: "right", lineHeight: 1.5 }}>{certLabel}</span>
         </div>
       </div>
 
-      <div style={{ background: "#fff", border: "1px solid #EDEDF2", borderRadius: 20, padding: "16px 18px", marginBottom: 16 }}>
-        <div style={{ fontSize: 14, color: "#61616C", fontWeight: 500, marginBottom: spec.experiences.length ? 12 : 0 }}>
+      <div style={{ background: "#fff", border: `1px solid ${LINE}`, borderRadius: 20, padding: "16px 18px", marginBottom: 16 }}>
+        <div style={{ fontSize: 14, color: INK_MUTED, fontWeight: 500, marginBottom: spec.experiences.length ? 12 : 0 }}>
           경험
         </div>
         {spec.experiences.length ? (
@@ -210,7 +210,7 @@ export function ProfileTab({
             ))}
           </div>
         ) : (
-          <div style={{ fontSize: 14, fontWeight: 600, color: "#9797A1" }}>경험 미입력</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: INK_FAINT }}>경험 미입력</div>
         )}
       </div>
 
@@ -227,7 +227,7 @@ export function ProfileTab({
           border: isDemo ? "none" : "1px solid #E1E0EA",
           borderRadius: 16,
           background: isDemo ? "#FEE500" : "#fff",
-          color: isDemo ? "#191600" : "#15141B",
+          color: isDemo ? "#191600" : INK,
           fontSize: 15,
           fontWeight: 700,
           cursor: "pointer",
@@ -256,7 +256,7 @@ export function ProfileTab({
           >
             합격자 스펙 제보하기
           </button>
-          <p style={{ margin: "9px 8px 0", fontSize: 11.5, color: "#9797A1", lineHeight: 1.5, textAlign: "center" }}>
+          <p style={{ margin: "9px 8px 0", fontSize: 11.5, color: INK_FAINT, lineHeight: 1.5, textAlign: "center" }}>
             제보 내용은 익명으로 저장되며, 검수 완료 후 비교 데이터에 반영됩니다.
           </p>
 
@@ -282,17 +282,17 @@ export function ProfileTab({
           )}
 
           {myReports.length > 0 && (
-            <div style={{ marginTop: 16, background: "#fff", border: "1px solid #EDEDF2", borderRadius: 18, padding: "6px 18px" }}>
-              <div style={{ fontSize: 12, color: "#9797A1", fontWeight: 600, padding: "12px 0 4px" }}>내 제보 {myReports.length}건</div>
+            <div style={{ marginTop: 16, background: "#fff", border: `1px solid ${LINE}`, borderRadius: 18, padding: "6px 18px" }}>
+              <div style={{ fontSize: 12, color: INK_FAINT, fontWeight: 600, padding: "12px 0 4px" }}>내 제보 {myReports.length}건</div>
               {myReports.map((r, i) => {
                 const badge = REVIEW_BADGE[r.status] ?? REVIEW_BADGE.PENDING;
                 return (
                   <div key={r.reportId} style={rowStyle(i < myReports.length - 1)}>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#15141B" }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>
                         {r.jobTypeLabel} · {r.year}년 합격
                       </div>
-                      <div style={{ fontSize: 11.5, color: "#9797A1", marginTop: 2 }}>
+                      <div style={{ fontSize: 11.5, color: INK_FAINT, marginTop: 2 }}>
                         {r.createdAt.slice(0, 10)} 제보
                       </div>
                     </div>

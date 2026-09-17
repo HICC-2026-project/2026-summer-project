@@ -1,7 +1,9 @@
 package com.career.recommendation.service;
 
+import com.career.recommendation.dto.recommendation.RecommendationResponse;
 import com.career.recommendation.dto.roadmap.RoadmapResponse;
 import com.career.recommendation.entity.Activity;
+import com.career.recommendation.entity.Recommendation;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.repository.ActivityRepository;
 import com.career.recommendation.repository.RecommendationRepository;
@@ -12,6 +14,7 @@ import com.career.recommendation.util.PromptDataBuilder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -20,10 +23,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.lenient;
@@ -79,7 +84,7 @@ class RoadmapServiceEmptyStepsTest {
         when(promptDataBuilder.serializeSpecForRoadmap(any())).thenReturn("{}");
         when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
         when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
-        when(promptDataBuilder.buildAvailableActivitiesJson(any())).thenReturn("[]");
+        when(promptDataBuilder.buildAvailableActivitiesJsonForRoadmap(any(), any())).thenReturn("[]");
 
         // 형태만 있고 알맹이는 없는 응답 — period/priority/activity/reason/activityIds 전부 없음.
         when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any()))
@@ -125,7 +130,7 @@ class RoadmapServiceEmptyStepsTest {
         when(promptDataBuilder.serializeSpecForRoadmap(any())).thenReturn("{}");
         when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
         when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
-        when(promptDataBuilder.buildAvailableActivitiesJson(any())).thenReturn("[]");
+        when(promptDataBuilder.buildAvailableActivitiesJsonForRoadmap(any(), any())).thenReturn("[]");
 
         // priority만 빠지고 나머지(period·activity·reason)는 전부 정상인, 실제로 흔히
         // 발생 가능한 스키마 이탈 케이스.
@@ -160,7 +165,7 @@ class RoadmapServiceEmptyStepsTest {
         when(promptDataBuilder.serializeSpecForRoadmap(any())).thenReturn("{}");
         when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
         when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
-        when(promptDataBuilder.buildAvailableActivitiesJson(any())).thenReturn("[]");
+        when(promptDataBuilder.buildAvailableActivitiesJsonForRoadmap(any(), any())).thenReturn("[]");
 
         when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn("{\"timeline\":[{\"period\":\"3학년 2학기\",\"priority\":\"high\","
@@ -242,7 +247,7 @@ class RoadmapServiceEmptyStepsTest {
         when(promptDataBuilder.serializeSpecForRoadmap(any())).thenReturn("{}");
         when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
         when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
-        when(promptDataBuilder.buildAvailableActivitiesJson(any())).thenReturn("[]");
+        when(promptDataBuilder.buildAvailableActivitiesJsonForRoadmap(any(), any())).thenReturn("[]");
 
         // Gemini 응답이 계속 비어 있어 폴백 경로로 떨어지게 한다.
         when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any())).thenReturn("");
@@ -314,5 +319,59 @@ class RoadmapServiceEmptyStepsTest {
                 roadmapService, "hasUsableCachedActivities", withActivity, java.time.LocalDate.of(2026, 8, 11));
 
         assertThat(usableWithActivity).isTrue();
+    }
+
+    /**
+     * F-03 캐시에 실린(아직 마감 안 지난) 활동 ID가 [전체 DB 등록 활동 목록]에서 제외되는지
+     * 검증한다. 같은 활동을 두 목록에 중복으로 실으면 로드맵 프롬프트 토큰만 낭비한다.
+     * targetSpec 제외는 buildAvailableActivitiesJsonForRoadmap 자체의 책임(PromptDataBuilderTest)이라
+     * 여기서는 RoadmapService가 그 메서드에 올바른 excludeIds를 넘기는지만 확인한다.
+     */
+    @Test
+    void F03_캐시에_이미_있는_활동은_전체_활동_목록에서_제외하도록_넘긴다() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(user.getId()).thenReturn(userId);
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+
+        when(roadmapCacheRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+
+        ObjectMapper realMapper = new ObjectMapper().findAndRegisterModules();
+        UUID alreadyRecommendedId = UUID.randomUUID();
+        RecommendationResponse cachedRec = RecommendationResponse.builder()
+                .activities(List.of(
+                        RecommendationResponse.ActivityRecommendation.builder()
+                                .id(alreadyRecommendedId)
+                                .name("이미 추천된 활동")
+                                .type("EXTERNAL")
+                                .deadline(java.time.LocalDate.now().plusDays(30))
+                                .build()))
+                .build();
+        Recommendation recommendation = Recommendation.builder()
+                .resultJson(realMapper.writeValueAsString(cachedRec))
+                .build();
+        when(recommendationRepository.findByUser_Id(userId)).thenReturn(Optional.of(recommendation));
+
+        List<Activity> activities = List.of(
+                Activity.builder().id(alreadyRecommendedId).type("EXTERNAL").name("이미 추천된 활동")
+                        .isActive(true).build(),
+                Activity.builder().id(UUID.randomUUID()).type("EXTERNAL").name("다른 활동")
+                        .isActive(true).build());
+        when(activityRepository.findRecommendableActivities(any(), any())).thenReturn(activities);
+
+        when(promptDataBuilder.serializeSpecForRoadmap(any())).thenReturn("{}");
+        when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
+        when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
+        when(promptDataBuilder.buildAvailableActivitiesJsonForRoadmap(any(), any())).thenReturn("[]");
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any())).thenReturn("");
+
+        ReflectionTestUtils.setField(roadmapService, "objectMapper", realMapper);
+
+        roadmapService.getRoadmap(authentication);
+
+        ArgumentCaptor<Set<UUID>> excludeIdsCaptor = ArgumentCaptor.forClass(Set.class);
+        verify(promptDataBuilder).buildAvailableActivitiesJsonForRoadmap(eq(activities), excludeIdsCaptor.capture());
+        assertThat(excludeIdsCaptor.getValue()).containsExactly(alreadyRecommendedId);
     }
 }

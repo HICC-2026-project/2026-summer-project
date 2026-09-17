@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { postExperienceEnrich, postExperienceQuestions } from "../api";
-import { DEPTH_LABELS, PRIMARY } from "../data";
+import { DEPTH_LABELS, INK, INK_FAINT, INK_MUTED, PRIMARY } from "../data";
 import type { Experience, ExperienceEnrichResult } from "../types";
 import { AreaChips } from "./AreaChips";
 
@@ -44,7 +44,7 @@ const sheetStyle = {
   padding: "20px 22px calc(20px + env(safe-area-inset-bottom))",
 } as const;
 
-const mutedTextStyle = { fontSize: 13, color: "#61616C", lineHeight: 1.55, margin: "0 0 16px" } as const;
+const mutedTextStyle = { fontSize: 13, color: INK_MUTED, lineHeight: 1.55, margin: "0 0 16px" } as const;
 
 const primaryButtonStyle = {
   height: 48,
@@ -64,7 +64,7 @@ const secondaryButtonStyle = {
   border: "1px solid #E1E0EA",
   borderRadius: 14,
   background: "#fff",
-  color: "#15141B",
+  color: INK,
   fontSize: 14.5,
   fontWeight: 700,
   cursor: "pointer",
@@ -87,7 +87,7 @@ const depthBadgeStyle = {
   display: "inline-block",
   fontSize: 11.5,
   fontWeight: 700,
-  color: "#61616C",
+  color: INK_MUTED,
   background: "#fff",
   border: "1px solid #E1E0EA",
   padding: "3px 9px",
@@ -123,12 +123,12 @@ export function ExperienceEnrichModalView({
           <div style={{ width: 40, height: 5, borderRadius: 999, background: "#E1E0EA" }} />
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: "#15141B" }}>AI 깊이 분석</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: INK }}>AI 깊이 분석</div>
           <button
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            style={{ border: "none", background: "transparent", color: "#9797A1", fontSize: 16, cursor: "pointer" }}
+            style={{ border: "none", background: "transparent", color: INK_FAINT, fontSize: 16, cursor: "pointer" }}
           >
             ✕
           </button>
@@ -169,7 +169,7 @@ export function ExperienceEnrichModalView({
             <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 18 }}>
               {phase.questions.map((q, i) => (
                 <div key={i}>
-                  <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#15141B", marginBottom: 6 }}>
+                  <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: INK, marginBottom: 6 }}>
                     {q}
                   </label>
                   <textarea

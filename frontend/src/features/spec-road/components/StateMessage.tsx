@@ -1,5 +1,7 @@
 "use client";
 
+import { INK, INK_FAINT, INK_MUTED, LINE } from "../data";
+
 // 탭에서 되풀이되는 로딩·오류·빈 결과 안내를 한 곳에서 그린다.
 // (홈·로드맵이 같은 모양을 각자 인라인으로 갖고 있어 문구만 달랐다)
 interface StateMessageProps {
@@ -12,7 +14,7 @@ interface StateMessageProps {
 export function StateMessage({ variant = "empty", title, description }: StateMessageProps) {
   if (variant === "loading") {
     return (
-      <div style={{ padding: "40px 0", textAlign: "center", color: "#9797A1", fontSize: 14, fontWeight: 500 }}>
+      <div style={{ padding: "40px 0", textAlign: "center", color: INK_FAINT, fontSize: 14, fontWeight: 500 }}>
         {title}
       </div>
     );
@@ -24,7 +26,7 @@ export function StateMessage({ variant = "empty", title, description }: StateMes
         padding: "32px 20px",
         textAlign: "center",
         background: "#fff",
-        border: "1px solid #EDEDF2",
+        border: `1px solid ${LINE}`,
         borderRadius: 16,
       }}
     >
@@ -32,13 +34,13 @@ export function StateMessage({ variant = "empty", title, description }: StateMes
         style={{
           fontSize: 14.5,
           fontWeight: 700,
-          color: variant === "error" ? "#E5484D" : "#15141B",
+          color: variant === "error" ? "#E5484D" : INK,
           marginBottom: description ? 6 : 0,
         }}
       >
         {title}
       </div>
-      {description && <div style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5 }}>{description}</div>}
+      {description && <div style={{ fontSize: 13, color: INK_MUTED, lineHeight: 1.5 }}>{description}</div>}
     </div>
   );
 }
