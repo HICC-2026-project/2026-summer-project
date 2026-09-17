@@ -248,7 +248,7 @@
 
 ## E11. 경험 심화 — 기여 프로필·외부 소스·검증 — 담당 BE-1/BE-3/FE, 규모 L, 의존 E1·E3
 
-> **2026-09-17 현행화 — 1차 구현**: 경험 항목 스키마 확장(`months·role·stack·areas(13종)·depth` 전부 선택, JSONB라 마이그레이션 불필요) + GitHub 파생 경험에 areas·stack·months 자동 태그(E11-1 규칙 추출 부분) + FE 카드·온보딩 상세 입력. **2차 진행 중**: 영역 커버리지(E11-2 1차 체크리스트)와 Gemini 심층 질문(E11-6). 원칙 유지: 깊이·영역은 점수(percentile) 미반영.
+> **2026-09-17 현행화 — 1·2차 구현 완료**: ①스키마 확장(`months·role·stack·areas(13종)·depth`, JSONB) ②GitHub 파생 경험 자동 태그(E11-1 규칙 추출) ③영역 커버리지(E11-2 1차 — `JobAreaRequirements` 고정 체크리스트, `specPosition.areaCoverage`, 프롬프트에 보유/미보유 영역·role·stack 주입, 비교 탭 카드) ④Gemini 심층 질문(E11-6 — `POST /users/me/experiences/questions`·`/enrich`, stateless·답변 미저장, ENRICH 일일 10회 상한, FE 모달). 원칙 유지: 깊이·영역은 점수(percentile) 미반영. **남은 것**: E11-2 2차(합격자 areas 분포 기반), E11-3(깊이 판정 diff 기반), E11-4(외부 소스), E11-5(합격자 측 수집), 기여율(contributionRatio).
 
 설계 원칙
 - **두 층 분리**: 층 1 = 경험 개수(합격자와 같은 단위로 percentile, E1). 층 2 = 기여 프로필(`areas`/`stack`/깊이) — 점수화하지 않고 **커버리지·설명·추천**에만 사용.

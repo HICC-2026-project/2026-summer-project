@@ -173,6 +173,68 @@ public class GeminiService {
     }
 
     /**
+     * E11-6 — 경험 입력 내용을 바탕으로 기술적 깊이를 판별할 후속 질문 2~3개를 생성한다.
+     * @param experienceContext 경험 항목(유형·제목·설명·역할·기술스택·현재 태그된 영역)을 요약한 텍스트
+     * @return Gemini 응답 JSON 텍스트 {"questions": [...]}. 실패 시 빈 문자열(호출부가 폴백 처리).
+     */
+    public String generateExperienceQuestions(String experienceContext) {
+        String prompt = buildExperienceQuestionsPrompt(experienceContext);
+        String systemInstruction = "당신은 취업 커리어 어드바이저입니다. 사용자가 입력한 경험 항목의 기술적 깊이를 " +
+                "판별할 수 있는 한국어 후속 질문을 만드세요. 반드시 JSON 형식으로만 응답하세요.";
+        String raw = callGeminiApi(systemInstruction, prompt);
+        return extractJsonBlock(raw);
+    }
+
+    private String buildExperienceQuestionsPrompt(String experienceContext) {
+        return String.format("""
+                [경험 정보]
+                %s
+
+                ## 규칙
+                1. 이 경험이 실제로 어느 수준까지 구현되었는지(직접 설계·구현했는지, 설정·연동 위주인지,
+                   반복적인 기본 작업 수준인지)를 판별할 수 있는 후속 질문을 한국어로 2~3개 작성하세요.
+                2. 질문은 이 경험의 구체적인 내용(제목·설명·역할·기술스택)에 기반해야 합니다. "어떤 역할을
+                   맡았나요?" 같은 범용 질문은 피하세요.
+                3. 응답은 {"questions": ["...", "..."]} JSON 형식으로만 출력하세요.
+                """, experienceContext);
+    }
+
+    /**
+     * E11-6 — 경험과 후속 질문 답변을 바탕으로 기여 영역·구현 깊이·역할 요약을 판정한다.
+     * 답변 원문은 이 호출 이후 어디에도 저장하지 않는다(호출부 책임).
+     * @param experienceContext 경험 항목 요약 텍스트
+     * @param qaContext         후속 질문과 답변 목록을 요약한 텍스트
+     * @return Gemini 응답 JSON 텍스트 {"areas": [...], "depth": "...", "roleSummary": "..."}.
+     *         실패 시 빈 문자열(호출부가 폴백 처리).
+     */
+    public String generateExperienceEnrichment(String experienceContext, String qaContext) {
+        String prompt = buildExperienceEnrichPrompt(experienceContext, qaContext);
+        String systemInstruction = "당신은 취업 커리어 어드바이저입니다. 사용자의 경험과 후속 질문 답변을 바탕으로 " +
+                "이 경험이 다룬 기여 영역과 구현 깊이, 역할 요약을 판정하세요. 반드시 JSON 형식으로만 응답하세요.";
+        String raw = callGeminiApi(systemInstruction, prompt);
+        return extractJsonBlock(raw);
+    }
+
+    private String buildExperienceEnrichPrompt(String experienceContext, String qaContext) {
+        return String.format("""
+                [경험 정보]
+                %s
+
+                [후속 질문과 답변]
+                %s
+
+                ## 규칙
+                1. areas는 다음 코드 중에서만 골라 배열로 반환하세요(해당 없으면 빈 배열): AUTH, API, DB,
+                   CI_CD, TEST, UI, STATE_MGMT, DATA_PIPELINE, ML_MODEL, INFRA, DOCS, SECURITY, PLANNING.
+                2. depth는 IMPLEMENTED(직접 설계·구현), CONFIGURED(설정·연동 위주), BOILERPLATE(반복적인
+                   기본 작업) 중 하나여야 합니다.
+                3. roleSummary는 이 경험에서 사용자가 실제로 한 일을 100자 이내 한국어 한 문장으로 요약하세요.
+                4. 답변에서 확인되지 않는 내용은 지어내지 마세요.
+                5. 응답은 {"areas": [...], "depth": "...", "roleSummary": "..."} JSON 형식으로만 출력하세요.
+                """, experienceContext, qaContext);
+    }
+
+    /**
      * Gemini API 원문 응답에서 순수 JSON 블록만 추출한다.
      */
     public String extractJsonBlock(String raw) {

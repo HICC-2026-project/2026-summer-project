@@ -227,6 +227,75 @@ class SpecPositionCalculatorTest {
                 .isEqualTo(SpecPositionCalculator.percentileOf(new int[]{2, 3, 5}, 0));
     }
 
+    // --- E11-2(1차) 요구 영역 커버리지 ---
+
+    @Test
+    void 목표_직무가_없으면_areaCoverage는_null이다() {
+        JobSpecProfile emptyJob = profile(null);
+
+        SpecPositionResult result = calculator.calculate(user("3.80", 850), emptyJob, () -> null);
+
+        assertThat(result.getAreaCoverage()).isNull();
+    }
+
+    @Test
+    void 목표_직무가_있으면_요구_영역_전체가_선언_순서대로_내려오고_보유_여부가_판정된다() {
+        JobSpecProfile job = profile("BACKEND", passer("3.50", 800));
+        UserSpec userWithApiAndDb = UserSpec.builder()
+                .gpa(new BigDecimal("3.50")).gpaMax(new BigDecimal("4.50"))
+                .experiences(List.of(
+                        Map.of("type", "PROJECT", "title", "결제 API", "areas", List.of("API", "DB"))))
+                .build();
+
+        SpecPositionResult result = calculator.calculate(userWithApiAndDb, job, () -> null);
+
+        // BACKEND 요구 영역 선언 순서: API, DB, AUTH, TEST, CI_CD, INFRA
+        assertThat(result.getAreaCoverage()).extracting(
+                        SpecPositionResult.AreaCoverage::getArea,
+                        SpecPositionResult.AreaCoverage::isCovered)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("API", true),
+                        org.assertj.core.groups.Tuple.tuple("DB", true),
+                        org.assertj.core.groups.Tuple.tuple("AUTH", false),
+                        org.assertj.core.groups.Tuple.tuple("TEST", false),
+                        org.assertj.core.groups.Tuple.tuple("CI_CD", false),
+                        org.assertj.core.groups.Tuple.tuple("INFRA", false));
+        assertThat(result.getAreaCoverage()).extracting(SpecPositionResult.AreaCoverage::getLabel)
+                .contains("API 개발", "데이터베이스");
+    }
+
+    @Test
+    void 경험이_없거나_areas가_없으면_요구_영역이_전부_미보유다() {
+        JobSpecProfile job = profile("FRONTEND", passer("3.50", 800));
+        UserSpec noExpUser = UserSpec.builder()
+                .gpa(new BigDecimal("3.50")).gpaMax(new BigDecimal("4.50"))
+                .build();
+
+        SpecPositionResult result = calculator.calculate(noExpUser, job, () -> null);
+
+        assertThat(result.getAreaCoverage()).isNotEmpty();
+        assertThat(result.getAreaCoverage()).allSatisfy(
+                coverage -> assertThat(coverage.isCovered()).isFalse());
+    }
+
+    @Test
+    void areaCoverage는_합격자_표본이_부족해_NONE으로_떨어져도_계산된다() {
+        // 커버리지는 합격자 데이터가 아니라 사용자 경험만으로 판정하므로, basis가 NONE이어도 채워야 한다.
+        JobSpecProfile job = profile("BACKEND", passer("3.50", 800)); // 표본 1명 → MIN_SAMPLE 미달
+        UserSpec userWithApi = UserSpec.builder()
+                .experiences(List.of(Map.of("type", "PROJECT", "title", "API 서버", "areas", List.of("API"))))
+                .build();
+
+        SpecPositionResult result = calculator.calculate(userWithApi, job, () -> null);
+
+        assertThat(result.getBasis()).isEqualTo("NONE");
+        assertThat(result.getAreaCoverage()).isNotNull();
+        assertThat(result.getAreaCoverage())
+                .filteredOn(c -> c.getArea().equals("API"))
+                .extracting(SpecPositionResult.AreaCoverage::isCovered)
+                .containsExactly(true);
+    }
+
     // --- 갭 리스트 ---
 
     @Test

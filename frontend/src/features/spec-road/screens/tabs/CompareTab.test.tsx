@@ -90,4 +90,35 @@ describe("CompareTab", () => {
     render(<CompareTab isDemo recMeta={null} onOpenPasserReport={() => {}} />);
     expect(screen.queryByText("합격자 스펙 제보하기")).not.toBeInTheDocument();
   });
+
+  it("areaCoverage가 있으면 보유/미보유 칩을 나누어 보여주고, 미보유가 있으면 안내 문구를 띄운다", () => {
+    render(
+      <CompareTab
+        isDemo={false}
+        recMeta={meta({
+          ...base,
+          areaCoverage: [
+            { area: "API", label: "API 개발", covered: true },
+            { area: "AUTH", label: "인증", covered: false },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText("영역 커버리지")).toBeInTheDocument();
+    expect(screen.getByText("✓ API 개발")).toBeInTheDocument();
+    expect(screen.getByText("인증")).toBeInTheDocument();
+    expect(screen.getByText("비어 있는 영역은 추천 활동으로 채워보세요")).toBeInTheDocument();
+  });
+
+  it("areaCoverage가 undefined/null/빈 배열이면 영역 커버리지 섹션 자체를 렌더하지 않는다", () => {
+    const { rerender } = render(<CompareTab isDemo={false} recMeta={meta(base)} />);
+    expect(screen.queryByText("영역 커버리지")).not.toBeInTheDocument();
+
+    rerender(<CompareTab isDemo={false} recMeta={meta({ ...base, areaCoverage: null })} />);
+    expect(screen.queryByText("영역 커버리지")).not.toBeInTheDocument();
+
+    rerender(<CompareTab isDemo={false} recMeta={meta({ ...base, areaCoverage: [] })} />);
+    expect(screen.queryByText("영역 커버리지")).not.toBeInTheDocument();
+  });
 });

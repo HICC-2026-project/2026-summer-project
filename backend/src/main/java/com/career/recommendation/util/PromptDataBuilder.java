@@ -129,6 +129,18 @@ public class PromptDataBuilder {
                                 : ""));
             }
         }
+        // E11-2 — 목표 직무 요구 영역 중 보유/미보유를 명시해, 추천이 "미보유 영역을 채우는
+        // 활동"으로 좁혀지게 한다. areaCoverage가 null(목표 직무 미설정)이거나 빈 리스트면 생략.
+        if (position.getAreaCoverage() != null && !position.getAreaCoverage().isEmpty()) {
+            List<String> held = new ArrayList<>();
+            List<String> missing = new ArrayList<>();
+            for (SpecPositionResult.AreaCoverage coverage : position.getAreaCoverage()) {
+                (coverage.isCovered() ? held : missing).add(coverage.getLabel());
+            }
+            sb.append(String.format("목표 직무 요구 영역 — 보유: %s / 미보유: %s\n",
+                    held.isEmpty() ? "없음" : String.join(", ", held),
+                    missing.isEmpty() ? "없음" : String.join(", ", missing)));
+        }
         if (position.getGaps() != null && !position.getGaps().isEmpty()) {
             sb.append("부족한 항목(갭 — 합격자 다수 보유, 사용자 미보유):\n");
             for (SpecPositionResult.SpecGap gap : position.getGaps()) {

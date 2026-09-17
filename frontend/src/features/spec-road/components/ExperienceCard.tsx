@@ -8,13 +8,16 @@ import { GithubExperienceBadge } from "./ExperienceBadge";
 
 interface ExperienceCardProps {
   experience: Experience;
+  // 깊이(depth)가 아직 없는 경험에만 "AI 깊이 분석" 버튼을 보여준다. 프로필 탭에서만 넘겨준다 —
+  // 온보딩 경험 목록 미리보기는 저장된 계정이 없어 이 기능을 쓸 수 없다(props 생략 시 버튼 없음).
+  onAnalyzeDepth?: () => void;
 }
 
 // 경험 한 건의 표시 내용 — 유형 라벨·기간(N개월), 제목(+ GitHub 추정 배지), 역할 한 줄,
 // 설명, 기술 스택·자동 태그(area) 칩, 깊이 배지를 그린다(E11 1단계).
 // 온보딩 경험 목록 미리보기와 프로필 탭 경험 카드가 이 컴포넌트를 공유한다 —
 // 한쪽만 고치고 다른 쪽을 빠뜨리는 걸 막기 위해서다.
-export function ExperienceCard({ experience: exp }: ExperienceCardProps) {
+export function ExperienceCard({ experience: exp, onAnalyzeDepth }: ExperienceCardProps) {
   const depth = exp.depth ? DEPTH_LABELS[exp.depth] : null;
   const hasStack = (exp.stack?.length ?? 0) > 0;
   const hasAreas = (exp.areas?.length ?? 0) > 0;
@@ -72,6 +75,29 @@ export function ExperienceCard({ experience: exp }: ExperienceCardProps) {
             </span>
           )}
         </div>
+      )}
+      {!exp.depth && onAnalyzeDepth && (
+        <button
+          type="button"
+          onClick={onAnalyzeDepth}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            marginTop: 8,
+            height: 28,
+            padding: "0 10px",
+            borderRadius: 999,
+            border: `1px solid color-mix(in srgb, ${PRIMARY} 30%, #E1E0EA)`,
+            background: `color-mix(in srgb, ${PRIMARY} 6%, #fff)`,
+            color: PRIMARY,
+            fontSize: 11.5,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          ✦ AI 깊이 분석
+        </button>
       )}
     </div>
   );

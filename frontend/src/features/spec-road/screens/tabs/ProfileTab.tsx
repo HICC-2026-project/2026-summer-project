@@ -2,11 +2,13 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { getMyPasserReports } from "../../api";
+import { ApiError } from "@/lib/api";
+import { getMyPasserReports, putSpec } from "../../api";
 import { ExperienceCard } from "../../components/ExperienceCard";
+import { ExperienceEnrichModal } from "../../components/ExperienceEnrichModal";
 import { BADGE, DEMO_USER_NAME, PRIMARY } from "../../data";
 import { hasMeaningfulLangScore, jobLabel } from "../../helpers";
-import type { MyPasserReport, ReviewStatus, Spec, Target } from "../../types";
+import type { Experience, ExperienceEnrichResult, MyPasserReport, ReviewStatus, Spec, Target } from "../../types";
 import { GithubSection } from "./GithubSection";
 
 // 검수 상태 → 배지. 관리자 화면 탭 라벨과 같은 말을 쓴다.
@@ -80,6 +82,44 @@ export function ProfileTab({
       cancelled = true;
     };
   }, [isDemo]);
+
+  // AI 심층 질문 모달이 열려 있는 경험의 인덱스. null이면 닫힌 상태다.
+  const [enrichingIndex, setEnrichingIndex] = useState<number | null>(null);
+  const enrichingExperience = enrichingIndex != null ? spec.experiences[enrichingIndex] : undefined;
+
+  // 분석 결과를 그 경험에 반영해 저장한다 — GithubSection과 같은 패턴으로, 화면 상태를 직접
+  // 바꾸는 대신 putSpec으로 저장한 뒤 onSpecRefresh로 서버 기준 스펙을 다시 불러온다.
+  async function applyEnrichResult(index: number, result: ExperienceEnrichResult) {
+    const target = spec.experiences[index];
+    if (!target) return;
+
+    const mergedAreas = Array.from(new Set([...(target.areas ?? []), ...result.areas]));
+    const updated: Experience = {
+      ...target,
+      areas: mergedAreas.length > 0 ? mergedAreas : target.areas,
+      // depth는 이미 없는 경험에서만 분석하므로(버튼 노출 조건) 결과값을 그대로 채운다.
+      depth: result.depth ?? target.depth,
+      // role이 이미 있으면 덮어쓰지 않는다 — 사용자가 직접 쓴 값이 우선이다.
+      role: target.role && target.role.trim() !== "" ? target.role : (result.roleSummary ?? target.role),
+    };
+    const nextSpec: Spec = {
+      ...spec,
+      experiences: spec.experiences.map((exp, i) => (i === index ? updated : exp)),
+    };
+
+    try {
+      await putSpec(nextSpec);
+      setEnrichingIndex(null);
+      onSpecRefresh?.();
+    } catch (error) {
+      window.alert(error instanceof ApiError ? error.message : "저장에 실패했어요. 잠시 후 다시 시도해주세요.");
+    }
+  }
+
+  function handleApplyEnrich(result: ExperienceEnrichResult) {
+    if (enrichingIndex == null) return;
+    void applyEnrichResult(enrichingIndex, result);
+  }
 
   return (
     <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
@@ -160,7 +200,13 @@ export function ProfileTab({
         {spec.experiences.length ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {spec.experiences.map((exp, idx) => (
-              <ExperienceCard key={idx} experience={exp} />
+              <ExperienceCard
+                key={idx}
+                experience={exp}
+                // 예시 화면·onSpecRefresh 없는 상태(저장할 계정 없음)에서는 분석 결과를 저장할 수
+                // 없으므로 버튼 자체를 숨긴다 — GithubSection 노출 조건과 같다.
+                onAnalyzeDepth={!isDemo && onSpecRefresh ? () => setEnrichingIndex(idx) : undefined}
+              />
             ))}
           </div>
         ) : (
@@ -296,6 +342,10 @@ export function ProfileTab({
             회원 탈퇴
           </a>
         </p>
+      )}
+
+      {enrichingExperience && (
+        <ExperienceEnrichModal experience={enrichingExperience} onApply={handleApplyEnrich} onClose={() => setEnrichingIndex(null)} />
       )}
     </div>
   );

@@ -1,15 +1,19 @@
 package com.career.recommendation.util;
 
+import com.career.recommendation.domain.ExperienceArea;
+import com.career.recommendation.domain.JobAreaRequirements;
 import com.career.recommendation.domain.JobType;
 import com.career.recommendation.dto.position.JobSpecProfile;
 import com.career.recommendation.dto.position.JobSpecProfile.CertStat;
 import com.career.recommendation.dto.position.SpecPositionResult;
+import com.career.recommendation.dto.position.SpecPositionResult.AreaCoverage;
 import com.career.recommendation.dto.position.SpecPositionResult.AxisPosition;
 import com.career.recommendation.dto.position.SpecPositionResult.SpecGap;
 import com.career.recommendation.entity.UserSpec;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -98,7 +102,10 @@ public class SpecPositionCalculator {
                 .targetJobType(targetJobType)
                 .targetJobLabel(JobType.labelOf(targetJobType))
                 .jobSampleSize(targetJobType != null ? jobProfile.getSampleSize() : 0)
-                .minSampleSize(MIN_SAMPLE);
+                .minSampleSize(MIN_SAMPLE)
+                // E11-2(1차) — 합격자 표본(basis)과 무관하게 사용자 경험만으로 판정하므로,
+                // 아래 JOB/OVERALL/NONE 분기보다 앞에서 한 번만 계산해 모든 경로에 싣는다.
+                .areaCoverage(buildAreaCoverage(targetJobType, userSpec));
         if (jobProfile != null && jobProfile.getJobType() != null && jobProfile.getSampleSize() >= MIN_SAMPLE) {
             profile = jobProfile;
             basis = BASIS_JOB;
@@ -221,6 +228,53 @@ public class SpecPositionCalculator {
         }
 
         return axes;
+    }
+
+    /**
+     * E11-2(1차) — 목표 직무의 요구 영역 체크리스트(JobAreaRequirements) 대비 사용자 보유 여부.
+     * 목표 직무가 없거나(targetJobType null) 알 수 없는 코드면 null — FE와 확정된 계약대로
+     * "목표 직무 미설정이면 null"을 그대로 지킨다. 정의된 직무인데 요구 영역이 비어 있는
+     * 경우(현재는 없음)는 빈 리스트를 준다.
+     */
+    private List<AreaCoverage> buildAreaCoverage(String targetJobType, UserSpec userSpec) {
+        if (targetJobType == null) {
+            return null;
+        }
+        return JobType.from(targetJobType).<List<AreaCoverage>>map(jobType -> {
+            List<ExperienceArea> required = JobAreaRequirements.requiredAreasFor(jobType);
+            if (required.isEmpty()) {
+                return List.of();
+            }
+            Set<ExperienceArea> userAreas = collectUserAreas(userSpec);
+            List<AreaCoverage> coverage = new ArrayList<>(required.size());
+            for (ExperienceArea area : required) {
+                coverage.add(AreaCoverage.builder()
+                        .area(area.name())
+                        .label(area.getLabel())
+                        .covered(userAreas.contains(area))
+                        .build());
+            }
+            return coverage;
+        }).orElse(null);
+    }
+
+    /** 사용자 experiences 각 항목의 areas 배열을 합집합으로 모은다. 미지 코드는 걸러진다. */
+    private Set<ExperienceArea> collectUserAreas(UserSpec userSpec) {
+        if (userSpec == null || userSpec.getExperiences() == null) {
+            return Set.of();
+        }
+        Set<ExperienceArea> areas = new HashSet<>();
+        for (Map<String, Object> experience : userSpec.getExperiences()) {
+            if (experience == null) continue;
+            Object rawAreas = experience.get("areas");
+            if (!(rawAreas instanceof List<?> list)) continue;
+            for (Object value : list) {
+                if (value instanceof String code) {
+                    ExperienceArea.from(code).ifPresent(areas::add);
+                }
+            }
+        }
+        return areas;
     }
 
     /** 보유율 임계 이상인데 사용자가 없는 자격증, 보유율 내림차순 상위 MAX_GAPS개. */
