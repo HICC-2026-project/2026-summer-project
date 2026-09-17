@@ -11,9 +11,14 @@ const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 120000;
 
 const CONSENT_TEXT =
-  "공개 레포만 분석합니다 · 코드 원문은 저장하지 않고 직무 비율 등 파생값만 저장합니다 · 연결 해제 시 분석 결과와 자동 추가된 경험이 삭제됩니다";
+  "소유한 공개 레포와 공개 커밋이 검색되는 기여 레포를 분석합니다 · 코드 원문은 저장하지 않고 직무 비율 등 파생값만 저장합니다 · 연결 해제 시 분석 결과와 자동 추가된 경험이 삭제됩니다";
 
 const RATE_LIMIT_MESSAGE = "GitHub 호출 한도에 걸렸어요. 잠시 후 재시도해 주세요.";
+
+// DONE인데 집계된 직무 비율·레포가 하나도 없을 때(소유 공개 레포 0개 등) 보여줄 안내.
+// 막대·레포 목록이 통째로 비어 분석일과 버튼 2개만 남으면 "결과가 어디 있지"로 보인다.
+const EMPTY_RESULT_MESSAGE =
+  "분석할 공개 활동을 찾지 못했어요. 본인 소유 공개 레포가 없거나 공개 커밋이 검색되지 않는 계정이에요. 레포를 공개로 전환하거나 커밋 후 재분석해 보세요.";
 
 function barRowStyle() {
   return { display: "flex", alignItems: "center", gap: 10, padding: "7px 0" } as const;
@@ -148,8 +153,13 @@ export function GithubSectionView({
   // DONE
   const ratios = profile.jobRatios ?? [];
   const repos = profile.repos ?? [];
+  const hasResults = ratios.length > 0 || repos.length > 0;
   return (
     <div>
+      {!hasResults && (
+        <div style={{ fontSize: 13, color: "#61616C", lineHeight: 1.6, marginBottom: 12 }}>{EMPTY_RESULT_MESSAGE}</div>
+      )}
+
       {ratios.length > 0 && (
         <div style={{ marginBottom: 14 }}>
           {ratios.map((r) => {

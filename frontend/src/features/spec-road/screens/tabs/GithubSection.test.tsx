@@ -53,7 +53,7 @@ describe("GithubSectionView", () => {
 
     expect(screen.getByPlaceholderText("username 또는 github.com/username")).toBeInTheDocument();
     expect(screen.getByText("분석 시작")).toBeDisabled();
-    expect(screen.getByText(/공개 레포만 분석합니다/)).toBeInTheDocument();
+    expect(screen.getByText(/기여 레포를 분석합니다/)).toBeInTheDocument();
   });
 
   it("PENDING이면 분석 중 안내를 보여주고, 폴링 타임아웃이면 새로고침 안내로 바뀐다", () => {
@@ -128,6 +128,35 @@ describe("GithubSectionView", () => {
     expect(onReanalyze).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByText("연결 해제"));
     expect(onDisconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("DONE인데 직무 비율·레포가 모두 비어있으면(소유 공개 레포 0개 등) 빈 결과 안내를 보여준다", () => {
+    const emptyDone: GithubProfile = {
+      ...doneProfile,
+      jobRatios: [],
+      repos: [],
+      targetJobMatchRatio: null,
+    };
+    render(
+      <GithubSectionView
+        profile={emptyDone}
+        urlInput=""
+        onUrlInputChange={noop}
+        submitting={false}
+        submitError={null}
+        pollTimedOut={false}
+        onSubmit={noop}
+        onReanalyze={noop}
+        onDisconnect={noop}
+      />,
+    );
+
+    expect(screen.getByText(/분석할 공개 활동을 찾지 못했어요/)).toBeInTheDocument();
+    expect(screen.queryByText("백엔드")).not.toBeInTheDocument();
+    // 안내 문구가 떠도 분석일·재분석·연결 해제는 그대로 남아 있어야 한다.
+    expect(screen.getByText("2026-09-10 분석")).toBeInTheDocument();
+    expect(screen.getByText("재분석")).toBeInTheDocument();
+    expect(screen.getByText("연결 해제")).toBeInTheDocument();
   });
 
   it("FAILED는 failureReason을, RATE_LIMITED는 failureReason이 없으면 기본 안내를 보여준다", () => {
