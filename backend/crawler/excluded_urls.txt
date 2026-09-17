@@ -77,3 +77,38 @@ https://linkareer.com/activity/351213
 
 # 검수 제외: SK키파운드리 정보보안 — 경력 4년 이상 요건
 https://linkareer.com/activity/351217
+
+# --- 2026-09-17 2회차 재수집 검수 (40건 중 11건 신규 제외) ---
+
+# 검수 제외: AI 3D모션그래픽 — 디자인/영상 직무
+https://linkareer.com/activity/350990
+
+# 검수 제외: 마포 청년 창업 아이디어 경진대회 — IT 특정 아님
+https://linkareer.com/activity/350985
+
+# 검수 제외: 성남시 정책 제안대회 — 직무 무관
+https://linkareer.com/activity/350995
+
+# 검수 제외: 윕스 고객경험(CX) 담당 — 직무 무관
+https://linkareer.com/activity/351097
+
+# 검수 제외: 룰루랩 RA·문서 운영 — 직무 무관
+https://linkareer.com/activity/351113
+
+# 검수 제외: 윕스 B2B 영업 — 영업 직무
+https://linkareer.com/activity/351124
+
+# 검수 제외: 룰루랩 국내 영업 — 영업 직무
+https://linkareer.com/activity/351129
+
+# 검수 제외: CJ ENM 엔터테인먼트부문 공채 — 개발 직무 포함 불명(커머스부문은 채택)
+https://linkareer.com/activity/351078
+
+# 검수 제외: CJ 4DPLEX 공채 — 개발 직무 포함 불명
+https://linkareer.com/activity/351069
+
+# 검수 제외: CJ대한통운 공채 — 개발 직무 포함 불명
+https://linkareer.com/activity/351100
+
+# 검수 제외: 한국소비자원 채용 — 일반 공공기관 채용(전산직 특정 불가)
+https://linkareer.com/activity/351016
