@@ -339,6 +339,7 @@
 - [x] vitest+happy-dom 도입, `CompareTab.test.tsx` 5건(막대/미입력/폴백 고지/제보 유도/데모). 프론트 CI에 `npm test` 추가
 - [x] 2026-09-17 최적화 패스 — Gemini 토큰: 프롬프트 경험 축약(설명 100자·stack 5개)·`thinkingBudget 0`+`maxOutputTokens 4096`·로드맵 프롬프트 중복 활동/targetSpec 제거·활동 목록 응답 200자 요약(상세는 전문). FE: 미사용 의존성 5종(lucide-react·cva·clsx·tailwind-merge·@base-ui) 제거, 색상 리터럴 177곳 토큰화. 추가로 추천 캐시 마감 필터·GitHub 조직 토큰 차단 익명 폴백(같은 날 별도 PR). 보류 판정: 재시도 2회(실패 시에만)·GitHub 호출량(일 1회 쿨다운)·OldVsNew 데모(문서용)
 - [x] PROJECT.md 추천·로드맵·제보/검수 흐름 v9 현행화
+- [x] 2026-09-17 실사용 피드백 수정(PR #63) — ① 로드맵 캐시 재생성 트리거: 원래 매칭 활동이 있던 캐시가 마감 필터로 전부 비면 재생성(추천만 갱신되고 로드맵은 낡은 채 남던 문제). ② `GraduateOnlyActivityFilter` 신설: 1~3학년 재학생에게 `targetSpec`에 학사·대졸·대학졸업·기졸업자 키워드가 있는 공고를 추천·로드맵 후보에서 제외(활성 29건 중 5건 해당). ③ GitHub 분석 빈 결과 근본 원인 해결: WebClient 기본 버퍼 256KB 초과로 커밋 검색 응답이 파싱 중 조용히 버려짐("status=200 실패" 로그) → 버퍼 10MB·per_page 50, logSkip에 예외 클래스명 기록
 
 ---
 
