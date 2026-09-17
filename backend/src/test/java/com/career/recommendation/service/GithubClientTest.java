@@ -79,8 +79,9 @@ class GithubClientTest {
                 .setHeader("X-RateLimit-Remaining", "100"));
         server.enqueue(emptySearchResponse());
 
-        // repo-a: languages/commits/tree 전부 정상, 남은 한도 넉넉함
+        // repo-a: languages/commits(샘플)/commits(정확한 총수)/tree 전부 정상, 남은 한도 넉넉함
         server.enqueue(jsonResponse(Map.of("Java", 1000)).setHeader("X-RateLimit-Remaining", "50"));
+        server.enqueue(jsonResponse(List.of()).setHeader("X-RateLimit-Remaining", "50"));
         server.enqueue(jsonResponse(List.of()).setHeader("X-RateLimit-Remaining", "50"));
         server.enqueue(jsonResponse(Map.of("tree", List.of())).setHeader("X-RateLimit-Remaining", "50"));
 
@@ -105,8 +106,9 @@ class GithubClientTest {
                 .setHeader("X-RateLimit-Remaining", "100"));
         server.enqueue(emptySearchResponse());
 
-        // owned-repo 한 건만 후속 호출(languages/commits/tree)이 나가야 한다.
+        // owned-repo 한 건만 후속 호출(languages/commits 샘플/commits 정확 총수/tree)이 나가야 한다.
         server.enqueue(jsonResponse(Map.of()).setHeader("X-RateLimit-Remaining", "100"));
+        server.enqueue(jsonResponse(List.of()).setHeader("X-RateLimit-Remaining", "100"));
         server.enqueue(jsonResponse(List.of()).setHeader("X-RateLimit-Remaining", "100"));
         server.enqueue(jsonResponse(Map.of("tree", List.of())).setHeader("X-RateLimit-Remaining", "100"));
 
@@ -114,9 +116,9 @@ class GithubClientTest {
 
         assertThat(result.rateLimited()).isFalse();
         assertThat(result.repos()).extracting(GithubClient.RepoRawData::name).containsExactly("owned-repo");
-        // 유저(1) + 레포목록(1) + 검색(1, 빈 결과) + owned-repo 후속 3건 = 6. fork·archive 레포는
+        // 유저(1) + 레포목록(1) + 검색(1, 빈 결과) + owned-repo 후속 4건 = 7. fork·archive 레포는
         // 추가 호출을 만들지 않는다.
-        assertThat(server.getRequestCount()).isEqualTo(6);
+        assertThat(server.getRequestCount()).isEqualTo(7);
     }
 
     @Test
@@ -128,6 +130,7 @@ class GithubClientTest {
         server.enqueue(emptySearchResponse());
 
         server.enqueue(jsonResponse(Map.of("Java", 1000)).setHeader("X-RateLimit-Remaining", "100"));
+        server.enqueue(jsonResponse(List.of()).setHeader("X-RateLimit-Remaining", "100"));
         server.enqueue(jsonResponse(List.of()).setHeader("X-RateLimit-Remaining", "100"));
         server.enqueue(jsonResponse(Map.of("tree", List.of(
                         Map.of("path", "package.json", "type", "blob"),
@@ -146,9 +149,76 @@ class GithubClientTest {
         assertThat(result.repos()).hasSize(1);
         assertThat(result.repos().get(0).dependencies())
                 .contains("spring-boot-starter-web", "eslint");
-        // 유저(1)+레포목록(1)+검색(1, 빈 결과)+languages(1)+commits(1)+tree(1)+contents(1, package.json만) = 7.
-        // 루트가 아닌 pom.xml은 조회하지 않는다.
-        assertThat(server.getRequestCount()).isEqualTo(7);
+        // 유저(1)+레포목록(1)+검색(1, 빈 결과)+languages(1)+commits 샘플(1)+commits 정확 총수(1)+
+        // tree(1)+contents(1, package.json만) = 8. 루트가 아닌 pom.xml은 조회하지 않는다.
+        assertThat(server.getRequestCount()).isEqualTo(8);
+    }
+
+    // --- 정확한 커밋 총수 계산(Link 헤더 페이지네이션 트릭) ---
+
+    @Test
+    void Link_헤더의_rel_last_page를_정확한_커밋_총수로_사용한다() {
+        server.enqueue(jsonResponse(Map.of("login", "octocat", "type", "User"))
+                .setHeader("X-RateLimit-Remaining", "100"));
+        server.enqueue(jsonResponse(List.of(repo("owned-repo", false, false))));
+        server.enqueue(emptySearchResponse());
+
+        server.enqueue(jsonResponse(Map.of("Java", 1000)));
+        // 샘플 조회(per_page=50)는 50건 가득 채워 응답 — 실제로는 198건이라 여기서 포화된다.
+        server.enqueue(jsonResponse(java.util.Collections.nCopies(50, Map.of())));
+        // 정확한 총수 조회(per_page=1)는 Link 헤더로 총 198페이지(=198커밋)를 알려준다.
+        server.enqueue(new MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setHeader("Link",
+                        "<https://api.example.com/repos/octocat/owned-repo/commits?author=octocat&per_page=1&page=2>; rel=\"next\", "
+                                + "<https://api.example.com/repos/octocat/owned-repo/commits?author=octocat&per_page=1&page=198>; rel=\"last\"")
+                .setBody("[{}]"));
+        server.enqueue(jsonResponse(Map.of("tree", List.of())));
+
+        GithubClient.GithubAnalysisRawResult result = client.analyze("octocat");
+
+        assertThat(result.rateLimited()).isFalse();
+        assertThat(result.repos()).hasSize(1);
+        assertThat(result.repos().get(0).commitCount()).isEqualTo(198);
+    }
+
+    @Test
+    void Link_헤더가_없으면_응답_배열_크기를_총_커밋_수로_사용한다() {
+        server.enqueue(jsonResponse(Map.of("login", "octocat", "type", "User"))
+                .setHeader("X-RateLimit-Remaining", "100"));
+        server.enqueue(jsonResponse(List.of(repo("owned-repo", false, false))));
+        server.enqueue(emptySearchResponse());
+
+        server.enqueue(jsonResponse(Map.of("Java", 1000)));
+        server.enqueue(jsonResponse(List.of())); // 샘플: 커밋 없음(실제로는 1건)
+        server.enqueue(jsonResponse(List.of(Map.of()))); // 정확한 총수 조회: Link 헤더 없이 1건
+        server.enqueue(jsonResponse(Map.of("tree", List.of())));
+
+        GithubClient.GithubAnalysisRawResult result = client.analyze("octocat");
+
+        assertThat(result.rateLimited()).isFalse();
+        assertThat(result.repos()).hasSize(1);
+        assertThat(result.repos().get(0).commitCount()).isEqualTo(1);
+    }
+
+    @Test
+    void 정확한_커밋_총수_조회가_실패하면_샘플_개수로_폴백한다() {
+        server.enqueue(jsonResponse(Map.of("login", "octocat", "type", "User"))
+                .setHeader("X-RateLimit-Remaining", "100"));
+        server.enqueue(jsonResponse(List.of(repo("owned-repo", false, false))));
+        server.enqueue(emptySearchResponse());
+
+        server.enqueue(jsonResponse(Map.of("Java", 1000)));
+        server.enqueue(jsonResponse(List.of(Map.of(), Map.of(), Map.of()))); // 샘플 3건
+        server.enqueue(new MockResponse().setResponseCode(500).setBody("{\"message\":\"boom\"}"));
+        server.enqueue(jsonResponse(Map.of("tree", List.of())));
+
+        GithubClient.GithubAnalysisRawResult result = client.analyze("octocat");
+
+        assertThat(result.rateLimited()).isFalse();
+        assertThat(result.repos()).hasSize(1);
+        assertThat(result.repos().get(0).commitCount()).isEqualTo(3);
     }
 
     // --- 커밋 검색을 통한 기여 레포 발견 ---
@@ -161,6 +231,7 @@ class GithubClientTest {
         server.enqueue(searchResponse(Map.of("full_name", "hicc-org/2026-summer-project", "fork", false)));
         server.enqueue(jsonResponse(orgRepo("2026-summer-project", "hicc-org", false, false)));
         server.enqueue(jsonResponse(Map.of("Java", 500)));
+        server.enqueue(jsonResponse(List.of()));
         server.enqueue(jsonResponse(List.of()));
         server.enqueue(jsonResponse(Map.of("tree", List.of())));
 
@@ -179,6 +250,9 @@ class GithubClientTest {
         assertThat(takeRequest().getPath())
                 .startsWith("/repos/hicc-org/2026-summer-project/commits")
                 .contains("author=octocat");
+        assertThat(takeRequest().getPath()) // 정확한 커밋 총수 조회(per_page=1)
+                .startsWith("/repos/hicc-org/2026-summer-project/commits")
+                .contains("per_page=1");
         assertThat(takeRequest().getPath()).startsWith("/repos/hicc-org/2026-summer-project/git/trees/main");
     }
 
@@ -207,6 +281,7 @@ class GithubClientTest {
         server.enqueue(jsonResponse(orgRepo("2026-summer-project", "hicc-org", false, false)));
         server.enqueue(jsonResponse(Map.of("Java", 500)));
         server.enqueue(jsonResponse(List.of()));
+        server.enqueue(jsonResponse(List.of()));
         server.enqueue(jsonResponse(Map.of("tree", List.of())));
 
         GithubClient.GithubAnalysisRawResult result = client.analyze("octocat");
@@ -230,14 +305,15 @@ class GithubClientTest {
         server.enqueue(jsonResponse(orgRepo("real-thing", "someorg", false, false)));
         server.enqueue(jsonResponse(Map.of()));
         server.enqueue(jsonResponse(List.of()));
+        server.enqueue(jsonResponse(List.of()));
         server.enqueue(jsonResponse(Map.of("tree", List.of())));
 
         GithubClient.GithubAnalysisRawResult result = client.analyze("octocat");
 
         assertThat(result.repos()).extracting(GithubClient.RepoRawData::name).containsExactly("real-thing");
         // fork 후보는 메타데이터 조회 자체를 만들지 않는다: 유저(1)+소유(1)+검색(1)+
-        // real-thing 메타(1)+languages(1)+commits(1)+tree(1) = 7.
-        assertThat(server.getRequestCount()).isEqualTo(7);
+        // real-thing 메타(1)+languages(1)+commits 샘플(1)+commits 정확 총수(1)+tree(1) = 8.
+        assertThat(server.getRequestCount()).isEqualTo(8);
     }
 
     @Test
@@ -247,6 +323,7 @@ class GithubClientTest {
         server.enqueue(jsonResponse(List.of(repo("owned-repo", false, false))));
         server.enqueue(new MockResponse().setResponseCode(403).setBody("{\"message\":\"rate limit\"}"));
         server.enqueue(jsonResponse(Map.of()));
+        server.enqueue(jsonResponse(List.of()));
         server.enqueue(jsonResponse(List.of()));
         server.enqueue(jsonResponse(Map.of("tree", List.of())));
 
@@ -264,14 +341,15 @@ class GithubClientTest {
         server.enqueue(searchResponse(Map.of("full_name", "octocat/dup-repo", "fork", false)));
         server.enqueue(jsonResponse(Map.of()));
         server.enqueue(jsonResponse(List.of()));
+        server.enqueue(jsonResponse(List.of()));
         server.enqueue(jsonResponse(Map.of("tree", List.of())));
 
         GithubClient.GithubAnalysisRawResult result = client.analyze("octocat");
 
         assertThat(result.repos()).extracting(GithubClient.RepoRawData::name).containsExactly("dup-repo");
         // 이미 소유 목록에 있으므로 메타데이터 재조회 없음: 유저(1)+소유(1)+검색(1)+
-        // dup-repo 후속 3건 = 6.
-        assertThat(server.getRequestCount()).isEqualTo(6);
+        // dup-repo 후속 4건(languages/commits 샘플/commits 정확 총수/tree) = 7.
+        assertThat(server.getRequestCount()).isEqualTo(7);
     }
 
     // --- 조직의 fine-grained PAT 차단 시 익명 폴백 ---
@@ -289,6 +367,7 @@ class GithubClientTest {
         server.enqueue(jsonResponse(orgRepo("2026-summer-project", "hicc-org", false, false)));
         server.enqueue(jsonResponse(Map.of("Java", 500)));
         server.enqueue(jsonResponse(List.of()));
+        server.enqueue(jsonResponse(List.of()));
         server.enqueue(jsonResponse(Map.of("tree", List.of())));
 
         GithubClient.GithubAnalysisRawResult result = client.analyze("octocat");
@@ -305,7 +384,7 @@ class GithubClientTest {
         assertThat(metaRetry.getHeader("Authorization")).isNull();
         assertThat(metaRetry.getPath()).startsWith("/repos/hicc-org/2026-summer-project");
 
-        assertThat(server.getRequestCount()).isEqualTo(8);
+        assertThat(server.getRequestCount()).isEqualTo(9);
     }
 
     @Test
@@ -322,14 +401,16 @@ class GithubClientTest {
         // owned-repo는 인증 요청으로 정상 처리된다.
         server.enqueue(jsonResponse(Map.of()));
         server.enqueue(jsonResponse(List.of()));
+        server.enqueue(jsonResponse(List.of()));
         server.enqueue(jsonResponse(Map.of("tree", List.of())));
 
         GithubClient.GithubAnalysisRawResult result = client.analyze("octocat");
 
         assertThat(result.rateLimited()).isFalse();
         assertThat(result.repos()).extracting(GithubClient.RepoRawData::name).containsExactly("owned-repo");
-        // 유저(1)+소유(1)+검색(1)+meta 인증(1)+meta 익명(1)+owned-repo 후속 3건 = 8.
-        assertThat(server.getRequestCount()).isEqualTo(8);
+        // 유저(1)+소유(1)+검색(1)+meta 인증(1)+meta 익명(1)+owned-repo 후속 4건
+        // (languages/commits 샘플/commits 정확 총수/tree) = 9.
+        assertThat(server.getRequestCount()).isEqualTo(9);
     }
 
     @Test
