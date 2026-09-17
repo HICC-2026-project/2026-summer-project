@@ -6,13 +6,18 @@ import com.career.recommendation.dto.gemini.GeminiRecommendationResult.GeminiAct
 import com.career.recommendation.dto.position.SpecPositionResult;
 import com.career.recommendation.dto.recommendation.RecommendationResponse;
 import com.career.recommendation.dto.recommendation.RecommendationResponse.ActivityRecommendation;
+import com.career.recommendation.dto.roadmap.RoadmapResponse;
+import com.career.recommendation.dto.roadmap.RoadmapResponse.MatchedActivity;
+import com.career.recommendation.dto.roadmap.RoadmapResponse.TimelineStep;
 import com.career.recommendation.entity.Activity;
 import com.career.recommendation.entity.Recommendation;
+import com.career.recommendation.entity.RoadmapCache;
 import com.career.recommendation.entity.TargetJob;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.entity.UserSpec;
 import com.career.recommendation.repository.ActivityRepository;
 import com.career.recommendation.repository.RecommendationRepository;
+import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
 import com.career.recommendation.util.GapMatcher;
@@ -30,8 +35,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -54,6 +61,7 @@ public class RecommendationService {
     private final TargetJobRepository targetJobRepository;
     private final RecommendationRepository recommendationRepository;
     private final RecommendationCacheService recommendationCacheService;
+    private final RoadmapCacheRepository roadmapCacheRepository;
     private final ActivityRepository activityRepository;
     private final SpecPositionService specPositionService;
     private final GeminiService geminiService;
@@ -128,9 +136,10 @@ public class RecommendationService {
             // (2026-08-11 실제 제보). 하루 한도는 Gemini 호출(활동 목록 재생성)에만 적용한다.
             // dailyLimitReached 플래그로 FE가 "활동 목록은 내일 갱신" 안내를 띄울 수 있게 한다.
             if (wantsRefresh) {
-                return rebuildPositionFromCurrentSpec(cachedResponse, userSpec, targetJob);
+                return mergeRoadmapActivities(
+                        rebuildPositionFromCurrentSpec(cachedResponse, userSpec, targetJob), user.getId(), today);
             }
-            return cachedResponse;
+            return mergeRoadmapActivities(cachedResponse, user.getId(), today);
         }
 
         // 3. 직무 요구 프로필 조회(캐시됨) 및 위치·갭 계산 — 로드맵과 같은 진입점을 쓴다.
@@ -167,7 +176,113 @@ public class RecommendationService {
             recommendationCacheService.save(user, response);
         }
 
-        return response;
+        return mergeRoadmapActivities(response, user.getId(), today);
+    }
+
+    /**
+     * 홈 추천 응답을 반환하기 직전, 같은 유저의 로드맵 캐시에 있는 매칭 활동 중 추천 목록에
+     * 아직 없는 것을 뒤에 덧붙인다. 실사용 피드백(2026-09-17): "추천이랑 로드맵이 띄워주는 게
+     * 달라. 둘 다 괜찮은 제안인데, 적어도 홈 화면엔 로드맵에 떠 있는 건 모두 떴으면 좋겠다."
+     *
+     * 로드맵 생성 시엔 이미 추천된 활동을 프롬프트에서 제외(excludeIds)하기 때문에 두 목록이
+     * 의도적으로 갈라진다 — 이 dedup 자체는 그대로 둔다. 대신 "홈에 보여줄 목록"을 만드는
+     * 이 시점에만 로드맵 표시 활동을 합쳐 보여준다.
+     *
+     * 읽기 시점 표시용이다: 로드맵을 새로 생성하지 않고(Gemini 호출 유발 금지) 이미 있는
+     * 로드맵 캐시만 참고하며, 병합 결과는 추천 캐시에 다시 저장하지 않는다 — 로드맵이 바뀌면
+     * 다음 조회에서 자동으로 반영되게 하기 위함이다.
+     */
+    private RecommendationResponse mergeRoadmapActivities(
+            RecommendationResponse response, UUID userId, LocalDate today) {
+        if (response == null) {
+            return response;
+        }
+
+        RoadmapCache roadmapCache = roadmapCacheRepository.findByUser_Id(userId).orElse(null);
+        if (roadmapCache == null) {
+            return response; // 로드맵을 아직 생성한 적 없음 — 병합할 것이 없다.
+        }
+
+        RoadmapResponse roadmap = deserializeRoadmap(roadmapCache.getResultJson());
+        if (roadmap == null || roadmap.getTimeline() == null || roadmap.getTimeline().isEmpty()) {
+            return response;
+        }
+
+        Set<UUID> existingIds = new HashSet<>();
+        if (response.getActivities() != null) {
+            for (ActivityRecommendation a : response.getActivities()) {
+                if (a.getId() != null) {
+                    existingIds.add(a.getId());
+                }
+            }
+        }
+
+        // 추천 목록에 없는 로드맵 매칭 활동을 등장 순서대로 모은다. 같은 활동이 여러 스텝에
+        // 걸쳐 있으면 가장 먼저 등장한 스텝의 맥락(순위·이유)만 사용한다.
+        List<TimelineStep> timeline = roadmap.getTimeline();
+        List<UUID> candidateOrder = new ArrayList<>();
+        Map<UUID, Integer> firstStepIndexByActivity = new HashMap<>();
+        for (int i = 0; i < timeline.size(); i++) {
+            TimelineStep step = timeline.get(i);
+            if (step == null || step.getMatchedActivities() == null) {
+                continue;
+            }
+            for (MatchedActivity ma : step.getMatchedActivities()) {
+                UUID activityId = (ma != null) ? ma.getActivityId() : null;
+                if (activityId == null || existingIds.contains(activityId)) {
+                    continue;
+                }
+                if (!firstStepIndexByActivity.containsKey(activityId)) {
+                    firstStepIndexByActivity.put(activityId, i);
+                    candidateOrder.add(activityId);
+                }
+            }
+        }
+        if (candidateOrder.isEmpty()) {
+            return response;
+        }
+
+        // DB와 대조해 비활성·마감·삭제된 활동은 제외한다(filterStaleActivities와 같은 기준).
+        Map<UUID, Activity> dbActivities = activityRepository.findAllById(candidateOrder).stream()
+                .collect(Collectors.toMap(Activity::getId, a -> a));
+
+        List<ActivityRecommendation> merged = new ArrayList<>(
+                response.getActivities() != null ? response.getActivities() : List.of());
+        for (UUID activityId : candidateOrder) {
+            Activity db = dbActivities.get(activityId);
+            if (!isActivityUsable(db, today)) {
+                continue;
+            }
+
+            int stepIndex = firstStepIndexByActivity.get(activityId);
+            TimelineStep step = timeline.get(stepIndex);
+            String reasonContext = (step.getReason() != null && !step.getReason().isBlank())
+                    ? step.getReason()
+                    : step.getActivity();
+            String reason = (reasonContext != null && !reasonContext.isBlank())
+                    ? String.format("로드맵 %d번째 시기 활동 · %s", stepIndex + 1, reasonContext)
+                    : String.format("로드맵 %d번째 시기 활동입니다.", stepIndex + 1);
+
+            merged.add(ActivityRecommendation.builder()
+                    .id(db.getId())
+                    .type(db.getType())
+                    .name(db.getName())
+                    .reason(reason)
+                    .deadline(db.getDeadline())
+                    .targetGap(null)
+                    .build());
+        }
+
+        return response.toBuilder().activities(merged).build();
+    }
+
+    private RoadmapResponse deserializeRoadmap(String json) {
+        try {
+            return objectMapper.readValue(json, RoadmapResponse.class);
+        } catch (Exception e) {
+            log.warn("로드맵 캐시 역직렬화 실패 → 홈 추천 병합 생략: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -220,12 +335,7 @@ public class RecommendationService {
                 .collect(Collectors.toMap(Activity::getId, a -> a));
 
         List<ActivityRecommendation> filtered = response.getActivities().stream()
-                .filter(a -> {
-                    Activity db = (a.getId() != null) ? dbActivities.get(a.getId()) : null;
-                    if (db == null) return false; // DB에 없음(삭제됨)
-                    if (!Boolean.TRUE.equals(db.getIsActive())) return false; // 비활성화됨
-                    return db.getDeadline() == null || !db.getDeadline().isBefore(today); // 마감 지남
-                })
+                .filter(a -> isActivityUsable((a.getId() != null) ? dbActivities.get(a.getId()) : null, today))
                 .toList();
 
         int removed = response.getActivities().size() - filtered.size();
@@ -234,6 +344,17 @@ public class RecommendationService {
         }
         log.info("추천 캐시 재검증: 비활성/마감/삭제된 활동 {}건 제거", removed);
         return response.toBuilder().activities(filtered).build();
+    }
+
+    /**
+     * DB 활동이 지금 추천/로드맵에 노출해도 되는 상태인지 판단한다: 삭제되지 않았고
+     * (db != null), 비활성화되지 않았고, 마감일이 없거나 아직 지나지 않았어야 한다.
+     * filterStaleActivities와 mergeRoadmapActivities가 같은 기준을 쓴다.
+     */
+    private static boolean isActivityUsable(Activity db, LocalDate today) {
+        if (db == null) return false; // DB에 없음(삭제됨)
+        if (!Boolean.TRUE.equals(db.getIsActive())) return false; // 비활성화됨
+        return db.getDeadline() == null || !db.getDeadline().isBefore(today); // 마감 지남
     }
 
     private boolean hasUsableCachedActivities(RecommendationResponse response, LocalDate today) {

@@ -34,10 +34,22 @@ public class GeminiService {
     private String model;
 
     // gemini-2.5-flash는 기본적으로 thinking이 켜져 있어, 화면에 보이지 않는 thinking 토큰까지
-    // output으로 과금될 수 있다. 이 서비스의 모든 응답은 JSON 필드 몇 개만 뽑아내는 짧은 구조라
-    // thinking이 답변 품질에 크게 기여하지 않는다고 보고 기본을 0(끔)으로 둔다.
+    // output으로 과금될 수 있다. 이 서비스의 대부분 응답(추천·후속 질문·경험 enrich)은 JSON 필드
+    // 몇 개만 뽑아내는 짧은 구조라 thinking이 답변 품질에 크게 기여하지 않는다고 보고 기본을
+    // 0(끔)으로 둔다.
     @Value("${gemini.api.max-output-tokens:4096}")
     private int maxOutputTokens;
+
+    // 로드맵만 별도 상한을 둔다. 2026-09-17 로드맵을 6개월(3구간)에서 12개월(최대 6구간)로
+    // 넓히면서 스텝 수가 최대 2배로 늘었다 — 스텝 하나(period·priority·activity·reason·
+    // activityIds 최대 3개)를 넉넉히 잡아도 350~500자 안팎이라 6스텝이면 대략 2500~3500토큰
+    // 수준으로 추정되는데(한글은 영어보다 문자당 토큰 소모가 커서 정확한 상한 예측이 어렵다),
+    // 공통 상한 4096과 여유가 크지 않아 응답이 중간에 잘려 JSON 파싱 자체가 실패할 위험이
+    // 있다고 판단했다. 잘린 응답은 재시도(2회)를 그대로 소모하고 폴백으로 떨어지므로,
+    // 추천·후속 질문 등 원래도 짧은 응답들의 공통 상한(gemini.api.max-output-tokens)은 그대로
+    // 두고 로드맵 호출에만 넉넉한 상한을 따로 준다.
+    @Value("${gemini.api.roadmap-max-output-tokens:8192}")
+    private int roadmapMaxOutputTokens;
 
     private final WebClient.Builder webClientBuilder;
     private final GeminiDailyQuota dailyQuota;
@@ -85,7 +97,9 @@ public class GeminiService {
         // 효과가 있었을 거라고 지적). 규칙 4·5와 동일하게 "시기 무관, 적합한 활동이 있으면
         // 매칭, 없는 시기만 가이드"로 통일한다.
         String systemInstruction = "당신은 취업 커리어 어드바이저입니다. 사용자의 현재 스펙과 목표 직무, 합격자 비교 데이터(분포 내 위치·갭) 및 우선 추천 활동을 기반으로 시기별 커리어 로드맵을 생성하되, 각 시기마다 제공된 DB 활동 목록 중 마감일과 직무가 적합한 활동이 있으면 매칭하고, 적합한 공고가 없는 시기에만 역량 준비 가이드를 제안하세요. JSON 형식으로만 응답하세요.";
-        String raw = callGeminiApi(systemInstruction, prompt);
+        // 로드맵은 12개월(최대 6구간)로 다른 호출보다 응답이 길어질 수 있어 별도 상한을 쓴다
+        // (roadmapMaxOutputTokens 필드 주석 참고).
+        String raw = callGeminiApi(systemInstruction, prompt, roadmapMaxOutputTokens);
         return extractJsonBlock(raw);
     }
 
@@ -132,18 +146,22 @@ public class GeminiService {
                                       java.time.LocalDate today) {
         // ⚠️ periodGuide에 오늘 날짜를 반드시 명시한다. 예전엔 날짜 없이 학기/방학 구분
         // 규칙만 줘서, Gemini가 타임라인의 "시작 시기"를 활동 마감일 등에서 추측했다 —
-        // 2학년 사용자의 로드맵이 8월 요청인데도 엉뚱한 학기에서 시작하거나, 6개월 창을
+        // 2학년 사용자의 로드맵이 8월 요청인데도 엉뚱한 학기에서 시작하거나, 12개월 창을
         // 벗어난 시기까지 늘어지는 원인이었다(2026-08-11 사용자 제보: "로드맵이 3학년
         // 1학기까지밖에 안 나온다" — 시작 앵커가 없으니 끝 앵커도 흔들린 것).
+        // 2026-09-17 실사용 피드백으로 6개월 → 12개월로 창을 넓혔다 — 학기(1학기 4개월·
+        // 2학기 3개월)와 방학(여름 2개월·겨울 3개월)을 한 바퀴(4구간) 돌면 시작 시점과
+        // 무관하게 정확히 12개월이 되므로, "학기 2번 + 방학 2번"을 그대로 스텝 수 가이드로 준다.
         String periodGuide = (grade != null)
                 ? String.format("""
                 오늘은 %s이고, 사용자는 현재 %d학년입니다. 기간 구분은 반드시 "학기"와 "방학"을 기준으로 나눠주세요.
                 예시: "3학년 2학기 (9~11월)", "겨울방학 (12월~2월)", "4학년 1학기 (3~6월)" 등.
-                타임라인의 첫 번째 시기는 오늘이 속한 학기/방학이어야 하고, 마지막 시기는 오늘로부터 6개월 이내여야 합니다.
+                타임라인의 첫 번째 시기는 오늘이 속한 학기/방학이어야 하고, 마지막 시기는 오늘로부터 12개월 이내여야 합니다.
+                학기 2번과 방학 2번(총 4개 시기)을 순서대로 배치해 12개월 전체를 빠짐없이 덮으세요.
                 """, today, grade)
                 : String.format("""
                 오늘은 %s입니다. 기간은 월 단위로 나눠주세요. 예: "7월", "8~9월" 등.
-                타임라인은 오늘이 속한 달부터 시작해 6개월 이내로 구성하세요.
+                타임라인은 오늘이 속한 달부터 시작해 12개월 이내로 구성하세요. 4~6개 시기로 나누는 것을 권장합니다.
                 """, today);
 
         return String.format("""
@@ -165,9 +183,9 @@ public class GeminiService {
                 %s
                 
                 ## 규칙
-                1. 6개월 커리어 로드맵을 위 기간 단위로 작성해 주세요.
+                1. 12개월 커리어 로드맵을 위 기간 단위로 작성해 주세요.
                 2. [합격자 비교 데이터]의 갭(부족한 항목)을 이른 시기부터 우선 보완하는 방향으로 흐름을 구성하세요. "targetGap에 쓸 수 있는 갭 이름"의 순서가 보완 우선순위입니다 — 앞에 있는 갭을 더 이른 시기에 배치하세요.
-                3. [우선 반영할 AI 추천 활동]에 포함된 활동들을 6개월 타임라인 중 적절한 시기에 우선적으로 배치하세요.
+                3. [우선 반영할 AI 추천 활동]에 포함된 활동들을 12개월 타임라인 중 적절한 시기에 우선적으로 배치하세요.
                 4. 각 시기마다 [전체 DB 등록 활동 목록]에서 마감일과 직무가 적합한 실제 활동의 ID를 매칭하세요.
                 5. 적합한 DB 활동 공고가 없거나 마감된 시기는, activityIds는 빈 배열([])로 두고, 해당 시기에 필수적으로 준비해야 할 역량 개발 가이드(예: "자격증 취득 및 포트폴리오 구체화", "알고리즘 코딩테스트 대비", "주요 부스트캠프/인턴십 차기 기수 모집 대비")를 activity 필드와 reason 필드에 설명하세요.
                 6. DB 활동을 매칭할 때 각 활동의 id 값을 그대로 사용하세요 (UUID 형식). 목록에 없는 ID는 절대로 임의로 만들지 마세요.
@@ -249,7 +267,13 @@ public class GeminiService {
         return matcher.find() ? matcher.group() : "";
     }
 
+    // 로드맵을 제외한 나머지 호출(추천·후속 질문·경험 enrich)은 전부 이 오버로드를 쓴다 —
+    // 공통 상한(gemini.api.max-output-tokens)을 그대로 적용한다.
     private String callGeminiApi(String systemInstruction, String userMessage) {
+        return callGeminiApi(systemInstruction, userMessage, maxOutputTokens);
+    }
+
+    private String callGeminiApi(String systemInstruction, String userMessage, int maxTokensForThisCall) {
         WebClient client = webClientBuilder
                 .baseUrl(baseUrl)
                 .build();
@@ -268,10 +292,11 @@ public class GeminiService {
                 "generationConfig", Map.of(
                         "responseMimeType", "application/json",
                         // thinkingBudget: 0 — 보이지 않는 thinking 토큰 과금을 막는다(gemini-2.5-flash는
-                        // 기본 thinking이 켜져 있다). maxOutputTokens는 이 서비스의 모든 호출(추천·로드맵·
-                        // 후속 질문·경험 enrich) 공통 상한 — 어느 응답도 4096 토큰을 넘길 필요가 없다.
+                        // 기본 thinking이 켜져 있다). maxTokensForThisCall은 호출부가 고른 상한 —
+                        // 추천·후속 질문·경험 enrich는 공통 상한(maxOutputTokens), 로드맵은 12개월
+                        // 확장으로 스텝이 늘어난 만큼 별도로 더 넉넉한 상한(roadmapMaxOutputTokens)을 쓴다.
                         "thinkingConfig", Map.of("thinkingBudget", 0),
-                        "maxOutputTokens", maxOutputTokens
+                        "maxOutputTokens", maxTokensForThisCall
                 )
         );
 

@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /**
  * GET /api/v1/roadmaps 응답 DTO.
- * 학기/방학 단위로 구분된 6개월 커리어 타임라인을 반환합니다.
+ * 학기/방학 단위로 구분된 12개월 커리어 타임라인을 반환합니다.
  * 각 타임라인 단계에는 Gemini가 선택한 실제 DB 활동 목록이 포함됩니다.
  *
  * ⚠️ @Jacksonized가 필수다(RecommendationResponse와 같은 이유). 이 애노테이션 없이도

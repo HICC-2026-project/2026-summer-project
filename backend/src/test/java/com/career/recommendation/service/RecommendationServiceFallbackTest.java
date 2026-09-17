@@ -6,6 +6,7 @@ import com.career.recommendation.entity.Activity;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.repository.ActivityRepository;
 import com.career.recommendation.repository.RecommendationRepository;
+import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
 import com.career.recommendation.util.PromptDataBuilder;
@@ -47,6 +48,7 @@ class RecommendationServiceFallbackTest {
     @Mock private TargetJobRepository targetJobRepository;
     @Mock private RecommendationRepository recommendationRepository;
     @Mock private RecommendationCacheService recommendationCacheService;
+    @Mock private RoadmapCacheRepository roadmapCacheRepository;
     @Mock private ActivityRepository activityRepository;
     @Mock private SpecPositionService specPositionService;
     @Mock private GeminiService geminiService;
