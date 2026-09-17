@@ -135,7 +135,7 @@ public class GithubClient {
             return GithubAnalysisRawResult.rateLimited(List.of());
         }
 
-        List<Map<String, Object>> repos;
+        List<Map<String, Object>> ownedRepos;
         try {
             ResponseEntity<List> reposResponse = client.get()
                     .uri(uriBuilder -> uriBuilder.path("/users/{username}/repos")
@@ -153,7 +153,7 @@ public class GithubClient {
             List<Map<String, Object>> body = reposResponse != null
                     ? (List<Map<String, Object>>) (List<?>) reposResponse.getBody()
                     : List.of();
-            repos = body != null ? body : List.of();
+            ownedRepos = body != null ? body : List.of();
         } catch (WebClientResponseException e) {
             if (isRateLimitStatus(e)) {
                 return GithubAnalysisRawResult.rateLimited(List.of());
@@ -162,7 +162,16 @@ public class GithubClient {
         }
 
         int maxRepos = hasToken() ? maxReposWithToken : maxReposWithoutToken;
-        List<Map<String, Object>> filtered = repos.stream()
+
+        // 조직 레포 등 "소유하지 않은" 기여 레포 발견 — 비공개 멤버십이면 /users/{u}/orgs가
+        // 비어 있어도 커밋 검색은 여전히 그 사람의 커밋이 있는 레포를 찾아낸다. 검색 API는
+        // 별도 쿼터(코어와 무관)이고 실패해도 전체 분석을 막지 않는다 — 아래에서 조용히 넘어간다.
+        List<Map<String, Object>> discoveredRepos = discoverContributedRepos(client, username, ownedRepos, maxRepos);
+
+        List<Map<String, Object>> merged = new ArrayList<>(ownedRepos);
+        merged.addAll(discoveredRepos);
+
+        List<Map<String, Object>> filtered = merged.stream()
                 .filter(r -> !Boolean.TRUE.equals(r.get("fork")) && !Boolean.TRUE.equals(r.get("archived")))
                 .sorted(Comparator.comparing(
                         (Map<String, Object> r) -> String.valueOf(r.getOrDefault("pushed_at", "")),
@@ -173,7 +182,8 @@ public class GithubClient {
         List<RepoRawData> results = new ArrayList<>();
         boolean rateLimited = false;
         for (Map<String, Object> repo : filtered) {
-            RepoFetchOutcome outcome = fetchRepoData(client, username, repo);
+            String repoOwnerLogin = ownerLoginOf(repo, username);
+            RepoFetchOutcome outcome = fetchRepoData(client, repoOwnerLogin, username, repo);
             if (outcome.rateLimited()) {
                 rateLimited = true;
                 break;
@@ -183,7 +193,100 @@ public class GithubClient {
         return new GithubAnalysisRawResult(results, rateLimited);
     }
 
-    private RepoFetchOutcome fetchRepoData(WebClient client, String owner, Map<String, Object> repoMeta) {
+    /**
+     * GET /search/commits?q=author:{u}로 이 사람이 커밋한 레포(조직 소유 포함)를 찾는다.
+     * 비공개 조직 멤버십이면 /users/{u}/orgs는 빈 배열을 돌려주지만, 커밋 검색은 author 필터로
+     * 실제 기여 레포를 찾아낸다(공개 레포에 한함 — 검색 API 자체가 비공개 레포는 접근 권한
+     * 없이는 찾지 못한다). 검색 1회만 호출하고, 실패(403/429 등 별도 쿼터 소진 포함)해도
+     * 예외를 던지지 않고 빈 목록을 돌려준다 — 소유 레포만으로 분석을 계속 진행하기 위함이다.
+     */
+    private List<Map<String, Object>> discoverContributedRepos(
+            WebClient client, String username, List<Map<String, Object>> ownedRepos, int maxCandidates) {
+        List<Map<String, Object>> discovered = new ArrayList<>();
+        try {
+            Set<String> ownedFullNames = ownedRepos.stream()
+                    .map(r -> String.valueOf(r.get("full_name")))
+                    .collect(java.util.stream.Collectors.toSet());
+
+            ResponseEntity<Map> searchResponse = client.get()
+                    .uri(uriBuilder -> uriBuilder.path("/search/commits")
+                            .queryParam("q", "author:" + username)
+                            .queryParam("sort", "committer-date")
+                            .queryParam("order", "desc")
+                            .queryParam("per_page", 100)
+                            .build())
+                    .retrieve()
+                    .toEntity(Map.class)
+                    .block(CALL_TIMEOUT);
+
+            Object items = searchResponse != null && searchResponse.getBody() != null
+                    ? searchResponse.getBody().get("items")
+                    : null;
+            if (!(items instanceof List<?> itemList)) {
+                return discovered;
+            }
+
+            // committer-date desc 순서를 그대로 유지해, 후보가 상한보다 많을 때 최근 기여 레포가
+            // 먼저 메타데이터 조회 대상이 되게 한다.
+            java.util.LinkedHashSet<String> candidateFullNames = new java.util.LinkedHashSet<>();
+            for (Object item : itemList) {
+                if (!(item instanceof Map<?, ?> itemMap)) continue;
+                Object repoObj = itemMap.get("repository");
+                if (!(repoObj instanceof Map<?, ?> repoMap)) continue;
+                if (Boolean.TRUE.equals(repoMap.get("fork"))) continue; // 1차 필터(검색 응답 자체 필드)
+                Object fullNameObj = repoMap.get("full_name");
+                if (fullNameObj == null) continue;
+                String fullName = String.valueOf(fullNameObj);
+                if (fullName.isBlank() || ownedFullNames.contains(fullName)) continue; // 이미 소유 목록에 있음
+                candidateFullNames.add(fullName);
+            }
+
+            int checked = 0;
+            for (String fullName : candidateFullNames) {
+                if (checked >= maxCandidates) break; // 코어 쿼터 보호 — 상한만큼만 메타데이터 조회
+                checked++;
+                String[] parts = fullName.split("/", 2);
+                if (parts.length != 2) continue;
+                Map<String, Object> meta = fetchRepoMeta(client, parts[0], parts[1]);
+                if (meta == null) continue; // 조회 실패(권한 없음·삭제됨·코어 레이트리밋 등) — 조용히 건너뜀
+                if (Boolean.TRUE.equals(meta.get("archived")) || Boolean.TRUE.equals(meta.get("fork"))) continue;
+                discovered.add(meta);
+            }
+        } catch (Exception e) {
+            // 검색 API는 코어와 별도 쿼터(무토큰 10/min)라 403/429가 흔할 수 있다 — 전체 분석을
+            // 실패시키지 않고 소유 레포만으로 계속 진행한다.
+            log.debug("GitHub 커밋 검색 실패 (소유 레포만으로 계속 진행): {}", e.getMessage());
+        }
+        return discovered;
+    }
+
+    /** 검색으로 찾은 레포의 archived·fork·default_branch·pushed_at 등 전체 메타데이터를 확인한다. */
+    private Map<String, Object> fetchRepoMeta(WebClient client, String ownerLogin, String repoName) {
+        try {
+            ResponseEntity<Map> resp = client.get()
+                    .uri("/repos/{owner}/{repo}", ownerLogin, repoName)
+                    .retrieve()
+                    .toEntity(Map.class)
+                    .block(CALL_TIMEOUT);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = resp != null ? (Map<String, Object>) resp.getBody() : null;
+            return body;
+        } catch (Exception e) {
+            log.debug("GitHub 레포 메타데이터 조회 실패 (건너뜀): {}/{} - {}", ownerLogin, repoName, e.getMessage());
+            return null;
+        }
+    }
+
+    /** repos 목록·검색 메타데이터 모두 "owner.login" 필드를 갖는다. 없으면 분석 대상 계정으로 가정. */
+    private static String ownerLoginOf(Map<String, Object> repo, String fallbackUsername) {
+        Object owner = repo.get("owner");
+        if (owner instanceof Map<?, ?> ownerMap && ownerMap.get("login") != null) {
+            return String.valueOf(ownerMap.get("login"));
+        }
+        return fallbackUsername;
+    }
+
+    private RepoFetchOutcome fetchRepoData(WebClient client, String repoOwnerLogin, String authorUsername, Map<String, Object> repoMeta) {
         String repoName = String.valueOf(repoMeta.get("name"));
         String description = repoMeta.get("description") != null ? String.valueOf(repoMeta.get("description")) : null;
         String defaultBranch = repoMeta.get("default_branch") != null
@@ -193,7 +296,7 @@ public class GithubClient {
         Map<String, Long> languages = new LinkedHashMap<>();
         try {
             ResponseEntity<Map> resp = client.get()
-                    .uri("/repos/{owner}/{repo}/languages", owner, repoName)
+                    .uri("/repos/{owner}/{repo}/languages", repoOwnerLogin, repoName)
                     .retrieve()
                     .toEntity(Map.class)
                     .block(CALL_TIMEOUT);
@@ -210,7 +313,7 @@ public class GithubClient {
             }
         } catch (WebClientResponseException e) {
             if (isRateLimitStatus(e)) return RepoFetchOutcome.blocked();
-            log.debug("GitHub languages 조회 실패 (무시): {}/{} - {}", owner, repoName, e.getStatusCode());
+            log.debug("GitHub languages 조회 실패 (무시): {}/{} - {}", repoOwnerLogin, repoName, e.getStatusCode());
         }
 
         int commitCount = 0;
@@ -219,9 +322,9 @@ public class GithubClient {
         try {
             ResponseEntity<List> resp = client.get()
                     .uri(uriBuilder -> uriBuilder.path("/repos/{owner}/{repo}/commits")
-                            .queryParam("author", owner)
+                            .queryParam("author", authorUsername)
                             .queryParam("per_page", commitsPerRepo)
-                            .build(owner, repoName))
+                            .build(repoOwnerLogin, repoName))
                     .retrieve()
                     .toEntity(List.class)
                     .block(CALL_TIMEOUT);
@@ -246,7 +349,7 @@ public class GithubClient {
             }
             if (e.getStatusCode().value() != 409) {
                 // 409 = 빈 레포(커밋 없음) — 정상 케이스로 0건 유지. 그 외는 로그만 남기고 0건 취급.
-                log.debug("GitHub commits 조회 실패 (0건 취급): {}/{} - {}", owner, repoName, e.getStatusCode());
+                log.debug("GitHub commits 조회 실패 (0건 취급): {}/{} - {}", repoOwnerLogin, repoName, e.getStatusCode());
             }
         }
 
@@ -255,7 +358,7 @@ public class GithubClient {
             ResponseEntity<Map> resp = client.get()
                     .uri(uriBuilder -> uriBuilder.path("/repos/{owner}/{repo}/git/trees/{branch}")
                             .queryParam("recursive", 1)
-                            .build(owner, repoName, defaultBranch))
+                            .build(repoOwnerLogin, repoName, defaultBranch))
                     .retrieve()
                     .toEntity(Map.class)
                     .block(CALL_TIMEOUT);
@@ -274,7 +377,7 @@ public class GithubClient {
             // truncated=true는 그대로 허용 — 지금까지 받은 경로 목록만으로 신호를 계산한다.
         } catch (WebClientResponseException e) {
             if (isRateLimitStatus(e)) return RepoFetchOutcome.blocked();
-            log.debug("GitHub tree 조회 실패 (빈 파일 목록 취급): {}/{} - {}", owner, repoName, e.getStatusCode());
+            log.debug("GitHub tree 조회 실패 (빈 파일 목록 취급): {}/{} - {}", repoOwnerLogin, repoName, e.getStatusCode());
         }
 
         List<String> dependencies = new ArrayList<>();
@@ -286,7 +389,7 @@ public class GithubClient {
             if (!rootFiles.contains(depFileName.toLowerCase(Locale.ROOT))) continue;
             try {
                 ResponseEntity<Map> resp = client.get()
-                        .uri("/repos/{owner}/{repo}/contents/{path}", owner, repoName, depFileName)
+                        .uri("/repos/{owner}/{repo}/contents/{path}", repoOwnerLogin, repoName, depFileName)
                         .retrieve()
                         .toEntity(Map.class)
                         .block(CALL_TIMEOUT);
@@ -300,9 +403,9 @@ public class GithubClient {
                 }
             } catch (WebClientResponseException e) {
                 if (isRateLimitStatus(e)) return RepoFetchOutcome.blocked();
-                log.debug("GitHub 의존성 파일 조회 실패 (건너뜀): {}/{}/{} - {}", owner, repoName, depFileName, e.getStatusCode());
+                log.debug("GitHub 의존성 파일 조회 실패 (건너뜀): {}/{}/{} - {}", repoOwnerLogin, repoName, depFileName, e.getStatusCode());
             } catch (Exception e) {
-                log.debug("GitHub 의존성 파일 파싱 실패 (건너뜀): {}/{}/{}", owner, repoName, depFileName);
+                log.debug("GitHub 의존성 파일 파싱 실패 (건너뜀): {}/{}/{}", repoOwnerLogin, repoName, depFileName);
             }
         }
 
