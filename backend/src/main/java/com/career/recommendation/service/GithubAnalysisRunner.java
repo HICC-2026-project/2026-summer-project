@@ -132,6 +132,7 @@ public class GithubAnalysisRunner {
             m.put("firstCommitAt", raw.firstCommitAt() != null ? raw.firstCommitAt().toString() : null);
             m.put("lastCommitAt", raw.lastCommitAt() != null ? raw.lastCommitAt().toString() : null);
             m.put("mainLanguage", rc.mainLanguage());
+            m.put("areas", rc.areas() != null ? rc.areas() : List.of());
             result.add(m);
         }
         result.sort(Comparator.comparingInt((Map<String, Object> m) -> (int) m.get("commits")).reversed());
@@ -236,7 +237,28 @@ public class GithubAnalysisRunner {
         exp.put("description", truncate(
                 String.format("GitHub 공개 레포 분석 — 주 직무 %s, 커밋 %d개", jobLabel, repo.commitCount()), 500));
         exp.put("source", "GITHUB");
+
+        // E11(1단계) — 신규 필드는 값이 있을 때만 채운다. months는 ExperienceRequest 계약(1~120)에
+        // 맞춰 clamp한다 — repo.activeMonths()가 이미 "그 레포의 첫~마지막 author 커밋 사이
+        // 개월수"(GithubClient.computeActiveMonths, 레포 단위)라 별도 재계산이 필요 없다.
+        Integer months = clampMonths(repo.activeMonths());
+        if (months != null) {
+            exp.put("months", months);
+        }
+        if (repo.stack() != null && !repo.stack().isEmpty()) {
+            exp.put("stack", repo.stack());
+        }
+        if (repo.areas() != null && !repo.areas().isEmpty()) {
+            exp.put("areas", repo.areas());
+        }
         return exp;
+    }
+
+    private static Integer clampMonths(int activeMonths) {
+        if (activeMonths <= 0) {
+            return null;
+        }
+        return Math.min(activeMonths, 120);
     }
 
     private static String truncate(String value, int maxLength) {

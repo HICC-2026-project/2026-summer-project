@@ -47,6 +47,8 @@ public class GithubProfileResponse {
         private String firstCommitAt;
         private String lastCommitAt;
         private String mainLanguage;
+        /** E11(1단계) — 레포 카드에 칩으로 보여줄 기여 영역(ExperienceArea 코드, 최대 5개). */
+        private List<String> areas;
     }
 
     public static GithubProfileResponse notConnected() {
@@ -105,6 +107,7 @@ public class GithubProfileResponse {
                             .firstCommitAt(asString(m.get("firstCommitAt")))
                             .lastCommitAt(asString(m.get("lastCommitAt")))
                             .mainLanguage(asString(m.get("mainLanguage")))
+                            .areas(asStringList(m.get("areas")))
                             .build();
                 })
                 .toList();
@@ -125,6 +128,13 @@ public class GithubProfileResponse {
         if (value == null) return null;
         if (value instanceof Number n) return n.intValue();
         return Optional.of(value.toString()).map(Integer::parseInt).orElse(null);
+    }
+
+    private static List<String> asStringList(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return null;
+        }
+        return list.stream().map(String::valueOf).toList();
     }
 
     private static Double asDouble(Object value) {

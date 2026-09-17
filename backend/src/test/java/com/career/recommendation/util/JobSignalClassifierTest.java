@@ -190,4 +190,151 @@ class JobSignalClassifierTest {
         assertThat(result.repos()).isEmpty();
         assertThat(result.userRatios()).isEmpty();
     }
+
+    // --- E11(1단계) — ExperienceArea(기여 영역) 골든 테스트 ---
+
+    @Test
+    void 스프링_백엔드_레포는_AUTH_API_DB_TEST_영역을_포함한다() {
+        JobSignalClassifier.RepoSignal repo = new JobSignalClassifier.RepoSignal(
+                "career-backend",
+                "Spring Boot 백엔드 서비스",
+                Map.of("Java", 100_000L),
+                List.of(
+                        "src/main/java/com/example/controller/UserController.java",
+                        "src/main/java/com/example/service/UserService.java",
+                        "src/main/java/com/example/repository/UserRepository.java",
+                        "src/main/java/com/example/domain/entity/User.java",
+                        "src/main/java/com/example/security/SecurityConfig.java",
+                        "src/main/java/com/example/auth/JwtTokenProvider.java",
+                        "src/test/java/com/example/service/UserServiceTest.java",
+                        "db/migration/V1__init.sql"
+                ),
+                List.of("spring-boot-starter-web", "spring-boot-starter-data-jpa", "spring-security"),
+                100,
+                10
+        );
+
+        JobSignalClassifier.RepoClassification result = JobSignalClassifier.classifyRepo(repo);
+
+        assertThat(result.areas()).contains("AUTH", "API", "DB", "TEST");
+        assertThat(result.areas()).hasSizeLessThanOrEqualTo(5);
+    }
+
+    @Test
+    void CI_CD와_INFRA는_서로_다른_영역으로_구분된다() {
+        // Dockerfile·docker-compose(INFRA 관례)와 .github/workflows(CI_CD 관례)는 서로 다른
+        // 신호라 하나로 뭉개지면 안 된다.
+        JobSignalClassifier.RepoSignal repo = new JobSignalClassifier.RepoSignal(
+                "infra-repo",
+                null,
+                Map.of("Shell", 1_000L),
+                List.of("Dockerfile", "docker-compose.yml", ".github/workflows/deploy.yml"),
+                List.of(),
+                5,
+                2
+        );
+
+        JobSignalClassifier.RepoClassification result = JobSignalClassifier.classifyRepo(repo);
+
+        assertThat(result.areas()).contains("CI_CD", "INFRA");
+    }
+
+    @Test
+    void React_레포는_UI_STATE_MGMT_영역을_포함한다() {
+        JobSignalClassifier.RepoSignal repo = new JobSignalClassifier.RepoSignal(
+                "career-frontend",
+                "React 기반 프론트엔드",
+                Map.of("TypeScript", 90_000L, "CSS", 5_000L),
+                List.of(
+                        "src/components/Header.tsx",
+                        "src/store/userStore.ts",
+                        "src/styles/global.css"
+                ),
+                List.of("react", "react-dom", "redux"),
+                50,
+                5
+        );
+
+        JobSignalClassifier.RepoClassification result = JobSignalClassifier.classifyRepo(repo);
+
+        assertThat(result.areas()).contains("UI", "STATE_MGMT");
+    }
+
+    @Test
+    void lock_파일과_min_파일은_areas_신호에도_기여하지_않는다() {
+        JobSignalClassifier.RepoSignal repo = new JobSignalClassifier.RepoSignal(
+                "empty-signal-repo",
+                null,
+                Map.of(),
+                List.of("package-lock.json", "yarn.lock", "dist/app.min.js", "dist/store.js"),
+                List.of(),
+                3,
+                1
+        );
+
+        JobSignalClassifier.RepoClassification result = JobSignalClassifier.classifyRepo(repo);
+
+        assertThat(result.areas()).isEmpty();
+    }
+
+    @Test
+    void areas는_최대_5개까지만_담긴다() {
+        // AUTH·API·DB·CI_CD·INFRA·TEST 6개 신호를 모두 갖춘 레포도 상위 5개로만 잘려야 한다.
+        JobSignalClassifier.RepoSignal repo = new JobSignalClassifier.RepoSignal(
+                "everything-repo",
+                null,
+                Map.of("Java", 1_000L),
+                List.of(
+                        "src/main/java/com/example/security/SecurityConfig.java",
+                        "src/main/java/com/example/controller/A.java",
+                        "src/main/java/com/example/entity/A.java",
+                        ".github/workflows/deploy.yml",
+                        "Dockerfile",
+                        "src/test/java/com/example/ATest.java"
+                ),
+                List.of("spring-security", "jpa"),
+                10,
+                2
+        );
+
+        JobSignalClassifier.RepoClassification result = JobSignalClassifier.classifyRepo(repo);
+
+        assertThat(result.areas()).hasSize(5);
+    }
+
+    // --- E11(1단계) — stack(사용 기술) 골든 테스트 ---
+
+    @Test
+    void stack은_의존성_이름_상위_5개로_중복없이_채워진다() {
+        JobSignalClassifier.RepoSignal repo = new JobSignalClassifier.RepoSignal(
+                "many-deps-repo",
+                null,
+                Map.of("Java", 1_000L),
+                List.of("src/main/java/com/example/App.java"),
+                List.of("spring-boot", "spring-boot", "lombok", "jackson-databind", "junit", "mockito", "assertj-core"),
+                10,
+                2
+        );
+
+        JobSignalClassifier.RepoClassification result = JobSignalClassifier.classifyRepo(repo);
+
+        assertThat(result.stack()).containsExactly("spring-boot", "lombok", "jackson-databind", "junit", "mockito");
+    }
+
+    @Test
+    void 의존성이_없으면_stack은_주_언어_하나로_채워진다() {
+        JobSignalClassifier.RepoSignal repo = new JobSignalClassifier.RepoSignal(
+                "no-deps-repo",
+                null,
+                Map.of("Java", 1_000L),
+                List.of("src/main/java/com/example/App.java"),
+                List.of(),
+                10,
+                2
+        );
+
+        JobSignalClassifier.RepoClassification result = JobSignalClassifier.classifyRepo(repo);
+
+        assertThat(result.stack()).containsExactly("Java");
+    }
 }

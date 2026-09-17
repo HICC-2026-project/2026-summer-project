@@ -1,4 +1,4 @@
-import { EXPERIENCE_TYPE_OPTIONS, JOB_OPTIONS, LANG_MAX, PRIMARY } from "./data";
+import { AREA_LABELS, DEPTH_LABELS, EXPERIENCE_TYPE_OPTIONS, JOB_OPTIONS, LANG_MAX, PRIMARY } from "./data";
 import type {
   Experience,
   JobCode,
@@ -119,10 +119,33 @@ export function experienceTypeLabel(type: string): string {
   return EXPERIENCE_TYPE_OPTIONS.find((option) => option.code === type)?.label ?? type;
 }
 
+// 자동 태그(area) 코드를 한글 라벨로 바꾼다. 매핑에 없는 값(신규 코드)은 원본을 그대로
+// 보여준다 — areas 필드 자체를 string[]로 열어둔 이유와 같다.
+export function areaLabel(code: string): string {
+  return (AREA_LABELS as Record<string, string>)[code] ?? code;
+}
+
+// 경험 깊이 코드를 한글 라벨로 바꾼다. 매핑에 없는 값은 원본을 그대로 보여준다.
+export function depthLabel(code: string): string {
+  return (DEPTH_LABELS as Record<string, string>)[code] ?? code;
+}
+
+// 경험의 "사용 기술" 자유입력(콤마로 구분)을 배열로 바꾼다.
+// 트림·빈 값 제거 후 최대 10개로 자르고, 백엔드 계약(각 항목 ≤50자)에 맞춰 긴 항목은 자른다.
+export function parseStackInput(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .slice(0, 10)
+    .map((s) => (s.length > 50 ? s.slice(0, 50) : s));
+}
+
 // GET /users/me 응답의 spec.experiences 배열을 화면 state로 되돌린다.
 // 미입력(null/undefined)은 빈 배열로 떨어뜨리고, description은 백엔드가 null로 줄 수 있어
 // undefined로 정규화한다(Experience.description은 optional string이라 null이 그대로 들어오면
-// 화면에서 "null" 문자열처럼 취급될 위험이 있다).
+// 화면에서 "null" 문자열처럼 취급될 위험이 있다). E11 1단계로 추가된 5개 선택 필드도
+// 같은 이유로 null → undefined로 정규화해 왕복시킨다.
 export function fromExperiencesPayload(payload: Experience[] | null | undefined): Experience[] {
   return (payload ?? []).map((item) => ({
     type: item.type,
@@ -130,6 +153,11 @@ export function fromExperiencesPayload(payload: Experience[] | null | undefined)
     description: item.description ?? undefined,
     // source도 그대로 보존한다 — 미기재(undefined)는 곧 MANUAL과 같으므로 굳이 채우지 않는다.
     source: item.source ?? undefined,
+    months: item.months ?? undefined,
+    role: item.role ?? undefined,
+    stack: item.stack ?? undefined,
+    areas: item.areas ?? undefined,
+    depth: item.depth ?? undefined,
   }));
 }
 

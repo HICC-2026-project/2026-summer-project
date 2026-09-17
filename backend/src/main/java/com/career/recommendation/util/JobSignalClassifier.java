@@ -1,5 +1,6 @@
 package com.career.recommendation.util;
 
+import com.career.recommendation.domain.ExperienceArea;
 import com.career.recommendation.domain.JobType;
 
 import java.util.ArrayList;
@@ -38,14 +39,22 @@ public final class JobSignalClassifier {
     ) {
     }
 
-    /** 레포 하나의 분류 결과. primaryJob==null이면 OTHER. */
+    /**
+     * 레포 하나의 분류 결과. primaryJob==null이면 OTHER.
+     *
+     * areas: E11(1단계) — 레포 신호로 도출한 기여 영역(최대 5개, 신호 강한 순). PLANNING은
+     * 코드 신호로 식별하지 않으므로 여기 담기지 않는다.
+     * stack: 의존성 파일에서 뽑은 라이브러리 이름 상위 5개. 의존성이 없으면 주 언어 1개.
+     */
     public record RepoClassification(
             String repoName,
             JobType primaryJob,
             int fileCount,
             int commitCount,
             int activeMonths,
-            String mainLanguage
+            String mainLanguage,
+            List<String> areas,
+            List<String> stack
     ) {
     }
 
@@ -97,6 +106,22 @@ public final class JobSignalClassifier {
 
     private static final Set<String> DATA_DEPENDENCY_TOKENS = Set.of("airflow", "dbt", "spark", "kafka", "flink");
     private static final Set<String> DATA_PATH_TOKENS = Set.of("pipelines", "etl", "dags", "warehouse");
+
+    // --- ExperienceArea(기여 영역) 전용 신호 — JobType 신호와 겹치는 것은 위 상수를 재사용한다 ---
+    private static final Set<String> AREA_API_PATH_TOKENS = Set.of("controller", "api", "service", "repository", "domain");
+    private static final Set<String> AREA_DB_PATH_TOKENS = Set.of("db", "entity", "repository", "migration");
+    private static final Set<String> AREA_DB_DEPENDENCY_TOKENS = Set.of("jpa", "hibernate", "prisma", "typeorm", "mybatis");
+    private static final String AREA_CI_CD_PATH_PREFIX = ".github/workflows/";
+    private static final Set<String> AREA_INFRA_PATH_TOKENS = Set.of("terraform", "k8s", "helm", "nginx", "dockerfile");
+    private static final String AREA_DOCKER_COMPOSE_PREFIX = "docker-compose";
+    private static final Set<String> AREA_UI_EXTENSIONS = Set.of("tsx", "jsx", "vue", "svelte", "css", "scss");
+    private static final Set<String> AREA_UI_PATH_TOKENS = Set.of("components", "pages", "styles");
+    private static final Set<String> AREA_STATE_DEPENDENCY_TOKENS = Set.of("redux", "zustand", "recoil", "mobx", "pinia");
+    private static final Set<String> AREA_STATE_PATH_TOKENS = Set.of("store", "state");
+    private static final double DOCS_MD_RATIO_THRESHOLD = 0.5;
+    private static final int DOCS_PATH_COUNT_THRESHOLD = 3;
+    private static final int MAX_AREAS_PER_REPO = 5;
+    private static final int MAX_STACK_PER_REPO = 5;
 
     private static final Set<String> LOCK_FILE_NAMES = Set.of(
             "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "npm-shrinkwrap.json",
@@ -198,7 +223,147 @@ public final class JobSignalClassifier {
                 .map(Map.Entry::getKey)
                 .orElse(null);
 
-        return new RepoClassification(repo.name(), primary, cleanPaths.size(), repo.commitCount(), repo.activeMonths(), mainLanguage);
+        List<String> areas = deriveAreas(cleanPaths, deps, nameDesc);
+        List<String> stack = extractStack(deps, mainLanguage);
+
+        return new RepoClassification(
+                repo.name(), primary, cleanPaths.size(), repo.commitCount(), repo.activeMonths(),
+                mainLanguage, areas, stack);
+    }
+
+    // --- ExperienceArea(기여 영역) 도출 ---
+
+    /**
+     * 레포 신호로 기여 영역을 최대 {@value #MAX_AREAS_PER_REPO}개까지 신호 강한 순으로 뽑는다.
+     * PLANNING은 코드 신호로 식별하지 않으므로 절대 담기지 않는다.
+     */
+    private static List<String> deriveAreas(List<String> cleanPaths, List<String> deps, String nameDesc) {
+        EnumMap<ExperienceArea, Double> score = new EnumMap<>(ExperienceArea.class);
+
+        // AUTH — SECURITY_PATH_TOKENS 등 JobType.SECURITY와 같은 신호를 재사용한다.
+        scoreIf(score, pathHasToken(cleanPaths, SECURITY_PATH_TOKENS), ExperienceArea.AUTH, PATH_TOKEN_WEIGHT);
+        scoreIf(score, hasDependency(deps, SECURITY_DEPENDENCY_TOKENS), ExperienceArea.AUTH, DEPENDENCY_WEIGHT);
+        scoreIf(score, hasFilenamePrefix(cleanPaths, SECURITY_CONFIG_FILE_PREFIX), ExperienceArea.AUTH, SECURITY_CONFIG_FILE_WEIGHT);
+
+        // API
+        scoreIf(score, pathHasToken(cleanPaths, AREA_API_PATH_TOKENS), ExperienceArea.API, PATH_TOKEN_WEIGHT);
+
+        // DB
+        scoreIf(score, pathHasToken(cleanPaths, AREA_DB_PATH_TOKENS), ExperienceArea.DB, PATH_TOKEN_WEIGHT);
+        scoreIf(score, countExtension(cleanPaths, "sql") > 0, ExperienceArea.DB, EXTENSION_WEIGHT);
+        scoreIf(score, hasDependency(deps, AREA_DB_DEPENDENCY_TOKENS), ExperienceArea.DB, DEPENDENCY_WEIGHT);
+
+        // CI_CD
+        scoreIf(score, hasPathPrefix(cleanPaths, AREA_CI_CD_PATH_PREFIX), ExperienceArea.CI_CD, PATH_TOKEN_WEIGHT);
+
+        // INFRA
+        scoreIf(score, pathHasToken(cleanPaths, AREA_INFRA_PATH_TOKENS), ExperienceArea.INFRA, PATH_TOKEN_WEIGHT);
+        scoreIf(score, hasFilenamePrefix(cleanPaths, AREA_DOCKER_COMPOSE_PREFIX), ExperienceArea.INFRA, PATH_TOKEN_WEIGHT);
+        scoreIf(score, hasDependency(deps, INFRA_DEPENDENCY_TOKENS), ExperienceArea.INFRA, DEPENDENCY_WEIGHT);
+
+        // TEST
+        scoreIf(score, hasTestPathSignal(cleanPaths), ExperienceArea.TEST, PATH_TOKEN_WEIGHT);
+        scoreIf(score, hasTestFileSignal(cleanPaths), ExperienceArea.TEST, EXTENSION_WEIGHT);
+
+        // UI
+        scoreIf(score, hasExtension(cleanPaths, AREA_UI_EXTENSIONS), ExperienceArea.UI, EXTENSION_WEIGHT);
+        scoreIf(score, pathHasToken(cleanPaths, AREA_UI_PATH_TOKENS), ExperienceArea.UI, PATH_TOKEN_WEIGHT);
+
+        // STATE_MGMT
+        scoreIf(score, hasDependency(deps, AREA_STATE_DEPENDENCY_TOKENS), ExperienceArea.STATE_MGMT, DEPENDENCY_WEIGHT);
+        scoreIf(score, pathHasToken(cleanPaths, AREA_STATE_PATH_TOKENS), ExperienceArea.STATE_MGMT, PATH_TOKEN_WEIGHT);
+
+        // DATA_PIPELINE — JobType.DATA_ENGINEER와 같은 신호를 재사용한다.
+        scoreIf(score, hasDependency(deps, DATA_DEPENDENCY_TOKENS), ExperienceArea.DATA_PIPELINE, DEPENDENCY_WEIGHT);
+        scoreIf(score, pathHasToken(cleanPaths, DATA_PATH_TOKENS), ExperienceArea.DATA_PIPELINE, PATH_TOKEN_WEIGHT);
+
+        // ML_MODEL — JobType.AI_ML과 같은 신호를 재사용한다.
+        scoreIf(score, hasExtension(cleanPaths, Set.of("ipynb")), ExperienceArea.ML_MODEL, EXTENSION_WEIGHT);
+        scoreIf(score, hasDependency(deps, AI_DEPENDENCY_TOKENS), ExperienceArea.ML_MODEL, DEPENDENCY_WEIGHT);
+        scoreIf(score, pathHasToken(cleanPaths, AI_PATH_TOKENS), ExperienceArea.ML_MODEL, PATH_TOKEN_WEIGHT);
+
+        // DOCS
+        scoreIf(score, hasDocsSignal(cleanPaths), ExperienceArea.DOCS, PATH_TOKEN_WEIGHT);
+
+        // SECURITY(보안 분석) — repo 이름/설명의 CTF류 키워드. AUTH의 보안 "경로" 신호와는 별개다.
+        scoreIf(score, containsAny(nameDesc, SECURITY_NAME_KEYWORDS), ExperienceArea.SECURITY, SECURITY_NAME_KEYWORD_WEIGHT);
+
+        return score.entrySet().stream()
+                .filter(e -> e.getValue() > 0)
+                .sorted(Map.Entry.<ExperienceArea, Double>comparingByValue().reversed()
+                        .thenComparing(e -> e.getKey().ordinal()))
+                .limit(MAX_AREAS_PER_REPO)
+                .map(e -> e.getKey().name())
+                .toList();
+    }
+
+    private static void scoreIf(Map<ExperienceArea, Double> score, boolean condition, ExperienceArea area, double weight) {
+        if (condition) {
+            score.merge(area, weight, Double::sum);
+        }
+    }
+
+    private static boolean hasPathPrefix(List<String> paths, String prefixLower) {
+        for (String path : paths) {
+            if (path.toLowerCase(Locale.ROOT).startsWith(prefixLower)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasTestPathSignal(List<String> paths) {
+        for (String path : paths) {
+            String lower = path.toLowerCase(Locale.ROOT);
+            if (lower.contains("src/test") || lower.contains("__tests__")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasTestFileSignal(List<String> paths) {
+        for (String path : paths) {
+            String lower = path.toLowerCase(Locale.ROOT);
+            String fileName = lower.substring(lower.lastIndexOf('/') + 1);
+            if (fileName.contains(".test.") || fileName.contains(".spec.")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 마크다운 파일 비중이 50% 이상이거나 docs/ 경로 파일이 3개 이상이면 문서화 신호로 본다. */
+    private static boolean hasDocsSignal(List<String> paths) {
+        if (paths.isEmpty()) {
+            return false;
+        }
+        long mdCount = countExtension(paths, "md");
+        double ratio = (double) mdCount / paths.size();
+        long docsPathCount = paths.stream().filter(p -> {
+            for (String seg : p.toLowerCase(Locale.ROOT).split("/")) {
+                if (seg.equals("docs")) {
+                    return true;
+                }
+            }
+            return false;
+        }).count();
+        return ratio >= DOCS_MD_RATIO_THRESHOLD || docsPathCount >= DOCS_PATH_COUNT_THRESHOLD;
+    }
+
+    /** 의존성 이름 상위 5개(중복 제거). 의존성이 하나도 없으면 주 언어 1개라도 담는다. */
+    private static List<String> extractStack(List<String> deps, String mainLanguage) {
+        if (deps != null && !deps.isEmpty()) {
+            List<String> cleaned = deps.stream()
+                    .filter(d -> d != null && !d.isBlank())
+                    .distinct()
+                    .limit(MAX_STACK_PER_REPO)
+                    .toList();
+            if (!cleaned.isEmpty()) {
+                return cleaned;
+            }
+        }
+        return mainLanguage != null ? List.of(mainLanguage) : List.of();
     }
 
     private static JobType pickPrimary(Map<JobType, Double> score) {

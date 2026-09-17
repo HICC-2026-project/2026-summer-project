@@ -144,6 +144,34 @@ class GithubAnalysisRunnerTest {
     }
 
     @Test
+    void 파생_경험에_레포_신호로_months_stack_areas가_채워진다() {
+        UUID profileId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        GithubProfile profile = pendingProfile(profileId, user(userId));
+        List<GithubClient.RepoRawData> repos = List.of(new GithubClient.RepoRawData(
+                "solo-repo", null, Map.of("Java", 10L), List.of("a/service/X.java"), List.of(),
+                5, LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 10)));
+
+        UserSpec spec = UserSpec.builder().id(UUID.randomUUID()).user(user(userId)).experiences(null).build();
+
+        stubTransactionManager();
+        when(githubProfileRepository.findById(profileId)).thenReturn(Optional.of(profile));
+        when(githubClient.analyze("octocat")).thenReturn(new GithubClient.GithubAnalysisRawResult(repos, false));
+        when(githubProfileRepository.saveAndFlush(any(GithubProfile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.of(spec));
+        when(userSpecRepository.saveAndFlush(any(UserSpec.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        runner.analyze(profileId, userId);
+
+        Map<String, Object> derived = spec.getExperiences().get(0);
+        // src/…/service/X.java 하나만으로도 activeMonths=1(같은 달), API 경로 신호, 의존성이
+        // 없으니 stack은 주 언어(Java) 하나로 채워져야 한다.
+        assertThat(derived).containsEntry("months", 1);
+        assertThat(derived).containsEntry("stack", List.of("Java"));
+        assertThat(derived).containsEntry("areas", List.of("API"));
+    }
+
+    @Test
     void 수동_항목이_20개면_GITHUB_파생을_추가하지_않는다() {
         UUID profileId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
