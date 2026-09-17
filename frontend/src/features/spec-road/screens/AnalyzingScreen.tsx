@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PRIMARY } from "../data";
+import { INK, INK_FAINT, INK_MUTED, PRIMARY } from "../data";
 
 const ANALYZE_STEPS = [
   { label: "스펙 프로필 정리 완료", done: true },
@@ -50,12 +50,12 @@ export function AnalyzingScreen() {
           ✦
         </div>
       </div>
-      <h2 style={{ fontSize: 20, fontWeight: 800, color: "#15141B", margin: "0 0 8px", letterSpacing: "-0.02em", textAlign: "center" }}>
+      <h2 style={{ fontSize: 20, fontWeight: 800, color: INK, margin: "0 0 8px", letterSpacing: "-0.02em", textAlign: "center" }}>
         합격자 데이터와
         <br />
         비교 분석 중이에요
       </h2>
-      <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 26px", textAlign: "center" }}>잠시만 기다려 주세요</p>
+      <p style={{ fontSize: 14, color: INK_MUTED, margin: "0 0 26px", textAlign: "center" }}>잠시만 기다려 주세요</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: 280 }}>
         {ANALYZE_STEPS.map((a) => (
           <div
@@ -66,7 +66,7 @@ export function AnalyzingScreen() {
               gap: 10,
               fontSize: 13.5,
               fontWeight: 600,
-              color: a.done ? "#15141B" : "#B0B0BA",
+              color: a.done ? INK : "#B0B0BA",
             }}
           >
             <span
@@ -94,7 +94,7 @@ export function AnalyzingScreen() {
         <p
           style={{
             fontSize: 12.5,
-            color: "#9797A1",
+            color: INK_FAINT,
             margin: "22px 0 0",
             textAlign: "center",
             lineHeight: 1.55,

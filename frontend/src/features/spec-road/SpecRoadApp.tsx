@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError, KAKAO_LOGIN_URL } from "@/lib/api";
 import { clearTokens, getAccessToken, onSessionExpired } from "@/lib/auth";
 import { deleteMe, getMe, getRecommendations, getRoadmap, patchNickname, postLogout, postPasserReport, putSpec, putTarget } from "./api";
-import { RECOMMENDATIONS, ROADMAP } from "./data";
+import { INK, RECOMMENDATIONS, ROADMAP } from "./data";
 import {
   fromExperiencesPayload,
   fromLanguageScoresPayload,
@@ -403,7 +403,7 @@ export function SpecRoadApp() {
         alignItems: "stretch",
         background: "#E9E9EF",
         fontFamily: '"Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif',
-        color: "#15141B",
+        color: INK,
       }}
     >
       <div

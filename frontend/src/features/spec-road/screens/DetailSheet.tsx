@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getActivity } from "../api";
-import { PRIMARY } from "../data";
+import { INK, INK_FAINT, INK_MUTED, PRIMARY, SURFACE_MUTED } from "../data";
 import { dday, ddayColor, fmtDate } from "../helpers";
 import type { ActivityDetailResponse, Recommendation, RecommendationMeta } from "../types";
 
@@ -91,15 +91,15 @@ export function DetailSheet({ recommendationId, recommendations, recMeta, onClos
         </div>
         <div className="cf-scroll" style={{ overflowY: "auto", padding: "12px 24px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#61616C", background: "#F1F0F6", padding: "5px 11px", borderRadius: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: INK_MUTED, background: SURFACE_MUTED, padding: "5px 11px", borderRadius: 8 }}>
               {rec.type}
             </span>
             <span style={{ fontSize: 12.5, fontWeight: 700, color: ddayColor(rec.deadline) }}>{dday(rec.deadline)}</span>
           </div>
-          <h2 style={{ fontSize: 23, fontWeight: 800, color: "#15141B", letterSpacing: "-0.02em", margin: "0 0 5px", lineHeight: 1.3 }}>
+          <h2 style={{ fontSize: 23, fontWeight: 800, color: INK, letterSpacing: "-0.02em", margin: "0 0 5px", lineHeight: 1.3 }}>
             {rec.name}
           </h2>
-          <div style={{ fontSize: 14, color: "#9797A1", fontWeight: 500, marginBottom: 20 }}>
+          <div style={{ fontSize: 14, color: INK_FAINT, fontWeight: 500, marginBottom: 20 }}>
             {organization ? `${organization} · ` : ""}마감 {fmtDate(rec.deadline)}
           </div>
 
@@ -143,13 +143,13 @@ export function DetailSheet({ recommendationId, recommendations, recMeta, onClos
               </div>
             )}
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14.5, fontWeight: 800, color: "#15141B", marginBottom: 4 }}>나와 잘 맞는 활동이에요</div>
-              <div style={{ fontSize: 13, color: "#61616C", lineHeight: 1.5 }}>{matchSubtitle}</div>
+              <div style={{ fontSize: 14.5, fontWeight: 800, color: INK, marginBottom: 4 }}>나와 잘 맞는 활동이에요</div>
+              <div style={{ fontSize: 13, color: INK_MUTED, lineHeight: 1.5 }}>{matchSubtitle}</div>
             </div>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
-            <span style={{ fontSize: 15, fontWeight: 800, color: "#15141B" }}>왜 추천했나요?</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: INK }}>왜 추천했나요?</span>
             <span style={{ fontSize: 11, fontWeight: 700, color: PRIMARY }}>✦ AI 분석</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
@@ -181,14 +181,14 @@ export function DetailSheet({ recommendationId, recommendations, recMeta, onClos
           {tags.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 8 }}>
               {tags.map((t) => (
-                <span key={t} style={{ fontSize: 12.5, fontWeight: 600, color: "#61616C", background: "#F1F0F6", padding: "6px 12px", borderRadius: 999 }}>
+                <span key={t} style={{ fontSize: 12.5, fontWeight: 600, color: INK_MUTED, background: SURFACE_MUTED, padding: "6px 12px", borderRadius: 999 }}>
                   #{t}
                 </span>
               ))}
             </div>
           )}
         </div>
-        <div style={{ padding: "12px 24px calc(20px + env(safe-area-inset-bottom))", borderTop: "1px solid #F1F0F6", display: "flex", gap: 10, flexShrink: 0 }}>
+        <div style={{ padding: "12px 24px calc(20px + env(safe-area-inset-bottom))", borderTop: `1px solid ${SURFACE_MUTED}`, display: "flex", gap: 10, flexShrink: 0 }}>
           {/* 지원 링크는 활동 상세에 있을 때만 노출한다. */}
           {applyUrl && (
             <a
@@ -201,7 +201,7 @@ export function DetailSheet({ recommendationId, recommendations, recMeta, onClos
                 border: "1px solid #E1E0EA",
                 borderRadius: 16,
                 background: "#fff",
-                color: "#15141B",
+                color: INK,
                 fontSize: 15,
                 fontWeight: 700,
                 display: "flex",

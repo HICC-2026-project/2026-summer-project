@@ -3,18 +3,7 @@
 import { useState, type CSSProperties } from "react";
 import { Chip } from "../components/Chip";
 import { ExperienceCard } from "../components/ExperienceCard";
-import {
-  EXPERIENCE_TYPE_OPTIONS,
-  GPA_SCALE_OPTIONS,
-  GRADE_OPTIONS,
-  INDUSTRY_OPTIONS,
-  JOB_OPTIONS,
-  LANG_MAX,
-  LANG_TYPES,
-  OPIC_GRADES,
-  PRIMARY,
-  SIZE_OPTIONS,
-} from "../data";
+import { EXPERIENCE_TYPE_OPTIONS, GPA_SCALE_OPTIONS, GRADE_OPTIONS, INDUSTRY_OPTIONS, INK, INK_FAINT, INK_MUTED, JOB_OPTIONS, LANG_MAX, LANG_TYPES, LINE, OPIC_GRADES, PRIMARY, SIZE_OPTIONS } from "../data";
 import { chipStyle, parseStackInput } from "../helpers";
 import type { Experience, ExperienceType, JobCode, OnboardStep, Spec, Target } from "../types";
 
@@ -39,7 +28,7 @@ interface OnboardingScreenProps {
 
 const cardStyle: CSSProperties = {
   background: "#fff",
-  border: "1px solid #EDEDF2",
+  border: `1px solid ${LINE}`,
   borderRadius: 20,
   padding: 18,
   marginBottom: 12,
@@ -49,7 +38,7 @@ const fieldLabelStyle: CSSProperties = {
   display: "block",
   fontSize: 13,
   fontWeight: 700,
-  color: "#61616C",
+  color: INK_MUTED,
   marginBottom: 10,
 };
 
@@ -59,7 +48,7 @@ const numberInputStyle: CSSProperties = {
   background: "transparent",
   fontSize: 28,
   fontWeight: 800,
-  color: "#15141B",
+  color: INK,
   padding: "2px 0",
   outline: "none",
 };
@@ -175,7 +164,7 @@ export function OnboardingScreen({
             border: "none",
             background: "#fff",
             boxShadow: "0 1px 2px rgba(24,22,44,0.06)",
-            color: "#61616C",
+            color: INK_MUTED,
             fontSize: 18,
             cursor: "pointer",
             flexShrink: 0,
@@ -194,17 +183,17 @@ export function OnboardingScreen({
             }}
           />
         </div>
-        <span style={{ fontSize: 13, fontWeight: 600, color: "#9797A1", flexShrink: 0 }}>{step + 1} / 2</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: INK_FAINT, flexShrink: 0 }}>{step + 1} / 2</span>
       </div>
 
       {step === 0 ? (
         <div className="cf-scroll" style={{ flex: 1, overflowY: "auto", padding: "8px 20px 20px", animation: "cfUp .4s ease both" }}>
-          <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em", margin: "6px 0 6px", color: "#15141B" }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em", margin: "6px 0 6px", color: INK }}>
             현재 내 스펙을
             <br />
             알려주세요
           </h1>
-          <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 22px", lineHeight: 1.55 }}>
+          <p style={{ fontSize: 14, color: INK_MUTED, margin: "0 0 22px", lineHeight: 1.55 }}>
             입력한 정보는 추천과 합격자 비교에만 쓰이고, 언제든 수정할 수 있어요.
           </p>
 
@@ -237,7 +226,7 @@ export function OnboardingScreen({
                 inputMode="decimal"
                 style={{ ...numberInputStyle, width: 92 }}
               />
-              <span style={{ fontSize: 17, fontWeight: 700, color: "#9797A1" }}>/ {spec.gpaScale}</span>
+              <span style={{ fontSize: 17, fontWeight: 700, color: INK_FAINT }}>/ {spec.gpaScale}</span>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               {GPA_SCALE_OPTIONS.map((scale) => (
@@ -262,7 +251,7 @@ export function OnboardingScreen({
                 const score = spec.langScores[lt] ?? "";
                 return (
                   <div key={lt}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#15141B" }}>{lt}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: INK }}>{lt}</span>
                     <div style={{ marginTop: 6 }}>
                       {lt === "OPIc" ? (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -289,7 +278,7 @@ export function OnboardingScreen({
                             inputMode="numeric"
                             style={{ ...numberInputStyle, fontSize: 22, width: 100 }}
                           />
-                          <span style={{ fontSize: 13, fontWeight: 600, color: "#9797A1" }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: INK_FAINT }}>
                             {langMax != null ? `/ ${langMax}점` : "점"}
                           </span>
                         </div>
@@ -449,7 +438,7 @@ export function OnboardingScreen({
                         outline: "none",
                       }}
                     />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "#9797A1", flexShrink: 0 }}>개월</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: INK_FAINT, flexShrink: 0 }}>개월</span>
                   </div>
                   <input
                     value={experienceDraft.role}
@@ -535,7 +524,7 @@ export function OnboardingScreen({
                     style={{
                       border: "none",
                       background: "transparent",
-                      color: "#9797A1",
+                      color: INK_FAINT,
                       fontSize: 14,
                       cursor: "pointer",
                       flexShrink: 0,
@@ -550,17 +539,17 @@ export function OnboardingScreen({
         </div>
       ) : (
         <div className="cf-scroll" style={{ flex: 1, overflowY: "auto", padding: "8px 20px 20px", animation: "cfUp .4s ease both" }}>
-          <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em", margin: "6px 0 6px", color: "#15141B" }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em", margin: "6px 0 6px", color: INK }}>
             어떤 목표를
             <br />
             준비하고 있나요?
           </h1>
-          <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 22px", lineHeight: 1.55 }}>
+          <p style={{ fontSize: 14, color: INK_MUTED, margin: "0 0 22px", lineHeight: 1.55 }}>
             목표에 따라 추천 활동과 비교 대상이 달라져요.
           </p>
 
           <div style={{ marginBottom: 22 }}>
-            <label style={{ display: "block", fontSize: 14, fontWeight: 700, color: "#15141B", marginBottom: 12 }}>
+            <label style={{ display: "block", fontSize: 14, fontWeight: 700, color: INK, marginBottom: 12 }}>
               희망 직무
             </label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -592,7 +581,7 @@ export function OnboardingScreen({
           </div>
 
           <div style={{ marginBottom: 22 }}>
-            <label style={{ display: "block", fontSize: 14, fontWeight: 700, color: "#15141B", marginBottom: 12 }}>
+            <label style={{ display: "block", fontSize: 14, fontWeight: 700, color: INK, marginBottom: 12 }}>
               희망 기업 규모
             </label>
             <div style={{ display: "flex", gap: 8 }}>
@@ -639,7 +628,7 @@ export function OnboardingScreen({
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: 14, fontWeight: 700, color: "#15141B", marginBottom: 12 }}>
+            <label style={{ display: "block", fontSize: 14, fontWeight: 700, color: INK, marginBottom: 12 }}>
               관심 업계
             </label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -679,7 +668,7 @@ export function OnboardingScreen({
         }}
       >
         {blockedMessage && (
-          <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#9797A1", textAlign: "center" }}>
+          <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: INK_FAINT, textAlign: "center" }}>
             {blockedMessage}
           </p>
         )}

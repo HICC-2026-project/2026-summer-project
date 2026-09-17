@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { PRIMARY } from "../data";
+import { INK, INK_MUTED, LINE, PRIMARY } from "../data";
 
 interface IntroScreenProps {
   onBack: () => void;
@@ -13,13 +13,13 @@ const sectionTitleStyle: CSSProperties = {
   fontSize: 18,
   fontWeight: 800,
   letterSpacing: "-0.02em",
-  color: "#15141B",
+  color: INK,
   margin: "0 0 12px",
 };
 
 const cardStyle: CSSProperties = {
   background: "#fff",
-  border: "1px solid #EDEDF2",
+  border: `1px solid ${LINE}`,
   borderRadius: 18,
   padding: 16,
 };
@@ -78,7 +78,7 @@ export function IntroScreen({ onBack, onLoginKakao, onPreviewDemo }: IntroScreen
             border: "none",
             background: "#fff",
             boxShadow: "0 1px 2px rgba(24,22,44,0.06)",
-            color: "#61616C",
+            color: INK_MUTED,
             fontSize: 18,
             cursor: "pointer",
             flexShrink: 0,
@@ -86,17 +86,17 @@ export function IntroScreen({ onBack, onLoginKakao, onPreviewDemo }: IntroScreen
         >
           ‹
         </button>
-        <span style={{ fontSize: 15, fontWeight: 700, color: "#15141B" }}>서비스 소개</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: INK }}>서비스 소개</span>
       </div>
 
       <div className="cf-scroll" style={{ flex: 1, overflowY: "auto", padding: "8px 20px 20px" }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: PRIMARY, marginBottom: 8 }}>Spec Road</div>
-        <h1 style={{ fontSize: 25, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.3, margin: "0 0 12px", color: "#15141B" }}>
+        <h1 style={{ fontSize: 25, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.3, margin: "0 0 12px", color: INK }}>
           막막한 취업 준비를
           <br />
           순서가 있는 계획으로
         </h1>
-        <p style={{ fontSize: 14.5, lineHeight: 1.6, color: "#61616C", margin: "0 0 26px" }}>
+        <p style={{ fontSize: 14.5, lineHeight: 1.6, color: INK_MUTED, margin: "0 0 26px" }}>
           &ldquo;지금 뭘 해야 하지?&rdquo; 취업 준비의 가장 큰 어려움은 정보가 없어서가 아니라, 흩어진 정보 중 나에게 맞는
           것이 무엇인지 모른다는 데 있어요. Spec Road는 내 스펙을 합격자 데이터와 비교해, 지금 해야 할 활동을 알려줍니다.
         </p>
@@ -107,10 +107,10 @@ export function IntroScreen({ onBack, onLoginKakao, onPreviewDemo }: IntroScreen
             <div key={feature.title} style={{ ...cardStyle, display: "flex", gap: 12 }}>
               <span style={{ fontSize: 19, lineHeight: 1.3, flexShrink: 0 }}>{feature.icon}</span>
               <span style={{ minWidth: 0 }}>
-                <span style={{ display: "block", fontSize: 15, fontWeight: 700, color: "#15141B", marginBottom: 4 }}>
+                <span style={{ display: "block", fontSize: 15, fontWeight: 700, color: INK, marginBottom: 4 }}>
                   {feature.title}
                 </span>
-                <span style={{ display: "block", fontSize: 13.5, color: "#61616C", lineHeight: 1.55 }}>{feature.body}</span>
+                <span style={{ display: "block", fontSize: 13.5, color: INK_MUTED, lineHeight: 1.55 }}>{feature.body}</span>
               </span>
             </div>
           ))}
@@ -138,10 +138,10 @@ export function IntroScreen({ onBack, onLoginKakao, onPreviewDemo }: IntroScreen
                 {item.step}
               </span>
               <span style={{ minWidth: 0 }}>
-                <span style={{ display: "block", fontSize: 14.5, fontWeight: 700, color: "#15141B", marginBottom: 3 }}>
+                <span style={{ display: "block", fontSize: 14.5, fontWeight: 700, color: INK, marginBottom: 3 }}>
                   {item.title}
                 </span>
-                <span style={{ display: "block", fontSize: 13.5, color: "#61616C", lineHeight: 1.55 }}>{item.body}</span>
+                <span style={{ display: "block", fontSize: 13.5, color: INK_MUTED, lineHeight: 1.55 }}>{item.body}</span>
               </span>
             </div>
           ))}
@@ -149,8 +149,8 @@ export function IntroScreen({ onBack, onLoginKakao, onPreviewDemo }: IntroScreen
 
         <h2 style={sectionTitleStyle}>데이터를 이렇게 다뤄요</h2>
         <div style={{ ...cardStyle, marginBottom: 8 }}>
-          <p style={{ fontSize: 13.5, color: "#61616C", lineHeight: 1.6, margin: 0 }}>
-            합격자 데이터는 <b style={{ color: "#15141B" }}>이름·학교 없이 익명</b>으로만 저장하고, 로그인 시에도 카카오
+          <p style={{ fontSize: 13.5, color: INK_MUTED, lineHeight: 1.6, margin: 0 }}>
+            합격자 데이터는 <b style={{ color: INK }}>이름·학교 없이 익명</b>으로만 저장하고, 로그인 시에도 카카오
             닉네임만 받아요. 아직 데이터가 충분하지 않은 활동은 그 사실을 화면에 그대로 알려드리고, 대신 AI 일반 추천을
             제공합니다.
           </p>
@@ -197,7 +197,7 @@ export function IntroScreen({ onBack, onLoginKakao, onPreviewDemo }: IntroScreen
             border: "1px solid #E1E0EA",
             borderRadius: 16,
             background: "transparent",
-            color: "#61616C",
+            color: INK_MUTED,
             fontSize: 14.5,
             fontWeight: 600,
             cursor: "pointer",

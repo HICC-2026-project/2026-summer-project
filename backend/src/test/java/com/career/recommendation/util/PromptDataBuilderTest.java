@@ -1,6 +1,7 @@
 package com.career.recommendation.util;
 
 import com.career.recommendation.dto.position.SpecPositionResult;
+import com.career.recommendation.entity.Activity;
 import com.career.recommendation.entity.TargetJob;
 import com.career.recommendation.entity.UserSpec;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -8,6 +9,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -134,6 +137,61 @@ class PromptDataBuilderTest {
 
         assertThat(recommendationJson).contains("Spring 기반 결제 API 설계·구현", "Spring Boot", "PostgreSQL");
         assertThat(roadmapJson).contains("Spring 기반 결제 API 설계·구현", "Spring Boot", "PostgreSQL");
+    }
+
+    @Test
+    void 경험_직렬화는_프롬프트에서만_description과_stack을_축약한다() {
+        // 500자 description·10개짜리 stack이 저장 형식 그대로 프롬프트에 실리면
+        // 경험 1건만으로도 프롬프트가 수천 자를 넘을 수 있었다. description은 100자+"..."로,
+        // stack은 앞 5개만 남기고, role·areas 등 다른 필드는 그대로 실려야 한다.
+        String longDescription = "가".repeat(500);
+        List<String> tenStacks = List.of("A", "B", "C", "D", "E", "F", "G", "H", "I", "J");
+        UserSpec userSpec = UserSpec.builder()
+                .experiences(List.of(new java.util.LinkedHashMap<>(Map.of(
+                        "type", "PROJECT",
+                        "title", "결제 API 서버",
+                        "role", "Spring 기반 결제 API 설계·구현",
+                        "description", longDescription,
+                        "stack", tenStacks,
+                        "areas", List.of("API", "DB")))))
+                .build();
+
+        String recommendationJson = builder.serializeSpecForRecommendation(userSpec);
+        String roadmapJson = builder.serializeSpecForRoadmap(userSpec);
+
+        String truncatedDescription = "가".repeat(100) + "...";
+        for (String json : List.of(recommendationJson, roadmapJson)) {
+            assertThat(json).contains(truncatedDescription);
+            assertThat(json).doesNotContain(longDescription);
+            assertThat(json).contains("\"A\"", "\"B\"", "\"C\"", "\"D\"", "\"E\"");
+            assertThat(json).doesNotContain("\"F\"", "\"G\"", "\"H\"", "\"I\"", "\"J\"");
+            // role·areas는 그대로 유지된다.
+            assertThat(json).contains("Spring 기반 결제 API 설계·구현", "API", "DB");
+        }
+    }
+
+    @Test
+    void 로드맵용_활동_목록은_이미_추천된_활동을_제외하고_targetSpec을_포함하지_않는다() {
+        UUID keepId = UUID.randomUUID();
+        UUID excludedId = UUID.randomUUID();
+        Activity kept = Activity.builder()
+                .id(keepId).type("EXTERNAL").name("남는 활동")
+                .targetSpec(Map.of("gpa", 3.5))
+                .build();
+        Activity excluded = Activity.builder()
+                .id(excludedId).type("EXTERNAL").name("이미 추천된 활동")
+                .targetSpec(Map.of("gpa", 4.0))
+                .build();
+
+        String json = builder.buildAvailableActivitiesJsonForRoadmap(
+                List.of(kept, excluded), Set.of(excludedId));
+
+        assertThat(json).contains("남는 활동").doesNotContain("이미 추천된 활동");
+        assertThat(json).doesNotContain("targetSpec");
+
+        // 대조군: 추천(F-03)용 메서드는 여전히 targetSpec을 포함한다(불변 계약).
+        String recommendationJson = builder.buildAvailableActivitiesJson(List.of(kept));
+        assertThat(recommendationJson).contains("targetSpec");
     }
 
     private SpecPositionResult.AreaCoverage areaCoverage(String area, String label, boolean covered) {

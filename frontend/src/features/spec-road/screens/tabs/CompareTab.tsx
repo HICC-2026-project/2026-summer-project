@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { BADGE, DEMO_SPEC_POSITION, PRIMARY } from "../../data";
+import { BADGE, DEMO_SPEC_POSITION, INK, INK_FAINT, INK_MUTED, LINE, PRIMARY, SURFACE_MUTED } from "../../data";
 import type { AreaCoverageItem, AxisPosition, RecommendationMeta, SpecPosition } from "../../types";
 import { percentileLabel } from "../../helpers";
 import { StateMessage } from "../../components/StateMessage";
@@ -46,7 +46,7 @@ export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabPr
         lineHeight: 1.6,
       }}
     >
-      <b style={{ color: "#15141B" }}>비교에 반영되지 않은 자격증이 있어요: </b>
+      <b style={{ color: INK }}>비교에 반영되지 않은 자격증이 있어요: </b>
       {unmatchedCerts.join(", ")}
       <br />
       {basisNoun} 데이터에 없는 자격증이에요. 오타라면 정확한 명칭으로 다시 입력해 주세요.
@@ -114,17 +114,17 @@ export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabPr
 
       {/* 축별 위치 — 총점·가중치 없이 각 축의 분포 내 위치를 그대로 보여준다.
           막대 길이 = percentile(합격자 중 나보다 낮은 비율). 미입력이면 막대를 그리지 않는다. */}
-      <div style={{ background: "#fff", border: "1px solid #EDEDF2", borderRadius: 22, padding: "8px 20px", marginBottom: 14 }}>
+      <div style={{ background: "#fff", border: `1px solid ${LINE}`, borderRadius: 22, padding: "8px 20px", marginBottom: 14 }}>
         {position.axes.map((a: AxisPosition, i: number) => {
           const hasValue = a.percentile != null;
           const badge = hasValue ? (a.percentile! >= 50 ? BADGE.ok : BADGE.bad) : BADGE.muted;
-          const divider = i === position.axes.length - 1 ? "transparent" : "#F1F0F6";
+          const divider = i === position.axes.length - 1 ? "transparent" : SURFACE_MUTED;
 
           return (
             <div key={a.axis} style={{ padding: "17px 0", borderBottom: `1px solid ${divider}` }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 14.5, fontWeight: 700, color: "#15141B" }}>{a.label}</span>
+                  <span style={{ fontSize: 14.5, fontWeight: 700, color: INK }}>{a.label}</span>
                   {/* 이 축 데이터를 가진 합격자 수 — 표본이 작으면 사용자가 감안할 수 있게 표기 */}
                   <span style={{ fontSize: 11, fontWeight: 600, color: "#B0B0BA" }}>합격자 {a.coverage}명 기준</span>
                 </div>
@@ -134,7 +134,7 @@ export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabPr
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 7 }}>
                 <span style={{ width: 42, fontSize: 11.5, fontWeight: 700, color: PRIMARY, flexShrink: 0 }}>나</span>
-                <div style={{ flex: 1, height: 9, borderRadius: 999, background: "#F1F0F6", overflow: "hidden" }}>
+                <div style={{ flex: 1, height: 9, borderRadius: 999, background: SURFACE_MUTED, overflow: "hidden" }}>
                   {hasValue && (
                     <div
                       style={{
@@ -148,13 +148,13 @@ export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabPr
                     />
                   )}
                 </div>
-                <span style={{ width: 72, textAlign: "right", fontSize: 13, fontWeight: 700, color: "#15141B", flexShrink: 0 }}>{a.myValue}</span>
+                <span style={{ width: 72, textAlign: "right", fontSize: 13, fontWeight: 700, color: INK, flexShrink: 0 }}>{a.myValue}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ width: 42, fontSize: 11.5, fontWeight: 700, color: "#B0B0BA", flexShrink: 0 }}>중앙값</span>
                 {/* 중앙값은 정의상 분포의 50% 지점 — 막대도 항상 절반이다. 이 막대가 있어야
                     "내 막대가 중앙값 막대보다 긴가"로 위치를 직관적으로 읽을 수 있다. */}
-                <div style={{ flex: 1, height: 9, borderRadius: 999, background: "#F1F0F6", overflow: "hidden" }}>
+                <div style={{ flex: 1, height: 9, borderRadius: 999, background: SURFACE_MUTED, overflow: "hidden" }}>
                   <div
                     style={{
                       height: "100%",
@@ -166,7 +166,7 @@ export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabPr
                     }}
                   />
                 </div>
-                <span style={{ width: 72, textAlign: "right", fontSize: 13, fontWeight: 600, color: "#9797A1", flexShrink: 0 }}>{a.medianValue}</span>
+                <span style={{ width: 72, textAlign: "right", fontSize: 13, fontWeight: 600, color: INK_FAINT, flexShrink: 0 }}>{a.medianValue}</span>
               </div>
             </div>
           );
@@ -181,9 +181,9 @@ export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabPr
       )}
 
       {/* 갭 — 이 직무 합격자 다수가 가진 것 중 나에게 없는 것. "다음 할 일" 리스트다. */}
-      <div style={{ background: "#fff", border: "1px solid #EDEDF2", borderRadius: 22, padding: "18px 20px" }}>
-        <div style={{ fontSize: 14.5, fontWeight: 800, color: "#15141B", marginBottom: 4 }}>지금 메우면 좋은 갭</div>
-        <p style={{ fontSize: 12.5, color: "#61616C", margin: "0 0 12px", lineHeight: 1.5 }}>
+      <div style={{ background: "#fff", border: `1px solid ${LINE}`, borderRadius: 22, padding: "18px 20px" }}>
+        <div style={{ fontSize: 14.5, fontWeight: 800, color: INK, marginBottom: 4 }}>지금 메우면 좋은 갭</div>
+        <p style={{ fontSize: 12.5, color: INK_MUTED, margin: "0 0 12px", lineHeight: 1.5 }}>
           {basisNoun} 다수가 보유했지만 아직 나에게 없는 자격증이에요.
         </p>
         {position.gaps.length === 0 ? (
@@ -196,25 +196,25 @@ export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabPr
               합격자 다수가 보유한 자격증을 모두 갖췄어요 👏
             </div>
           ) : (
-            <div style={{ fontSize: 13, color: "#61616C" }}>
+            <div style={{ fontSize: 13, color: INK_MUTED }}>
               아직 이 비교 기준에서 집계된 주요 자격증이 없어요. 합격자 데이터가 쌓이면 여기에 갭이 표시돼요.
             </div>
           )
         ) : (
           position.gaps.map((g, i) => (
-            <div key={g.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid #F1F0F6" }}>
-              <span style={{ fontSize: 13.5, fontWeight: 700, color: "#15141B", flex: 1 }}>{g.name}</span>
-              <div style={{ width: 90, height: 8, borderRadius: 999, background: "#F1F0F6", overflow: "hidden", flexShrink: 0 }}>
+            <div key={g.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: i === 0 ? "none" : `1px solid ${SURFACE_MUTED}` }}>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: INK, flex: 1 }}>{g.name}</span>
+              <div style={{ width: 90, height: 8, borderRadius: 999, background: SURFACE_MUTED, overflow: "hidden", flexShrink: 0 }}>
                 <div style={{ height: "100%", borderRadius: 999, background: PRIMARY, width: `${g.holderRatePercent}%` }} />
               </div>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#61616C", width: 92, textAlign: "right", flexShrink: 0 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: INK_MUTED, width: 92, textAlign: "right", flexShrink: 0 }}>
                 합격자 {g.holderRatePercent}% 보유
               </span>
             </div>
           ))
         )}
         {matchedCerts.length > 0 && (
-          <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F1F0F6", fontSize: 12.5, color: "#61616C", lineHeight: 1.6 }}>
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${SURFACE_MUTED}`, fontSize: 12.5, color: INK_MUTED, lineHeight: 1.6 }}>
             <b style={{ color: BADGE.ok.color }}>이미 보유 ✓</b> {matchedCerts.join(", ")}
           </div>
         )}
@@ -227,8 +227,8 @@ export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabPr
 function Shell({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
   return (
     <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
-      <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 6px", color: "#15141B" }}>합격자 분포 속 내 위치</h1>
-      <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 20px", lineHeight: 1.55 }}>
+      <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 6px", color: INK }}>합격자 분포 속 내 위치</h1>
+      <p style={{ fontSize: 14, color: INK_MUTED, margin: "0 0 20px", lineHeight: 1.55 }}>
         내 스펙이 익명 합격자 분포의 어디쯤인지, 뭘 보완하면 좋을지 보여드려요.
       </p>
       {children}
@@ -241,9 +241,9 @@ function Shell({ children, footer }: { children: ReactNode; footer?: ReactNode }
 function AreaCoverageCard({ areaCoverage }: { areaCoverage: AreaCoverageItem[] }) {
   const hasUncovered = areaCoverage.some((a) => !a.covered);
   return (
-    <div style={{ background: "#fff", border: "1px solid #EDEDF2", borderRadius: 22, padding: "18px 20px", marginBottom: 14 }}>
-      <div style={{ fontSize: 14.5, fontWeight: 800, color: "#15141B", marginBottom: 4 }}>영역 커버리지</div>
-      <p style={{ fontSize: 12.5, color: "#61616C", margin: "0 0 12px", lineHeight: 1.5 }}>
+    <div style={{ background: "#fff", border: `1px solid ${LINE}`, borderRadius: 22, padding: "18px 20px", marginBottom: 14 }}>
+      <div style={{ fontSize: 14.5, fontWeight: 800, color: INK, marginBottom: 4 }}>영역 커버리지</div>
+      <p style={{ fontSize: 12.5, color: INK_MUTED, margin: "0 0 12px", lineHeight: 1.5 }}>
         목표 직무가 요구하는 영역 기준 — 합격자 표본·점수와 무관해요
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -258,7 +258,7 @@ function AreaCoverageCard({ areaCoverage }: { areaCoverage: AreaCoverageItem[] }
               fontWeight: 700,
               padding: "6px 12px",
               borderRadius: 999,
-              color: a.covered ? PRIMARY : "#9797A1",
+              color: a.covered ? PRIMARY : INK_FAINT,
               background: a.covered ? `color-mix(in srgb, ${PRIMARY} 10%, #fff)` : "#fff",
               border: `1px solid ${a.covered ? PRIMARY : "#E1E0EA"}`,
             }}
@@ -269,7 +269,7 @@ function AreaCoverageCard({ areaCoverage }: { areaCoverage: AreaCoverageItem[] }
         ))}
       </div>
       {hasUncovered && (
-        <p style={{ margin: "12px 0 0", fontSize: 12, color: "#9797A1", lineHeight: 1.5 }}>
+        <p style={{ margin: "12px 0 0", fontSize: 12, color: INK_FAINT, lineHeight: 1.5 }}>
           비어 있는 영역은 추천 활동으로 채워보세요
         </p>
       )}
@@ -289,12 +289,12 @@ function ReportCta({ position, onOpenPasserReport }: { position: SpecPosition; o
         background: `color-mix(in srgb, ${PRIMARY} 6%, #fff)`,
       }}
     >
-      <div style={{ fontSize: 14, fontWeight: 800, color: "#15141B", marginBottom: 4 }}>
+      <div style={{ fontSize: 14, fontWeight: 800, color: INK, marginBottom: 4 }}>
         {position.targetJobLabel
           ? `${position.targetJobLabel} 합격자 데이터가 ${position.jobSampleSize ?? 0}명뿐이에요`
           : "합격자 데이터가 더 필요해요"}
       </div>
-      <p style={{ margin: "0 0 12px", fontSize: 12.5, color: "#61616C", lineHeight: 1.55, wordBreak: "keep-all" }}>
+      <p style={{ margin: "0 0 12px", fontSize: 12.5, color: INK_MUTED, lineHeight: 1.55, wordBreak: "keep-all" }}>
         {position.minSampleSize ?? 3}명부터 직무별 비교가 가능해요. 합격 경험이 있다면 익명으로 제보해 주세요 — 검수 후 바로 비교에 반영돼요.
       </p>
       <button

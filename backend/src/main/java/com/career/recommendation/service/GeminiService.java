@@ -33,6 +33,12 @@ public class GeminiService {
     @Value("${gemini.api.model}")
     private String model;
 
+    // gemini-2.5-flash는 기본적으로 thinking이 켜져 있어, 화면에 보이지 않는 thinking 토큰까지
+    // output으로 과금될 수 있다. 이 서비스의 모든 응답은 JSON 필드 몇 개만 뽑아내는 짧은 구조라
+    // thinking이 답변 품질에 크게 기여하지 않는다고 보고 기본을 0(끔)으로 둔다.
+    @Value("${gemini.api.max-output-tokens:4096}")
+    private int maxOutputTokens;
+
     private final WebClient.Builder webClientBuilder;
     private final GeminiDailyQuota dailyQuota;
     private final GeminiCallStats callStats;
@@ -260,7 +266,12 @@ public class GeminiService {
                         )
                 ),
                 "generationConfig", Map.of(
-                        "responseMimeType", "application/json"
+                        "responseMimeType", "application/json",
+                        // thinkingBudget: 0 — 보이지 않는 thinking 토큰 과금을 막는다(gemini-2.5-flash는
+                        // 기본 thinking이 켜져 있다). maxOutputTokens는 이 서비스의 모든 호출(추천·로드맵·
+                        // 후속 질문·경험 enrich) 공통 상한 — 어느 응답도 4096 토큰을 넘길 필요가 없다.
+                        "thinkingConfig", Map.of("thinkingBudget", 0),
+                        "maxOutputTokens", maxOutputTokens
                 )
         );
 

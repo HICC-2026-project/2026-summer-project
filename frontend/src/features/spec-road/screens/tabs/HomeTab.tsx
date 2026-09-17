@@ -1,6 +1,6 @@
 "use client";
 
-import { BADGE, DEMO_SPEC_POSITION, DEMO_USER_NAME, PRIMARY } from "../../data";
+import { BADGE, DEMO_SPEC_POSITION, DEMO_USER_NAME, INK, INK_FAINT, INK_MUTED, LINE, PRIMARY, SURFACE_MUTED } from "../../data";
 import { StateMessage } from "../../components/StateMessage";
 import { dday, ddayColor, hasMeaningfulLangScore, jobLabel, percentileLabel } from "../../helpers";
 import type { Recommendation, RecommendationMeta, Spec, Target } from "../../types";
@@ -49,8 +49,8 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
     <div style={{ padding: "22px 20px 108px", animation: "cfUp .35s ease both" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 22 }}>
         <div>
-          <p style={{ fontSize: 14, color: "#61616C", margin: "0 0 4px", fontWeight: 500 }}>{displayName}님, 안녕하세요 👋</p>
-          <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em", margin: 0, color: "#15141B", lineHeight: 1.3 }}>
+          <p style={{ fontSize: 14, color: INK_MUTED, margin: "0 0 4px", fontWeight: 500 }}>{displayName}님, 안녕하세요 👋</p>
+          <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em", margin: 0, color: INK, lineHeight: 1.3 }}>
             {targetSummary}
             <br />
             준비를 위한 추천이에요
@@ -118,33 +118,33 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
       <div style={{ display: "flex", gap: 10, marginBottom: 26 }}>
         {isDemo ? (
           <>
-            <div style={{ flex: 1, background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16, padding: 14 }}>
-              <div style={{ fontSize: 12, color: "#9797A1", fontWeight: 600, marginBottom: 6 }}>강점</div>
+            <div style={{ flex: 1, background: "#fff", border: `1px solid ${LINE}`, borderRadius: 16, padding: 14 }}>
+              <div style={{ fontSize: 12, color: INK_FAINT, fontWeight: 600, marginBottom: 6 }}>강점</div>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#12A150" }}>학점 · 자격증</div>
             </div>
-            <div style={{ flex: 1, background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16, padding: 14 }}>
-              <div style={{ fontSize: 12, color: "#9797A1", fontWeight: 600, marginBottom: 6 }}>보완 필요</div>
+            <div style={{ flex: 1, background: "#fff", border: `1px solid ${LINE}`, borderRadius: 16, padding: 14 }}>
+              <div style={{ fontSize: 12, color: INK_FAINT, fontWeight: 600, marginBottom: 6 }}>보완 필요</div>
               <div style={{ fontSize: 15, fontWeight: 700, color: "#E5484D" }}>어학 · 실무경험</div>
             </div>
           </>
         ) : (
           <>
-            <div style={{ flex: 1, background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16, padding: 14 }}>
-              <div style={{ fontSize: 12, color: "#9797A1", fontWeight: 600, marginBottom: 6 }}>내 학점</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#15141B" }}>
+            <div style={{ flex: 1, background: "#fff", border: `1px solid ${LINE}`, borderRadius: 16, padding: 14 }}>
+              <div style={{ fontSize: 12, color: INK_FAINT, fontWeight: 600, marginBottom: 6 }}>내 학점</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: INK }}>
                 {spec.gpa ? `${spec.gpa} / ${spec.gpaScale}` : "미입력"}
               </div>
             </div>
-            <div style={{ flex: 1, background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16, padding: 14 }}>
-              <div style={{ fontSize: 12, color: "#9797A1", fontWeight: 600, marginBottom: 6 }}>어학 · 자격증</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#15141B" }}>{specSummary}</div>
+            <div style={{ flex: 1, background: "#fff", border: `1px solid ${LINE}`, borderRadius: 16, padding: 14 }}>
+              <div style={{ fontSize: 12, color: INK_FAINT, fontWeight: 600, marginBottom: 6 }}>어학 · 자격증</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: INK }}>{specSummary}</div>
             </div>
           </>
         )}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.02em", margin: 0, color: "#15141B" }}>
+        <h2 style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.02em", margin: 0, color: INK }}>
           지금 지원하면 좋은 활동
         </h2>
         <span
@@ -154,8 +154,8 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
             gap: 4,
             fontSize: 11.5,
             fontWeight: 700,
-            color: isFallbackRec ? "#9797A1" : PRIMARY,
-            background: isFallbackRec ? "#F1F0F6" : `color-mix(in srgb, ${PRIMARY} 11%, #fff)`,
+            color: isFallbackRec ? INK_FAINT : PRIMARY,
+            background: isFallbackRec ? SURFACE_MUTED : `color-mix(in srgb, ${PRIMARY} 11%, #fff)`,
             padding: "5px 9px",
             borderRadius: 999,
           }}
@@ -166,7 +166,7 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
 
       {/* 추천 갱신 정책 안내: 스펙을 바꿔야 새로 생성되고, 하루 3회까지만 가능하다. 로그인 유저에게만 표시. */}
       {recMeta != null && (
-        <p style={{ fontSize: 12, color: "#9797A1", margin: "0 0 12px", lineHeight: 1.5 }}>
+        <p style={{ fontSize: 12, color: INK_FAINT, margin: "0 0 12px", lineHeight: 1.5 }}>
           스펙을 수정하면 추천을 새로 만들어요. 하루 3번까지 호출할 수 있어요.
         </p>
       )}
@@ -213,7 +213,7 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
               onClick={() => onOpenDetail(r.id)}
               style={{
                 background: "#fff",
-                border: "1px solid #EDEDF2",
+                border: `1px solid ${LINE}`,
                 borderRadius: 20,
                 padding: "17px 18px",
                 cursor: "pointer",
@@ -223,7 +223,7 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: "#61616C", background: "#F1F0F6", padding: "4px 9px", borderRadius: 7 }}>
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: INK_MUTED, background: SURFACE_MUTED, padding: "4px 9px", borderRadius: 7 }}>
                       {r.type}
                     </span>
                     <span style={{ fontSize: 12, fontWeight: 600, color: ddayColor(r.deadline) }}>{dday(r.deadline)}</span>
@@ -234,11 +234,11 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: 16.5, fontWeight: 700, color: "#15141B", letterSpacing: "-0.01em", marginBottom: 3, lineHeight: 1.3 }}>
+                  <div style={{ fontSize: 16.5, fontWeight: 700, color: INK, letterSpacing: "-0.01em", marginBottom: 3, lineHeight: 1.3 }}>
                     {r.name}
                   </div>
                   {/* 기관(org)은 백엔드 응답에 없어 목업에만 존재 → 있을 때만 표시 */}
-                  {r.org && <div style={{ fontSize: 13, color: "#9797A1", fontWeight: 500 }}>{r.org}</div>}
+                  {r.org && <div style={{ fontSize: 13, color: INK_FAINT, fontWeight: 500 }}>{r.org}</div>}
                 </div>
                 {/* 개별 활동 점수(score)도 목업 전용 → 있을 때만 표시 */}
                 {r.score != null && (

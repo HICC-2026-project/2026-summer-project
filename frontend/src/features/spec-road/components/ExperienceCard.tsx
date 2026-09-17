@@ -1,6 +1,6 @@
 "use client";
 
-import { DEPTH_LABELS, PRIMARY } from "../data";
+import { DEPTH_LABELS, INK, INK_MUTED, PRIMARY } from "../data";
 import { experienceTypeLabel } from "../helpers";
 import type { Experience } from "../types";
 import { AreaChips } from "./AreaChips";
@@ -28,7 +28,7 @@ export function ExperienceCard({ experience: exp, onAnalyzeDepth }: ExperienceCa
         {experienceTypeLabel(exp.type)}
         {exp.months != null && ` · ${exp.months}개월`}
       </div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: "#15141B" }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>
         {exp.title}
         {exp.source === "GITHUB" && <GithubExperienceBadge />}
       </div>
@@ -36,7 +36,7 @@ export function ExperienceCard({ experience: exp, onAnalyzeDepth }: ExperienceCa
         <div style={{ fontSize: 12.5, color: "#4A4954", fontWeight: 600, marginTop: 2 }}>{exp.role}</div>
       )}
       {exp.description && (
-        <div style={{ fontSize: 12.5, color: "#61616C", marginTop: 2, lineHeight: 1.5 }}>{exp.description}</div>
+        <div style={{ fontSize: 12.5, color: INK_MUTED, marginTop: 2, lineHeight: 1.5 }}>{exp.description}</div>
       )}
       {(hasStack || hasAreas || depth) && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
@@ -64,7 +64,7 @@ export function ExperienceCard({ experience: exp, onAnalyzeDepth }: ExperienceCa
                 display: "inline-block",
                 fontSize: 11.5,
                 fontWeight: 700,
-                color: "#61616C",
+                color: INK_MUTED,
                 background: "#fff",
                 border: "1px solid #E1E0EA",
                 padding: "3px 9px",

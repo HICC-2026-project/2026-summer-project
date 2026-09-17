@@ -2,12 +2,19 @@ import type { AreaCode, ExperienceDepth, ExperienceType, JobCode, Recommendation
 
 export const PRIMARY = "#2F6FED";
 
+// 공통 잉크/라인 색 — spec-road 화면 전반에서 반복 사용되는 텍스트·테두리·배경 톤.
+export const INK = "#15141B";
+export const INK_MUTED = "#61616C";
+export const INK_FAINT = "#9797A1";
+export const LINE = "#EDEDF2";
+export const SURFACE_MUTED = "#F1F0F6";
+
 // 상태 배지 색 — 좋음(반영·상위)·주의(대기)·나쁨(반려·하위). 탭마다 같은 의미엔 같은 색을 쓴다.
 export const BADGE = {
   ok: { color: "#12A150", bg: "#E7F6EE" },
   warn: { color: "#79551F", bg: "#FFF9ED" },
   bad: { color: "#E5484D", bg: "#FCECEC" },
-  muted: { color: "#9797A1", bg: "#F1F0F6" },
+  muted: { color: INK_FAINT, bg: SURFACE_MUTED },
 } as const;
 
 export const RECOMMENDATIONS: Recommendation[] = [
