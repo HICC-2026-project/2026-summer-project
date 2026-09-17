@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * BE-1 담당 — F-03 활동 추천 비즈니스 로직.
@@ -86,6 +87,10 @@ public class RecommendationService {
             wantsRefresh = true;
         } else {
             cachedResponse = deserialize(cached.getResultJson());
+            // 캐시는 스펙이 바뀔 때만 재생성되는데, 생성 후 스케줄러가 마감 활동을 비활성화하거나
+            // 관리자가 활동을 내리면 캐시가 그 활동을 계속 노출한다(2026-09-17 실사용자 제보:
+            // "마감 끝난 활동이 추천에 뜬다"). 캐시를 반환하기 직전, 매번 DB와 대조해 걸러낸다.
+            cachedResponse = filterStaleActivities(cachedResponse, today);
             boolean isSpecChanged = isSpecModifiedSince(userSpec, targetJob, cached.getCreatedAt());
             boolean hasUsableActivities = hasUsableCachedActivities(cachedResponse, today);
             // v8 이하(구 점수 체계 — matchScore·compareRows) 캐시는 specPosition이 없어
@@ -189,6 +194,41 @@ public class RecommendationService {
                 .scoreFormulaVersion(SpecPositionCalculator.CURRENT_SCORE_FORMULA_VERSION)
                 .dailyLimitReached(true)
                 .build();
+    }
+
+    /**
+     * 캐시 속 활동 목록을 DB와 대조해 비활성화(is_active=false)·삭제·마감(deadline < today)된
+     * 항목을 제거한다. 마감일이 null(상시 모집)인 항목은 그대로 유지한다.
+     * 활동은 최대 {@value #MAX_RECOMMENDABLE_ACTIVITIES}개뿐이라 findAllById 1회면 충분하다.
+     * 캐시 JSON 자체는 다시 쓰지 않고(원본은 그대로 둔다), 읽을 때마다 필터링만 한다.
+     */
+    private RecommendationResponse filterStaleActivities(RecommendationResponse response, LocalDate today) {
+        if (response == null || response.getActivities() == null || response.getActivities().isEmpty()) {
+            return response;
+        }
+
+        List<UUID> ids = response.getActivities().stream()
+                .map(ActivityRecommendation::getId)
+                .filter(id -> id != null)
+                .toList();
+        Map<UUID, Activity> dbActivities = activityRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Activity::getId, a -> a));
+
+        List<ActivityRecommendation> filtered = response.getActivities().stream()
+                .filter(a -> {
+                    Activity db = (a.getId() != null) ? dbActivities.get(a.getId()) : null;
+                    if (db == null) return false; // DB에 없음(삭제됨)
+                    if (!Boolean.TRUE.equals(db.getIsActive())) return false; // 비활성화됨
+                    return db.getDeadline() == null || !db.getDeadline().isBefore(today); // 마감 지남
+                })
+                .toList();
+
+        int removed = response.getActivities().size() - filtered.size();
+        if (removed == 0) {
+            return response;
+        }
+        log.info("추천 캐시 재검증: 비활성/마감/삭제된 활동 {}건 제거", removed);
+        return response.toBuilder().activities(filtered).build();
     }
 
     private boolean hasUsableCachedActivities(RecommendationResponse response, LocalDate today) {

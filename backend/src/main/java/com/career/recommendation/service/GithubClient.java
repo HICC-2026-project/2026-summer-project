@@ -111,7 +111,9 @@ public class GithubClient {
      * @throws GithubOrganizationAccountException 대상이 조직(Organization) 계정
      */
     public GithubAnalysisRawResult analyze(String username) {
-        WebClient client = buildClient();
+        Clients clients = buildClients();
+        WebClient client = clients.authClient();
+        WebClient anonymousClient = clients.anonymousClient();
 
         ResponseEntity<Map> userResponse;
         try {
@@ -166,7 +168,8 @@ public class GithubClient {
         // 조직 레포 등 "소유하지 않은" 기여 레포 발견 — 비공개 멤버십이면 /users/{u}/orgs가
         // 비어 있어도 커밋 검색은 여전히 그 사람의 커밋이 있는 레포를 찾아낸다. 검색 API는
         // 별도 쿼터(코어와 무관)이고 실패해도 전체 분석을 막지 않는다 — 아래에서 조용히 넘어간다.
-        List<Map<String, Object>> discoveredRepos = discoverContributedRepos(client, username, ownedRepos, maxRepos);
+        List<Map<String, Object>> discoveredRepos =
+                discoverContributedRepos(client, anonymousClient, username, ownedRepos, maxRepos);
 
         List<Map<String, Object>> merged = new ArrayList<>(ownedRepos);
         merged.addAll(discoveredRepos);
@@ -183,7 +186,7 @@ public class GithubClient {
         boolean rateLimited = false;
         for (Map<String, Object> repo : filtered) {
             String repoOwnerLogin = ownerLoginOf(repo, username);
-            RepoFetchOutcome outcome = fetchRepoData(client, repoOwnerLogin, username, repo);
+            RepoFetchOutcome outcome = fetchRepoData(client, anonymousClient, repoOwnerLogin, username, repo);
             if (outcome.rateLimited()) {
                 rateLimited = true;
                 break;
@@ -201,7 +204,8 @@ public class GithubClient {
      * 예외를 던지지 않고 빈 목록을 돌려준다 — 소유 레포만으로 분석을 계속 진행하기 위함이다.
      */
     private List<Map<String, Object>> discoverContributedRepos(
-            WebClient client, String username, List<Map<String, Object>> ownedRepos, int maxCandidates) {
+            WebClient client, WebClient anonymousClient, String username,
+            List<Map<String, Object>> ownedRepos, int maxCandidates) {
         List<Map<String, Object>> discovered = new ArrayList<>();
         try {
             Set<String> ownedFullNames = ownedRepos.stream()
@@ -247,7 +251,7 @@ public class GithubClient {
                 checked++;
                 String[] parts = fullName.split("/", 2);
                 if (parts.length != 2) continue;
-                Map<String, Object> meta = fetchRepoMeta(client, parts[0], parts[1]);
+                Map<String, Object> meta = fetchRepoMeta(client, anonymousClient, parts[0], parts[1]);
                 if (meta == null) continue; // 조회 실패(권한 없음·삭제됨·코어 레이트리밋 등) — 조용히 건너뜀
                 if (Boolean.TRUE.equals(meta.get("archived")) || Boolean.TRUE.equals(meta.get("fork"))) continue;
                 discovered.add(meta);
@@ -255,24 +259,26 @@ public class GithubClient {
         } catch (Exception e) {
             // 검색 API는 코어와 별도 쿼터(무토큰 10/min)라 403/429가 흔할 수 있다 — 전체 분석을
             // 실패시키지 않고 소유 레포만으로 계속 진행한다.
-            log.debug("GitHub 커밋 검색 실패 (소유 레포만으로 계속 진행): {}", e.getMessage());
+            logSkip("GitHub 커밋 검색", "author:" + username, e);
         }
         return discovered;
     }
 
     /** 검색으로 찾은 레포의 archived·fork·default_branch·pushed_at 등 전체 메타데이터를 확인한다. */
-    private Map<String, Object> fetchRepoMeta(WebClient client, String ownerLogin, String repoName) {
+    private Map<String, Object> fetchRepoMeta(WebClient client, WebClient anonymousClient, String ownerLogin, String repoName) {
+        String fullName = ownerLogin + "/" + repoName;
         try {
-            ResponseEntity<Map> resp = client.get()
-                    .uri("/repos/{owner}/{repo}", ownerLogin, repoName)
-                    .retrieve()
-                    .toEntity(Map.class)
-                    .block(CALL_TIMEOUT);
+            ResponseEntity<Map> resp = requestWithAnonymousFallback(client, anonymousClient, fullName,
+                    c -> c.get()
+                            .uri("/repos/{owner}/{repo}", ownerLogin, repoName)
+                            .retrieve()
+                            .toEntity(Map.class)
+                            .block(CALL_TIMEOUT));
             @SuppressWarnings("unchecked")
             Map<String, Object> body = resp != null ? (Map<String, Object>) resp.getBody() : null;
             return body;
         } catch (Exception e) {
-            log.debug("GitHub 레포 메타데이터 조회 실패 (건너뜀): {}/{} - {}", ownerLogin, repoName, e.getMessage());
+            logSkip("GitHub 레포 메타데이터 조회 (레포 발견 건너뜀)", fullName, e);
             return null;
         }
     }
@@ -286,8 +292,10 @@ public class GithubClient {
         return fallbackUsername;
     }
 
-    private RepoFetchOutcome fetchRepoData(WebClient client, String repoOwnerLogin, String authorUsername, Map<String, Object> repoMeta) {
+    private RepoFetchOutcome fetchRepoData(
+            WebClient client, WebClient anonymousClient, String repoOwnerLogin, String authorUsername, Map<String, Object> repoMeta) {
         String repoName = String.valueOf(repoMeta.get("name"));
+        String fullName = repoOwnerLogin + "/" + repoName;
         String description = repoMeta.get("description") != null ? String.valueOf(repoMeta.get("description")) : null;
         String defaultBranch = repoMeta.get("default_branch") != null
                 ? String.valueOf(repoMeta.get("default_branch"))
@@ -295,11 +303,12 @@ public class GithubClient {
 
         Map<String, Long> languages = new LinkedHashMap<>();
         try {
-            ResponseEntity<Map> resp = client.get()
-                    .uri("/repos/{owner}/{repo}/languages", repoOwnerLogin, repoName)
-                    .retrieve()
-                    .toEntity(Map.class)
-                    .block(CALL_TIMEOUT);
+            ResponseEntity<Map> resp = requestWithAnonymousFallback(client, anonymousClient, fullName,
+                    c -> c.get()
+                            .uri("/repos/{owner}/{repo}/languages", repoOwnerLogin, repoName)
+                            .retrieve()
+                            .toEntity(Map.class)
+                            .block(CALL_TIMEOUT));
             if (resp != null && isRateLimited(resp.getHeaders(), resp.getStatusCode())) {
                 return RepoFetchOutcome.blocked();
             }
@@ -313,21 +322,22 @@ public class GithubClient {
             }
         } catch (WebClientResponseException e) {
             if (isRateLimitStatus(e)) return RepoFetchOutcome.blocked();
-            log.debug("GitHub languages 조회 실패 (무시): {}/{} - {}", repoOwnerLogin, repoName, e.getStatusCode());
+            logSkip("GitHub languages 조회 (무시)", fullName, e);
         }
 
         int commitCount = 0;
         LocalDate first = null;
         LocalDate last = null;
         try {
-            ResponseEntity<List> resp = client.get()
-                    .uri(uriBuilder -> uriBuilder.path("/repos/{owner}/{repo}/commits")
-                            .queryParam("author", authorUsername)
-                            .queryParam("per_page", commitsPerRepo)
-                            .build(repoOwnerLogin, repoName))
-                    .retrieve()
-                    .toEntity(List.class)
-                    .block(CALL_TIMEOUT);
+            ResponseEntity<List> resp = requestWithAnonymousFallback(client, anonymousClient, fullName,
+                    c -> c.get()
+                            .uri(uriBuilder -> uriBuilder.path("/repos/{owner}/{repo}/commits")
+                                    .queryParam("author", authorUsername)
+                                    .queryParam("per_page", commitsPerRepo)
+                                    .build(repoOwnerLogin, repoName))
+                            .retrieve()
+                            .toEntity(List.class)
+                            .block(CALL_TIMEOUT));
             if (resp != null && isRateLimited(resp.getHeaders(), resp.getStatusCode())) {
                 return RepoFetchOutcome.blocked();
             }
@@ -349,19 +359,20 @@ public class GithubClient {
             }
             if (e.getStatusCode().value() != 409) {
                 // 409 = 빈 레포(커밋 없음) — 정상 케이스로 0건 유지. 그 외는 로그만 남기고 0건 취급.
-                log.debug("GitHub commits 조회 실패 (0건 취급): {}/{} - {}", repoOwnerLogin, repoName, e.getStatusCode());
+                logSkip("GitHub commits 조회 (0건 취급)", fullName, e);
             }
         }
 
         List<String> filePaths = new ArrayList<>();
         try {
-            ResponseEntity<Map> resp = client.get()
-                    .uri(uriBuilder -> uriBuilder.path("/repos/{owner}/{repo}/git/trees/{branch}")
-                            .queryParam("recursive", 1)
-                            .build(repoOwnerLogin, repoName, defaultBranch))
-                    .retrieve()
-                    .toEntity(Map.class)
-                    .block(CALL_TIMEOUT);
+            ResponseEntity<Map> resp = requestWithAnonymousFallback(client, anonymousClient, fullName,
+                    c -> c.get()
+                            .uri(uriBuilder -> uriBuilder.path("/repos/{owner}/{repo}/git/trees/{branch}")
+                                    .queryParam("recursive", 1)
+                                    .build(repoOwnerLogin, repoName, defaultBranch))
+                            .retrieve()
+                            .toEntity(Map.class)
+                            .block(CALL_TIMEOUT));
             if (resp != null && isRateLimited(resp.getHeaders(), resp.getStatusCode())) {
                 return RepoFetchOutcome.blocked();
             }
@@ -377,7 +388,7 @@ public class GithubClient {
             // truncated=true는 그대로 허용 — 지금까지 받은 경로 목록만으로 신호를 계산한다.
         } catch (WebClientResponseException e) {
             if (isRateLimitStatus(e)) return RepoFetchOutcome.blocked();
-            log.debug("GitHub tree 조회 실패 (빈 파일 목록 취급): {}/{} - {}", repoOwnerLogin, repoName, e.getStatusCode());
+            logSkip("GitHub tree 조회 (빈 파일 목록 취급)", fullName, e);
         }
 
         List<String> dependencies = new ArrayList<>();
@@ -388,11 +399,12 @@ public class GithubClient {
         for (String depFileName : DEPENDENCY_FILE_NAMES) {
             if (!rootFiles.contains(depFileName.toLowerCase(Locale.ROOT))) continue;
             try {
-                ResponseEntity<Map> resp = client.get()
-                        .uri("/repos/{owner}/{repo}/contents/{path}", repoOwnerLogin, repoName, depFileName)
-                        .retrieve()
-                        .toEntity(Map.class)
-                        .block(CALL_TIMEOUT);
+                ResponseEntity<Map> resp = requestWithAnonymousFallback(client, anonymousClient, fullName,
+                        c -> c.get()
+                                .uri("/repos/{owner}/{repo}/contents/{path}", repoOwnerLogin, repoName, depFileName)
+                                .retrieve()
+                                .toEntity(Map.class)
+                                .block(CALL_TIMEOUT));
                 if (resp != null && isRateLimited(resp.getHeaders(), resp.getStatusCode())) {
                     return RepoFetchOutcome.blocked();
                 }
@@ -403,9 +415,9 @@ public class GithubClient {
                 }
             } catch (WebClientResponseException e) {
                 if (isRateLimitStatus(e)) return RepoFetchOutcome.blocked();
-                log.debug("GitHub 의존성 파일 조회 실패 (건너뜀): {}/{}/{} - {}", repoOwnerLogin, repoName, depFileName, e.getStatusCode());
+                logSkip("GitHub 의존성 파일 조회 (건너뜀)", fullName + "/" + depFileName, e);
             } catch (Exception e) {
-                log.debug("GitHub 의존성 파일 파싱 실패 (건너뜀): {}/{}/{}", repoOwnerLogin, repoName, depFileName);
+                log.debug("GitHub 의존성 파일 파싱 실패 (건너뜀): {}/{}", fullName, depFileName);
             }
         }
 
@@ -443,16 +455,51 @@ public class GithubClient {
         return token != null && !token.isBlank();
     }
 
-    private WebClient buildClient() {
+    /** 인증 클라이언트와, 조직의 fine-grained PAT 차단 시 폴백용 익명 클라이언트를 함께 만든다. */
+    private record Clients(WebClient authClient, WebClient anonymousClient) {}
+
+    private Clients buildClients() {
         WebClient.Builder builder = webClientBuilder
                 .baseUrl(baseUrl)
                 .defaultHeader("Accept", "application/vnd.github+json")
                 .defaultHeader("X-GitHub-Api-Version", "2022-11-28");
-        if (hasToken()) {
-            // 토큰 원문은 여기서만 쓰이고 로그에는 절대 남기지 않는다.
-            builder = builder.defaultHeader("Authorization", "Bearer " + token);
+        WebClient anonymous = builder.build();
+        WebClient authenticated = hasToken()
+                // 토큰 원문은 여기서만 쓰이고 로그에는 절대 남기지 않는다. 인증 클라이언트는 별도로
+                // clone()한 빌더에만 Authorization을 추가해, anonymous 빌드에 영향을 주지 않는다.
+                ? builder.clone().defaultHeader("Authorization", "Bearer " + token).build()
+                : anonymous;
+        return new Clients(authenticated, anonymous);
+    }
+
+    /**
+     * 레포 단위 GET(메타·languages·commits·트리·contents) 공통 헬퍼. 토큰이 설정된 상태에서
+     * 403을 받으면 같은 요청을 Authorization 헤더 없는 익명 클라이언트로 1회만 재시도한다 —
+     * fine-grained PAT를 차단하는 조직의 공개 레포는 익명 요청이 오히려 성공하기 때문이다.
+     * 익명 재시도도 실패하면 그 예외를 그대로 던져 호출부의 기존 실패 처리(레이트리밋 판정/
+     * 건너뜀)를 그대로 태운다.
+     */
+    private <T> ResponseEntity<T> requestWithAnonymousFallback(
+            WebClient authClient, WebClient anonymousClient, String targetFullName,
+            java.util.function.Function<WebClient, ResponseEntity<T>> request) {
+        try {
+            return request.apply(authClient);
+        } catch (WebClientResponseException e) {
+            if (authClient != anonymousClient && e.getStatusCode().value() == 403) {
+                log.warn("조직이 토큰을 차단해 익명으로 재시도: {}", targetFullName);
+                return request.apply(anonymousClient);
+            }
+            throw e;
         }
-        return builder.build();
+    }
+
+    /** 실패를 조용히 건너뛰는 지점의 로그를 운영(INFO)에서도 보이도록 warn으로 남긴다. 상태코드·대상만 남기고 토큰 등 민감정보는 남기지 않는다. */
+    private void logSkip(String action, String targetFullName, Exception e) {
+        if (e instanceof WebClientResponseException wcre) {
+            log.warn("{} 실패: {} - status={}", action, targetFullName, wcre.getStatusCode().value());
+        } else {
+            log.warn("{} 실패: {} - {}", action, targetFullName, e.getMessage());
+        }
     }
 
     // --- 파싱 헬퍼 ---
