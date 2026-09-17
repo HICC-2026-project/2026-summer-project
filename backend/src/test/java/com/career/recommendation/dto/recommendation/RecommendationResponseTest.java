@@ -58,6 +58,11 @@ class RecommendationResponseTest {
                         .build()))
                 .matchedCertifications(List.of("SQLD"))
                 .unmatchedCertifications(List.of("완전정크자격증123"))
+                .areaCoverage(List.of(
+                        SpecPositionResult.AreaCoverage.builder()
+                                .area("API").label("API 개발").covered(true).build(),
+                        SpecPositionResult.AreaCoverage.builder()
+                                .area("AUTH").label("인증").covered(false).build()))
                 .build();
 
         RecommendationResponse original = RecommendationResponse.builder()
@@ -96,5 +101,36 @@ class RecommendationResponseTest {
         assertThat(restoredPosition.getGaps().get(0).getHolderRatePercent()).isEqualTo(70);
         assertThat(restoredPosition.getMatchedCertifications()).containsExactly("SQLD");
         assertThat(restoredPosition.getUnmatchedCertifications()).containsExactly("완전정크자격증123");
+        assertThat(restoredPosition.getAreaCoverage()).hasSize(2);
+        assertThat(restoredPosition.getAreaCoverage().get(0).getArea()).isEqualTo("API");
+        assertThat(restoredPosition.getAreaCoverage().get(0).getLabel()).isEqualTo("API 개발");
+        assertThat(restoredPosition.getAreaCoverage().get(0).isCovered()).isTrue();
+        assertThat(restoredPosition.getAreaCoverage().get(1).isCovered()).isFalse();
+    }
+
+    /**
+     * E11-2 — FE와 확정된 계약 형태 {"area":"API","label":"API 개발","covered":true}를
+     * 그대로 고정한다. 목표 직무 미설정이면 areaCoverage 자체가 null이어야 한다(FE 계약).
+     */
+    @Test
+    void areaCoverage는_FE_계약_형태로_직렬화되고_목표_직무_미설정이면_null이다() throws Exception {
+        SpecPositionResult withCoverage = SpecPositionResult.builder()
+                .basis("JOB")
+                .areaCoverage(List.of(SpecPositionResult.AreaCoverage.builder()
+                        .area("API").label("API 개발").covered(true).build()))
+                .build();
+        SpecPositionResult withoutTargetJob = SpecPositionResult.builder()
+                .basis("OVERALL")
+                .areaCoverage(null)
+                .build();
+
+        JsonNode covered = objectMapper.readTree(objectMapper.writeValueAsString(withCoverage));
+        JsonNode uncovered = objectMapper.readTree(objectMapper.writeValueAsString(withoutTargetJob));
+
+        JsonNode firstArea = covered.path("areaCoverage").get(0);
+        assertThat(firstArea.path("area").asText()).isEqualTo("API");
+        assertThat(firstArea.path("label").asText()).isEqualTo("API 개발");
+        assertThat(firstArea.path("covered").asBoolean()).isTrue();
+        assertThat(uncovered.path("areaCoverage").isNull()).isTrue();
     }
 }

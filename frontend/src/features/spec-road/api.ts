@@ -3,6 +3,10 @@ import { getRefreshToken } from "@/lib/auth";
 import { toLanguageScoresPayload } from "./helpers";
 import type {
   ActivityDetailResponse,
+  Experience,
+  ExperienceEnrichResult,
+  ExperienceQuestionAnswer,
+  ExperienceQuestionsResponse,
   GithubAnalysisAccepted,
   GithubProfile,
   MyPasserReport,
@@ -129,4 +133,37 @@ export function postGithubAnalysis(url: string): Promise<GithubAnalysisAccepted>
 // 연결 해제. 서버가 분석 결과와 GitHub 파생 경험(Experience.source === "GITHUB")을 함께 지운다.
 export function deleteGithubProfile(): Promise<void> {
   return apiFetch<void>("/api/v1/users/me/github", { method: "DELETE" });
+}
+
+// 경험 필드 중 질문 생성·심층 분석 계약이 받는 부분집합만 추려 보낸다.
+// (months·depth·source 등은 계약에 없어 보내지 않는다 — JSON.stringify가 undefined 필드는 알아서 생략한다)
+function toExperienceEnrichInput(experience: Experience) {
+  return {
+    type: experience.type,
+    title: experience.title,
+    description: experience.description,
+    role: experience.role,
+    stack: experience.stack,
+    areas: experience.areas,
+  };
+}
+
+// E11 2차: 경험 심층 질문 생성. 0개면 화면이 "지금은 질문을 만들 수 없어요"로 처리하고,
+// 한도 초과 등은 ApiError.message를 그대로 보여준다.
+export function postExperienceQuestions(experience: Experience): Promise<ExperienceQuestionsResponse> {
+  return apiFetch<ExperienceQuestionsResponse>("/api/v1/users/me/experiences/questions", {
+    method: "POST",
+    body: JSON.stringify({ experience: toExperienceEnrichInput(experience) }),
+  });
+}
+
+// E11 2차: 질문 답변을 바탕으로 경험의 areas·depth·역할 요약을 분석한다.
+export function postExperienceEnrich(
+  experience: Experience,
+  answers: ExperienceQuestionAnswer[],
+): Promise<ExperienceEnrichResult> {
+  return apiFetch<ExperienceEnrichResult>("/api/v1/users/me/experiences/enrich", {
+    method: "POST",
+    body: JSON.stringify({ experience: toExperienceEnrichInput(experience), answers }),
+  });
 }

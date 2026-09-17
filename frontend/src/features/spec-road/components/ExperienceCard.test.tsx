@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { ExperienceCard } from "./ExperienceCard";
 import type { Experience } from "../types";
 
@@ -33,5 +33,22 @@ describe("ExperienceCard", () => {
 
     expect(screen.getByText("프로젝트")).toBeInTheDocument();
     expect(screen.getByText("사이드 프로젝트")).toBeInTheDocument();
+  });
+
+  it("depth가 없고 onAnalyzeDepth가 있으면 'AI 깊이 분석' 버튼을 보여주고 클릭 시 콜백을 호출한다", () => {
+    const onAnalyzeDepth = vi.fn();
+    const exp: Experience = { type: "PROJECT", title: "사이드 프로젝트" };
+    render(<ExperienceCard experience={exp} onAnalyzeDepth={onAnalyzeDepth} />);
+
+    const button = screen.getByText("✦ AI 깊이 분석");
+    fireEvent.click(button);
+    expect(onAnalyzeDepth).toHaveBeenCalledTimes(1);
+  });
+
+  it("depth가 이미 있으면 onAnalyzeDepth를 넘겨도 'AI 깊이 분석' 버튼을 보여주지 않는다", () => {
+    const exp: Experience = { type: "PROJECT", title: "사이드 프로젝트", depth: "IMPLEMENTED" };
+    render(<ExperienceCard experience={exp} onAnalyzeDepth={() => {}} />);
+
+    expect(screen.queryByText("✦ AI 깊이 분석")).not.toBeInTheDocument();
   });
 });

@@ -55,6 +55,14 @@ public class SpecPositionResult {
     /** 축별 위치. 합격자 데이터가 없는 축은 아예 포함하지 않는다(예전 v8 규칙 유지). */
     private List<AxisPosition> axes;
 
+    /**
+     * E11-2(1차) — 목표 직무의 요구 영역 커버리지 체크리스트(JobAreaRequirements 선언 순서).
+     * percentile 축이 아니다 — 점수에 반영하지 않고 화면에 별도 섹션으로만 표시한다.
+     * 목표 직무가 미설정이면 null(FE와 확정된 계약). 합격자 표본과 무관하게(basis가 NONE이어도)
+     * 사용자 경험의 areas 합집합만으로 판정하므로 항상 채울 수 있으면 채운다.
+     */
+    private List<AreaCoverage> areaCoverage;
+
     /** 갭: 이 직무 합격자 다수가 보유하지만 사용자에게 없는 자격증. 보유율 내림차순. */
     private List<SpecGap> gaps;
 
@@ -105,5 +113,24 @@ public class SpecPositionResult {
 
         /** 이 직무 합격자 보유율(%). "합격자 70%가 보유" 문구의 근거. */
         private Integer holderRatePercent;
+    }
+
+    /**
+     * E11-2(1차) 요구 영역 하나의 보유 여부. FE 확정 계약:
+     * {"area":"API","label":"API 개발","covered":true}
+     */
+    @Getter
+    @Builder
+    @Jacksonized
+    public static class AreaCoverage {
+
+        /** ExperienceArea 코드 (예: API) */
+        private String area;
+
+        /** 화면 표시용 한글 라벨 (예: API 개발) */
+        private String label;
+
+        /** 사용자 experiences의 areas 합집합에 이 영역이 포함되는지 */
+        private boolean covered;
     }
 }

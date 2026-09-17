@@ -86,6 +86,13 @@ public class GlobalExceptionHandler {
                 .body(errorBody("GITHUB_ANALYSIS_COOLDOWN", e.getMessage()));
     }
 
+    /** E11-6 경험 심층 질문/보강의 사용자별 하루 상한(10회) 초과. */
+    @ExceptionHandler(AiDailyLimitExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleAiDailyLimitExceededException(AiDailyLimitExceededException e) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(errorBody("AI_DAILY_LIMIT_EXCEEDED", e.getMessage()));
+    }
+
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Map<String, Object>> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)

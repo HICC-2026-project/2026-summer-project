@@ -181,6 +181,14 @@ export interface SpecGap {
   holderRatePercent: number;
 }
 
+// E11 2차: specPosition의 영역 커버리지 — 목표 직무가 요구하는 영역별 보유 여부.
+// 합격자 표본·점수(axes/gaps)와는 별개 신호라 비교 탭에서 독립된 카드로 보여준다.
+export interface AreaCoverageItem {
+  area: string;
+  label: string;
+  covered: boolean;
+}
+
 // GET /api/v1/recommendations의 specPosition — 합격자 분포 내 위치·갭 계산 결과.
 // 예전의 matchScore(가중 총점)·compareRows(충족/부족 행)·comparisonMessage·
 // similarPasserCount·unrecognizedCertifications를 전부 이 객체가 대체한다.
@@ -201,6 +209,9 @@ export interface SpecPosition {
   gaps: SpecGap[];
   matchedCertifications?: string[];
   unmatchedCertifications?: string[];
+  // 목표 직무 미설정이면 null. 옛 캐시 응답엔 필드 자체가 없을 수 있어(undefined) 화면에서
+  // undefined/null을 모두 "섹션 숨김"으로 같이 취급한다.
+  areaCoverage?: AreaCoverageItem[] | null;
 }
 
 // GET /api/v1/recommendations 전체 응답.
@@ -329,4 +340,29 @@ export type GithubProfile =
 export interface GithubAnalysisAccepted {
   username: string;
   status: "PENDING";
+}
+
+// E11 2차: 경험 심층 질문·분석. 계약(백엔드와 병행 개발 중이라 임의로 모양을 바꾸지 않는다):
+// POST .../experiences/questions body { experience } → { questions } (0개면 "질문을 만들 수 없다" 처리)
+// POST .../experiences/enrich    body { experience, answers } → ExperienceEnrichResult
+
+// 두 엔드포인트가 공통으로 받는 경험 필드 — Experience 전체가 아니라 이 부분집합만 보낸다.
+export type ExperienceEnrichInput = Pick<Experience, "type" | "title" | "description" | "role" | "stack" | "areas">;
+
+export interface ExperienceQuestionsResponse {
+  questions: string[];
+}
+
+export interface ExperienceQuestionAnswer {
+  question: string;
+  // 화면에서 ≤1000자로 강제한다(계약).
+  answer: string;
+}
+
+// 전부 빈 값(areas 없음·depth null·roleSummary null)이면 분석 실패로 취급한다(계약) —
+// 화면은 이 경우 "분석에 실패했어요"를 보여주고 적용할 것이 없다.
+export interface ExperienceEnrichResult {
+  areas: string[];
+  depth: ExperienceDepth | null;
+  roleSummary: string | null;
 }
