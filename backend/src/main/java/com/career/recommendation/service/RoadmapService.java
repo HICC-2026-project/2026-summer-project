@@ -41,7 +41,8 @@ import java.util.stream.Collectors;
 
 /**
  * BE-1 담당 — F-05 커리어 로드맵 비즈니스 로직.
- * 유저 학년을 기반으로 학기/방학 단위로 구분된 6개월 타임라인을 생성한다.
+ * 유저 학년을 기반으로 학기/방학 단위로 구분된 12개월 타임라인을 생성한다(2026-09-17 실사용
+ * 피드백으로 6개월 → 12개월 확장).
  *
  * RAG 패턴 적용 — DB 활동 목록을 Gemini 프롬프트에 주입하여
  * AI가 실제 존재하는 활동 중에서만 선택하도록 하고, 응답 ID를 DB와 검증하여 할루시네이션을 방지한다.
@@ -72,7 +73,7 @@ public class RoadmapService {
     private static final Set<String> VALID_PRIORITIES = Set.of("HIGH", "MEDIUM", "LOW");
 
     /**
-     * 현재 로그인한 유저의 6개월 커리어 로드맵을 반환한다.
+     * 현재 로그인한 유저의 12개월 커리어 로드맵을 반환한다.
      * F-03 맞춤 추천 활동 및 유사 합격자 데이터를 공유받아 일관성 있는 로드맵을 생성한다.
      */
     public RoadmapResponse getRoadmap(Authentication authentication) {
@@ -334,85 +335,90 @@ public class RoadmapService {
                 .build();
     }
 
+    // 폴백 로드맵의 시기별 가이드 문구. 인덱스 0이 가장 이른(HIGH) 시기, 이후 순서대로 이어진다.
+    // 2026-09-17 실사용 피드백으로 로드맵을 6개월(3구간)에서 12개월(학년 있음: 4구간, 없음: 6구간)로
+    // 넓히면서, 예전엔 3개뿐이던 가이드 문구를 그 이후 시기까지 채우도록 늘렸다.
+    private static final String[] FALLBACK_GUIDE_ACTIVITY = {
+            "[AI 응답 지연] 핵심 SW 교육 및 인턴십 지원",
+            "[AI 응답 지연] 부트캠프 및 프로젝트 몰입",
+            "[AI 응답 지연] 오픈소스 기여 및 해커톤 공모전 참가",
+            "[AI 응답 지연] 심화 프로젝트 및 기술 스택 확장",
+            "[AI 응답 지연] 채용 연계형 인턴십 및 공채 서류 준비",
+            "[AI 응답 지연] 최종 코딩테스트·면접 대비",
+    };
+    private static final String[] FALLBACK_GUIDE_REASON = {
+            "[서버 지연 임시 로드맵] 서류 가점 및 기초 실무 역량을 다지는 핵심 시기입니다.",
+            // ⚠️ "방학 기간을 활용하여"처럼 계절을 못박은 문구는 쓰지 않는다 — computeFallbackPeriods가
+            // today 기준으로 학기/방학을 동적으로 계산하므로, 이 인덱스가 방학이 아니라 학기(2학기·1학기)인
+            // 경우도 생긴다(예: 7~8월 요청 → 2번째 시기가 "2학기"). 방학이라고 단정하는 문구가 남아 있으면
+            // 그 경우 카드 본문과 기간 라벨이 서로 모순된다.
+            "[서버 지연 임시 로드맵] 이 시기를 활용하여 포트폴리오를 대폭 강화합니다.",
+            "[서버 지연 임시 로드맵] 실무 협업 역량을 입증하고 채용 우대 혜택을 획득합니다.",
+            "[서버 지연 임시 로드맵] 지금까지 쌓은 역량을 심화하고 목표 직무에 필요한 기술을 추가로 학습합니다.",
+            "[서버 지연 임시 로드맵] 본격적인 채용 시즌에 대비해 서류·포트폴리오를 완성도 있게 정리합니다.",
+            "[서버 지연 임시 로드맵] 목표 기업의 채용 전형에 맞춰 실전 감각을 끌어올립니다.",
+    };
+
     /**
      * Gemini 미사용/실패 시 DB 등록 활동 기반 기본 로드맵 반환.
      *
-     * ⚠️ 예전엔 이 세 시기 라벨이 "N학년 2학기 (9~11월)"부터 시작하도록 하드코딩돼 있었다 —
-     * 요청 시점이 실제로 몇 월인지는 전혀 보지 않았다. 4월에 3학년이 폴백을 받으면 1번째
-     * (HIGH="지금 집중") 시기로 ~5개월 뒤인 "3학년 2학기"를, 3번째 시기로 ~11개월 뒤인
-     * "4학년 1학기"를 보여줘 클래스 상단 문서가 약속하는 "6개월 로드맵"을 벗어났다. grade가
-     * null인 분기는 이미 상대적("1~2개월 차"~"5~6개월 차")이라 문제가 없었는데, grade가 있는
-     * 분기만 절대 달력이었다. today를 기준으로 현재 속한 학기/방학 구간부터 3개를 순서대로
-     * 계산하도록 고친다.
+     * ⚠️ 예전엔 이 시기 라벨이 "N학년 2학기 (9~11월)"부터 시작하도록 하드코딩돼 있었다 —
+     * 요청 시점이 실제로 몇 월인지는 전혀 보지 않았다. today를 기준으로 현재 속한 학기/방학
+     * 구간부터 순서대로 계산한다(computeFallbackPeriods).
      */
     private RoadmapResponse buildFallbackRoadmap(Integer grade, List<Activity> activeActivities, LocalDate today) {
         String[] periods = computeFallbackPeriods(grade, today);
-        String semester1 = periods[0];
-        String semester2 = periods[1];
-        String semester3 = periods[2];
 
-        // ⚠️ 예전엔 활동을 리스트 인덱스로만 3등분해(0~2→1번째, 3~5→2번째, 6~8→3번째)
-        // step1/2/3에 나눠 담았다. activeActivities는 findRecommendableActivities가
-        // deadline ASC로 정렬해 준 목록이라, 그때는 "가장 빨리 마감되는 활동들이 가장 먼
-        // 미래 시기"에 배정되는 게 항상 가능했다 — computeFallbackPeriods가 세 시기를
-        // 여전히 절대 달력(9~11월 고정)으로 보여줄 때는 두 값이 아무 관계도 없어 눈에 안
-        // 띄었을 뿐이다. 이제 시기 라벨이 today 기준 실제 달력 구간이 되면서, 예를 들어
-        // 8월에 마감하는 활동이 "3학년 겨울방학 (12~2월)" 밑에 나오는 것처럼 카드에 적힌
-        // matchedActivities의 마감일과 그 시기 라벨이 정면으로 모순될 수 있다. 시기별
-        // 실제 마감일 구간을 계산해 재배정하는 대신(이번 마감 전 범위를 넘는 작업), 첫
-        // 번째(HIGH="지금 집중") 시기에만 실제 DB 활동을 붙이고 2·3번째는 텍스트 가이드만
-        // 보여준다 — 이러면 최소한 "틀린 날짜 주장"은 절대 나오지 않는다.
-        List<MatchedActivity> step1Matched = new ArrayList<>();
+        // ⚠️ 예전엔 활동을 리스트 인덱스로만 등분해(예: 0~2→1번째, 3~5→2번째) 각 스텝에
+        // 나눠 담았다. activeActivities는 findRecommendableActivities가 deadline ASC로 정렬해
+        // 준 목록이라, 시기 라벨이 today 기준 실제 달력 구간이 되면서 예를 들어 8월에 마감하는
+        // 활동이 "3학년 겨울방학 (12~2월)" 밑에 나오는 것처럼 카드에 적힌 matchedActivities의
+        // 마감일과 그 시기 라벨이 정면으로 모순될 수 있다. 시기별 실제 마감일 구간을 계산해
+        // 재배정하는 대신(이번 마감 전 범위를 넘는 작업), 첫 번째(HIGH="지금 집중") 시기에만
+        // 실제 DB 활동을 붙이고 나머지는 텍스트 가이드만 보여준다 — 이러면 최소한 "틀린 날짜
+        // 주장"은 절대 나오지 않는다.
+        List<MatchedActivity> firstStepMatched = new ArrayList<>();
         if (activeActivities != null) {
             for (int i = 0; i < activeActivities.size() && i < 3; i++) {
-                step1Matched.add(toMatchedActivity(activeActivities.get(i)));
+                firstStepMatched.add(toMatchedActivity(activeActivities.get(i)));
             }
         }
-        List<MatchedActivity> step2Matched = List.of();
-        List<MatchedActivity> step3Matched = List.of();
+
+        List<TimelineStep> steps = new ArrayList<>();
+        for (int i = 0; i < periods.length; i++) {
+            // priority 규칙은 Gemini 프롬프트 규칙 8과 동일하다: 가장 이른 시기만 HIGH, 그
+            // 다음은 MEDIUM, 이후 나머지 전부는 LOW.
+            String priority = (i == 0) ? "HIGH" : (i == 1) ? "MEDIUM" : "LOW";
+            steps.add(TimelineStep.builder()
+                    .period(periods[i])
+                    .priority(priority)
+                    .activity(FALLBACK_GUIDE_ACTIVITY[i % FALLBACK_GUIDE_ACTIVITY.length])
+                    .reason(FALLBACK_GUIDE_REASON[i % FALLBACK_GUIDE_REASON.length])
+                    .matchedActivities(i == 0 ? firstStepMatched : List.of())
+                    .build());
+        }
 
         return RoadmapResponse.builder()
-                .timeline(List.of(
-                        TimelineStep.builder()
-                                .period(semester1)
-                                .priority("HIGH")
-                                .activity("[AI 응답 지연] 핵심 SW 교육 및 인턴십 지원")
-                                .reason("[서버 지연 임시 로드맵] 서류 가점 및 기초 실무 역량을 다지는 핵심 시기입니다.")
-                                .matchedActivities(step1Matched)
-                                .build(),
-                        TimelineStep.builder()
-                                .period(semester2)
-                                .priority("MEDIUM")
-                                .activity("[AI 응답 지연] 부트캠프 및 프로젝트 몰입")
-                                // ⚠️ "방학 기간을 활용하여"처럼 계절을 못박은 문구는 쓰지 않는다 —
-                                // computeFallbackPeriods가 today 기준으로 학기/방학을 동적으로
-                                // 계산하면서 semester2가 방학이 아니라 학기(2학기·1학기)인 경우도
-                                // 생겼다(예: 7~8월 요청 → 2번째 시기가 "2학기"). 방학이라고 단정하는
-                                // 문구가 남아 있으면 그 경우 카드 본문과 기간 라벨이 서로 모순된다.
-                                .reason("[서버 지연 임시 로드맵] 이 시기를 활용하여 포트폴리오를 대폭 강화합니다.")
-                                .matchedActivities(step2Matched)
-                                .build(),
-                        TimelineStep.builder()
-                                .period(semester3)
-                                .priority("LOW")
-                                .activity("[AI 응답 지연] 오픈소스 기여 및 해커톤 공모전 참가")
-                                .reason("[서버 지연 임시 로드맵] 실무 협업 역량을 입증하고 채용 우대 혜택을 획득합니다.")
-                                .matchedActivities(step3Matched)
-                                .build()
-                ))
+                .timeline(steps)
                 .aiRoadmap(false)
                 .build();
     }
 
     /**
-     * grade가 있을 때, today가 속한 학기/방학 구간부터 순서대로 3개의 시기 라벨을 만든다.
-     * 한 해를 1학기(3~6월)·여름방학(7~8월)·2학기(9~11월)·겨울방학(12~2월) 4구간으로 보고,
-     * 겨울방학 다음엔 학년이 하나 올라간다. 4학년을 넘어가면 "졸업 후 취업 준비"로 고정한다.
-     * grade가 null이면 학기 개념이 없으므로 상대적인 "N~N개월 차" 라벨을 그대로 쓴다.
+     * grade가 있을 때, today가 속한 학기/방학 구간부터 순서대로 4개의 시기 라벨을 만든다.
+     * 한 해를 1학기(3~6월, 4개월)·여름방학(7~8월, 2개월)·2학기(9~11월, 3개월)·겨울방학
+     * (12~2월, 3개월) 4구간으로 보는데, 이 4종류를 정확히 한 바퀴(4구간) 돌면 시작 시점과
+     * 무관하게 항상 4+2+3+3=12개월이 된다 — "12개월 로드맵" 계약과 정확히 맞아떨어지는
+     * 구간 수라 3이 아닌 4를 쓴다(6개월 로드맵이던 시절엔 3구간을 썼다). 겨울방학 다음엔
+     * 학년이 하나 올라간다. 4학년을 넘어가면 "졸업 후 취업 준비"로 고정한다.
+     * grade가 null이면 학기 개념이 없으므로 상대적인 "N~N개월 차" 라벨을 2개월 단위로
+     * 6구간(12개월) 채워 그대로 쓴다.
      */
     private String[] computeFallbackPeriods(Integer grade, LocalDate today) {
         if (grade == null) {
-            return new String[]{"1~2개월 차", "3~4개월 차", "5~6개월 차"};
+            return new String[]{
+                    "1~2개월 차", "3~4개월 차", "5~6개월 차", "7~8개월 차", "9~10개월 차", "11~12개월 차",
+            };
         }
         int month = today.getMonthValue();
         int termIndex; // 0=1학기, 1=여름방학, 2=2학기, 3=겨울방학
@@ -421,10 +427,10 @@ public class RoadmapService {
         else if (month >= 9 && month <= 11) termIndex = 2;
         else termIndex = 3;
 
-        String[] periods = new String[3];
+        String[] periods = new String[4];
         int curGrade = grade;
         int curTerm = termIndex;
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < periods.length; i++) {
             periods[i] = fallbackTermLabel(curGrade, curTerm);
             curTerm++;
             if (curTerm > 3) {

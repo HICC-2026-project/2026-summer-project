@@ -40,10 +40,10 @@ public class RecommendationController {
     }
 
     /**
-     * F-05: 학기/방학 단위로 구분된 6개월 커리어 로드맵 생성.
+     * F-05: 학기/방학 단위로 구분된 12개월 커리어 로드맵 생성.
      */
     @Operation(summary = "커리어 로드맵 생성 (F-05)",
-            description = "학기·방학 단위로 구분된 6개월 커리어 로드맵을 생성한다.")
+            description = "학기·방학 단위로 구분된 12개월 커리어 로드맵을 생성한다.")
     @GetMapping("/roadmaps")
     public RoadmapResponse getRoadmap(Authentication authentication) {
         return roadmapService.getRoadmap(authentication);

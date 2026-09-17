@@ -5,6 +5,7 @@ import com.career.recommendation.dto.recommendation.RecommendationResponse;
 import com.career.recommendation.entity.Recommendation;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.repository.RecommendationRepository;
+import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
 import com.career.recommendation.util.SpecPositionCalculator;
@@ -49,6 +50,7 @@ class RecommendationServiceLegacyCacheTest {
     @Mock private TargetJobRepository targetJobRepository;
     @Mock private RecommendationRepository recommendationRepository;
     @Mock private RecommendationCacheService recommendationCacheService;
+    @Mock private RoadmapCacheRepository roadmapCacheRepository;
     @Mock private GeminiService geminiService;
     @Mock private SpecPositionService specPositionService;
     @Mock private AiDailyAttemptLimiter aiDailyAttemptLimiter;

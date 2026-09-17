@@ -25,6 +25,24 @@ describe("ExperienceEnrichModalView", () => {
     expect(screen.getByText("가장 어려웠던 점은?")).toBeInTheDocument();
     expect(screen.getByText("분석하기")).toBeDisabled();
     expect(screen.getByText("건너뛰기")).toBeInTheDocument();
+    // 답변이 하나도 없을 때는 왜 제출이 막혔는지 안내 문구를 보여준다.
+    expect(screen.getByText("답변을 1개 이상 작성해야 분석할 수 있어요.")).toBeInTheDocument();
+  });
+
+  it("모달은 뷰포트 중앙에 뜨는 dialog로 렌더링되고, 답변을 채우면 안내 문구가 사라진다", () => {
+    render(
+      <ExperienceEnrichModalView
+        phase={{ kind: "questions", questions: ["어떤 역할을 맡았나요?"] }}
+        answers={["백엔드 API를 설계했어요"]}
+        onAnswerChange={noop}
+        onSubmit={noop}
+        onApply={noop}
+        onClose={noop}
+      />,
+    );
+
+    expect(screen.getByRole("dialog", { name: "AI 깊이 분석" })).toBeInTheDocument();
+    expect(screen.queryByText("답변을 1개 이상 작성해야 분석할 수 있어요.")).not.toBeInTheDocument();
   });
 
   it("답변이 하나라도 있으면 분석하기가 활성화되고 클릭 시 onSubmit이 호출된다", () => {

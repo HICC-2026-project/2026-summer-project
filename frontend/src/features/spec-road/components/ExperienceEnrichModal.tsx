@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { postExperienceEnrich, postExperienceQuestions } from "../api";
-import { DEPTH_LABELS, INK, INK_FAINT, INK_MUTED, PRIMARY } from "../data";
+import { DEPTH_LABELS, INK, INK_FAINT, INK_MUTED, LINE, PRIMARY } from "../data";
 import type { Experience, ExperienceEnrichResult } from "../types";
 import { AreaChips } from "./AreaChips";
 
@@ -26,25 +26,57 @@ type Phase =
   // 질문 생성·분석 API가 에러를 던진 경우(한도 초과 등) — ApiError.message를 그대로 보여준다.
   | { kind: "error"; message: string };
 
+// 실사용 피드백(2026-09-17): 예전엔 position:absolute였는데, 가까운 positioned 조상이 없으면
+// 문서 전체(스크롤 가능한 긴 프로필 탭)가 컨테이닝 블록이 되어 alignItems:flex-end가 시트를
+// "현재 보이는 화면"이 아니라 "문서 맨 아래"에 붙였다 — 사용자에겐 창이 엉뚱한 위치에 뜨고,
+// 시트 맨 아래에 있는 제출 버튼은 그 아래로 한참 스크롤해야 보였다("제출 버튼이 없다"는
+// 제보의 실제 원인). position:fixed로 바꿔 뷰포트 기준 중앙에 고정한다.
 const overlayStyle = {
-  position: "absolute",
+  position: "fixed",
   inset: 0,
   background: "rgba(20,18,40,0.42)",
   zIndex: 50,
   display: "flex",
-  alignItems: "flex-end",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 16, // 모바일(~400px)에서도 좌우 16px 여백을 보장한다.
 } as const;
 
-const sheetStyle = {
+// 헤더(고정) / 본문(스크롤) / 푸터(고정)로 나눠, 질문이 많아 본문이 길어져도 제출 버튼은
+// 스크롤과 무관하게 항상 보이게 한다.
+const modalStyle = {
   width: "100%",
-  maxHeight: "85%",
-  overflowY: "auto",
+  maxWidth: 420,
+  maxHeight: "85vh",
   background: "#fff",
-  borderRadius: "26px 26px 0 0",
-  padding: "20px 22px calc(20px + env(safe-area-inset-bottom))",
+  borderRadius: 26,
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+} as const;
+
+const modalHeaderStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "20px 22px 14px",
+  flexShrink: 0,
+} as const;
+
+const modalBodyStyle = {
+  overflowY: "auto",
+  padding: "0 22px 20px",
+} as const;
+
+const modalFooterStyle = {
+  flexShrink: 0,
+  borderTop: `1px solid ${LINE}`,
+  padding: "14px 22px calc(14px + env(safe-area-inset-bottom))",
 } as const;
 
 const mutedTextStyle = { fontSize: 13, color: INK_MUTED, lineHeight: 1.55, margin: "0 0 16px" } as const;
+
+const hintTextStyle = { fontSize: 12, color: INK_MUTED, lineHeight: 1.5, margin: "8px 0 0", textAlign: "center" } as const;
 
 const primaryButtonStyle = {
   height: 48,
@@ -115,14 +147,12 @@ export function ExperienceEnrichModalView({
   onClose,
 }: ExperienceEnrichModalViewProps) {
   const canSubmit = phase.kind === "questions" && answers.some((a) => a.trim().length > 0);
+  const showEmptyAnswerHint = phase.kind === "questions" && !canSubmit;
 
   return (
     <div style={overlayStyle}>
-      <div style={sheetStyle}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
-          <div style={{ width: 40, height: 5, borderRadius: 999, background: "#E1E0EA" }} />
-        </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+      <div role="dialog" aria-modal="true" aria-label="AI 깊이 분석" style={modalStyle}>
+        <div style={modalHeaderStyle}>
           <div style={{ fontSize: 16, fontWeight: 800, color: INK }}>AI 깊이 분석</div>
           <button
             type="button"
@@ -134,99 +164,99 @@ export function ExperienceEnrichModalView({
           </button>
         </div>
 
-        {phase.kind === "loading" && <p style={mutedTextStyle}>질문을 준비하고 있어요...</p>}
+        <div style={modalBodyStyle}>
+          {phase.kind === "loading" && <p style={mutedTextStyle}>질문을 준비하고 있어요...</p>}
 
-        {phase.kind === "no-questions" && (
-          <>
-            <p style={mutedTextStyle}>지금은 질문을 만들 수 없어요. 잠시 후 다시 시도해 주세요.</p>
-            <button type="button" onClick={onClose} style={primaryButtonStyle}>
-              닫기
-            </button>
-          </>
-        )}
+          {phase.kind === "no-questions" && <p style={mutedTextStyle}>지금은 질문을 만들 수 없어요. 잠시 후 다시 시도해 주세요.</p>}
 
-        {phase.kind === "error" && (
-          <>
-            <p style={{ ...mutedTextStyle, color: "#E5484D" }}>{phase.message}</p>
-            <button type="button" onClick={onClose} style={primaryButtonStyle}>
-              닫기
-            </button>
-          </>
-        )}
+          {phase.kind === "error" && <p style={{ ...mutedTextStyle, color: "#E5484D" }}>{phase.message}</p>}
 
-        {phase.kind === "enrich-failed" && (
-          <>
-            <p style={{ ...mutedTextStyle, color: "#E5484D" }}>분석에 실패했어요.</p>
-            <button type="button" onClick={onClose} style={primaryButtonStyle}>
-              닫기
-            </button>
-          </>
-        )}
+          {phase.kind === "enrich-failed" && <p style={{ ...mutedTextStyle, color: "#E5484D" }}>분석에 실패했어요.</p>}
 
-        {(phase.kind === "questions" || phase.kind === "submitting") && (
-          <>
-            <p style={mutedTextStyle}>편하게 답할 수 있는 질문에만 답해주세요. (최소 1개, 각 1000자 이내)</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 18 }}>
-              {phase.questions.map((q, i) => (
-                <div key={i}>
-                  <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: INK, marginBottom: 6 }}>
-                    {q}
-                  </label>
-                  <textarea
-                    value={answers[i] ?? ""}
-                    onChange={(e) => onAnswerChange(i, e.target.value.slice(0, MAX_ANSWER_LENGTH))}
-                    maxLength={MAX_ANSWER_LENGTH}
-                    rows={3}
-                    placeholder="답변 (선택)"
-                    disabled={phase.kind === "submitting"}
-                    style={textareaStyle}
-                  />
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" onClick={onClose} disabled={phase.kind === "submitting"} style={secondaryButtonStyle}>
-                건너뛰기
+          {(phase.kind === "questions" || phase.kind === "submitting") && (
+            <>
+              <p style={mutedTextStyle}>편하게 답할 수 있는 질문에만 답해주세요. (최소 1개, 각 1000자 이내)</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {phase.questions.map((q, i) => (
+                  <div key={i}>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: INK, marginBottom: 6 }}>
+                      {q}
+                    </label>
+                    <textarea
+                      value={answers[i] ?? ""}
+                      onChange={(e) => onAnswerChange(i, e.target.value.slice(0, MAX_ANSWER_LENGTH))}
+                      maxLength={MAX_ANSWER_LENGTH}
+                      rows={3}
+                      placeholder="답변 (선택)"
+                      disabled={phase.kind === "submitting"}
+                      style={textareaStyle}
+                    />
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {phase.kind === "result" && (
+            <>
+              <p style={mutedTextStyle}>이렇게 반영할게요</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                <AreaChips areas={phase.result.areas} />
+                {phase.result.depth && <span style={depthBadgeStyle}>{DEPTH_LABELS[phase.result.depth]}</span>}
+              </div>
+              {phase.result.roleSummary && (
+                <p style={{ fontSize: 13, color: "#4A4954", lineHeight: 1.5, margin: 0 }}>{phase.result.roleSummary}</p>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* 푸터는 본문 스크롤과 분리된 영역에 고정돼, 질문이 많아 본문이 길어져도 항상 보인다.
+            (질문을 준비하는 로딩 단계는 아직 아무 동작도 없어 푸터를 생략한다.) */}
+        {phase.kind !== "loading" && (
+          <div style={modalFooterStyle}>
+            {(phase.kind === "no-questions" || phase.kind === "error" || phase.kind === "enrich-failed") && (
+              <button type="button" onClick={onClose} style={primaryButtonStyle}>
+                닫기
               </button>
-              <button
-                type="button"
-                onClick={onSubmit}
-                disabled={!canSubmit}
-                style={{
-                  ...primaryButtonStyle,
-                  width: "auto",
-                  flex: 1.4,
-                  opacity: canSubmit ? 1 : 0.6,
-                  cursor: canSubmit ? "pointer" : "not-allowed",
-                }}
-              >
-                {phase.kind === "submitting" ? "분석 중..." : "분석하기"}
-              </button>
-            </div>
-          </>
-        )}
-
-        {phase.kind === "result" && (
-          <>
-            <p style={mutedTextStyle}>이렇게 반영할게요</p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-              <AreaChips areas={phase.result.areas} />
-              {phase.result.depth && <span style={depthBadgeStyle}>{DEPTH_LABELS[phase.result.depth]}</span>}
-            </div>
-            {phase.result.roleSummary && (
-              <p style={{ fontSize: 13, color: "#4A4954", lineHeight: 1.5, margin: "0 0 18px" }}>
-                {phase.result.roleSummary}
-              </p>
             )}
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" onClick={onClose} style={secondaryButtonStyle}>
-                취소
-              </button>
-              <button type="button" onClick={onApply} style={{ ...primaryButtonStyle, width: "auto", flex: 1.4 }}>
-                적용
-              </button>
-            </div>
-          </>
+
+            {(phase.kind === "questions" || phase.kind === "submitting") && (
+              <>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="button" onClick={onClose} disabled={phase.kind === "submitting"} style={secondaryButtonStyle}>
+                    건너뛰기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onSubmit}
+                    disabled={!canSubmit}
+                    style={{
+                      ...primaryButtonStyle,
+                      width: "auto",
+                      flex: 1.4,
+                      opacity: canSubmit ? 1 : 0.6,
+                      cursor: canSubmit ? "pointer" : "not-allowed",
+                    }}
+                  >
+                    {phase.kind === "submitting" ? "분석 중..." : "분석하기"}
+                  </button>
+                </div>
+                {showEmptyAnswerHint && <p style={hintTextStyle}>답변을 1개 이상 작성해야 분석할 수 있어요.</p>}
+              </>
+            )}
+
+            {phase.kind === "result" && (
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" onClick={onClose} style={secondaryButtonStyle}>
+                  취소
+                </button>
+                <button type="button" onClick={onApply} style={{ ...primaryButtonStyle, width: "auto", flex: 1.4 }}>
+                  적용
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

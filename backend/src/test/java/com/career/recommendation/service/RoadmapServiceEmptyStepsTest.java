@@ -182,9 +182,12 @@ class RoadmapServiceEmptyStepsTest {
     /**
      * Gemini 폴백 로드맵의 시기 라벨이 요청 시점(today)과 무관하게 "N학년 2학기 (9~11월)"부터
      * 하드코딩돼 있던 회귀를 고정한다. 4월에 3학년이 폴백을 받으면 예전 코드는 1번째(HIGH)
-     * 시기로 ~5개월 뒤인 "3학년 2학기"를 보여줬다 — "6개월 로드맵"이라는 계약을 벗어난다.
-     * computeFallbackPeriods는 private이라 리플렉션으로 직접 호출해, 시스템 시계와 무관하게
-     * 결정적으로 검증한다.
+     * 시기로 ~5개월 뒤인 "3학년 2학기"를 보여줬다 — "12개월 로드맵"(2026-09-17 실사용
+     * 피드백으로 6개월에서 확장)이라는 계약을 벗어난다. computeFallbackPeriods는 private이라
+     * 리플렉션으로 직접 호출해, 시스템 시계와 무관하게 결정적으로 검증한다.
+     *
+     * grade가 있으면 학기·방학 4종류(1학기 4개월·여름방학 2개월·2학기 3개월·겨울방학 3개월)를
+     * 한 바퀴(4구간) 돌려 항상 정확히 12개월을 커버한다.
      */
     @Test
     void 폴백_로드맵_시기_라벨은_실제_현재월부터_순서대로_계산된다() {
@@ -192,34 +195,36 @@ class RoadmapServiceEmptyStepsTest {
         String[] april = ReflectionTestUtils.invokeMethod(
                 roadmapService, "computeFallbackPeriods", 3, java.time.LocalDate.of(2026, 4, 15));
         assertThat(april).containsExactly(
-                "3학년 1학기 (3~6월)", "3학년 여름방학 (7~8월)", "3학년 2학기 (9~11월)");
+                "3학년 1학기 (3~6월)", "3학년 여름방학 (7~8월)", "3학년 2학기 (9~11월)", "3학년 겨울방학 (12~2월)");
 
         // 12월(겨울방학 구간) — 다음 시기부터는 학년이 하나 올라가야 한다.
         String[] december = ReflectionTestUtils.invokeMethod(
                 roadmapService, "computeFallbackPeriods", 3, java.time.LocalDate.of(2026, 12, 1));
         assertThat(december).containsExactly(
-                "3학년 겨울방학 (12~2월)", "4학년 1학기 (3~6월)", "4학년 여름방학 (7~8월)");
+                "3학년 겨울방학 (12~2월)", "4학년 1학기 (3~6월)", "4학년 여름방학 (7~8월)", "4학년 2학기 (9~11월)");
 
         // 4학년 겨울방학 다음은 "졸업 후 취업 준비"로 고정돼야 한다.
         String[] graduating = ReflectionTestUtils.invokeMethod(
                 roadmapService, "computeFallbackPeriods", 4, java.time.LocalDate.of(2026, 12, 1));
         assertThat(graduating).containsExactly(
-                "4학년 겨울방학 (12~2월)", "졸업 후 취업 준비", "졸업 후 취업 준비");
+                "4학년 겨울방학 (12~2월)", "졸업 후 취업 준비", "졸업 후 취업 준비", "졸업 후 취업 준비");
 
-        // grade가 없으면 상대적 라벨을 그대로 쓴다.
+        // grade가 없으면 상대적 라벨을 2개월 단위로 12개월치(6구간) 그대로 쓴다.
         String[] noGrade = ReflectionTestUtils.invokeMethod(
                 roadmapService, "computeFallbackPeriods", (Integer) null, java.time.LocalDate.of(2026, 4, 15));
-        assertThat(noGrade).containsExactly("1~2개월 차", "3~4개월 차", "5~6개월 차");
+        assertThat(noGrade).containsExactly(
+                "1~2개월 차", "3~4개월 차", "5~6개월 차", "7~8개월 차", "9~10개월 차", "11~12개월 차");
     }
 
     /**
-     * 폴백 로드맵이 활동을 리스트 인덱스(0~2/3~5/6~8)로만 3등분해 2·3번째 시기에도
-     * matchedActivities를 채워 넣던 회귀를 고정한다. activeActivities는 deadline ASC로
-     * 정렬돼 오므로, 시기 라벨이 today 기준 실제 달력 구간(computeFallbackPeriods)이 된
-     * 지금은 "가장 빨리 마감되는 활동"이 "가장 먼 미래 시기" 밑에 나올 수 있었다 — 예:
-     * 8월에 마감하는 활동이 "3학년 겨울방학 (12~2월)" 카드에 실려 마감일과 시기 라벨이
-     * 정면으로 모순됐다. 이제 1번째(HIGH="지금 집중") 시기에만 실제 DB 활동을 붙이고
-     * 2·3번째는 텍스트 가이드만 보여준다.
+     * 폴백 로드맵이 활동을 리스트 인덱스로만 등분해 2번째 이후 시기에도 matchedActivities를
+     * 채워 넣던 회귀를 고정한다. activeActivities는 deadline ASC로 정렬돼 오므로, 시기 라벨이
+     * today 기준 실제 달력 구간(computeFallbackPeriods)이 된 지금은 "가장 빨리 마감되는 활동"이
+     * "가장 먼 미래 시기" 밑에 나올 수 있었다 — 예: 8월에 마감하는 활동이 "3학년 겨울방학
+     * (12~2월)" 카드에 실려 마감일과 시기 라벨이 정면으로 모순됐다. 이제 1번째(HIGH="지금
+     * 집중") 시기에만 실제 DB 활동을 붙이고 나머지는 텍스트 가이드만 보여준다.
+     *
+     * 이 테스트는 userSpec이 없어 grade가 null이므로, 폴백은 2개월 단위 6구간(12개월)을 쓴다.
      */
     @Test
     void 폴백_로드맵은_1번째_시기에만_실제_DB_활동을_붙인다() throws Exception {
@@ -256,16 +261,15 @@ class RoadmapServiceEmptyStepsTest {
 
         RoadmapResponse response = roadmapService.getRoadmap(authentication);
 
-        assertThat(response.getTimeline()).hasSize(3);
+        assertThat(response.getTimeline()).hasSize(6);
         assertThat(response.getTimeline().get(0).getMatchedActivities())
                 .as("1번째(HIGH) 시기에만 실제 DB 활동이 붙어야 한다")
                 .hasSize(3);
-        assertThat(response.getTimeline().get(1).getMatchedActivities())
-                .as("2번째 시기 라벨과 무관한 활동을 잘못 붙이지 않는다")
-                .isEmpty();
-        assertThat(response.getTimeline().get(2).getMatchedActivities())
-                .as("3번째 시기 라벨과 무관한 활동을 잘못 붙이지 않는다")
-                .isEmpty();
+        for (int i = 1; i < 6; i++) {
+            assertThat(response.getTimeline().get(i).getMatchedActivities())
+                    .as(i + "번째 시기 라벨과 무관한 활동을 잘못 붙이지 않는다")
+                    .isEmpty();
+        }
     }
 
     /**
