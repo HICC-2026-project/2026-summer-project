@@ -6,6 +6,7 @@ import com.career.recommendation.entity.Activity;
 import com.career.recommendation.entity.Recommendation;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.repository.ActivityRepository;
+import com.career.recommendation.repository.RecommendationFeedbackRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.repository.TargetJobRepository;
@@ -58,6 +59,7 @@ class RoadmapServiceEmptyStepsTest {
     @Mock private GeminiService geminiService;
     @Mock private PromptDataBuilder promptDataBuilder;
     @Mock private AiDailyAttemptLimiter aiDailyAttemptLimiter;
+    @Mock private RecommendationFeedbackRepository recommendationFeedbackRepository;
     @Mock private Authentication authentication;
     @Mock private User user;
 
@@ -87,7 +89,7 @@ class RoadmapServiceEmptyStepsTest {
         when(promptDataBuilder.buildAvailableActivitiesJsonForRoadmap(any(), any())).thenReturn("[]");
 
         // 형태만 있고 알맹이는 없는 응답 — period/priority/activity/reason/activityIds 전부 없음.
-        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any()))
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn("{\"timeline\":[{},{},{}]}");
 
         ReflectionTestUtils.setField(roadmapService, "objectMapper", new ObjectMapper());
@@ -134,7 +136,7 @@ class RoadmapServiceEmptyStepsTest {
 
         // priority만 빠지고 나머지(period·activity·reason)는 전부 정상인, 실제로 흔히
         // 발생 가능한 스키마 이탈 케이스.
-        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any()))
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn("{\"timeline\":[{\"period\":\"3학년 2학기\",\"activity\":\"정보처리기사 취득\","
                         + "\"reason\":\"서류 가점\",\"activityIds\":[]}]}");
 
@@ -167,7 +169,7 @@ class RoadmapServiceEmptyStepsTest {
         when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
         when(promptDataBuilder.buildAvailableActivitiesJsonForRoadmap(any(), any())).thenReturn("[]");
 
-        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any()))
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn("{\"timeline\":[{\"period\":\"3학년 2학기\",\"priority\":\"high\","
                         + "\"activity\":\"정보처리기사 취득\",\"reason\":\"서류 가점\",\"activityIds\":[]}]}");
 
@@ -255,7 +257,7 @@ class RoadmapServiceEmptyStepsTest {
         when(promptDataBuilder.buildAvailableActivitiesJsonForRoadmap(any(), any())).thenReturn("[]");
 
         // Gemini 응답이 계속 비어 있어 폴백 경로로 떨어지게 한다.
-        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any())).thenReturn("");
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn("");
 
         ReflectionTestUtils.setField(roadmapService, "objectMapper", new ObjectMapper());
 
@@ -368,7 +370,7 @@ class RoadmapServiceEmptyStepsTest {
         when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
         when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
         when(promptDataBuilder.buildAvailableActivitiesJsonForRoadmap(any(), any())).thenReturn("[]");
-        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any())).thenReturn("");
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn("");
 
         ReflectionTestUtils.setField(roadmapService, "objectMapper", realMapper);
 

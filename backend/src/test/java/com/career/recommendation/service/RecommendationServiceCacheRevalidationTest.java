@@ -7,6 +7,7 @@ import com.career.recommendation.entity.Activity;
 import com.career.recommendation.entity.Recommendation;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.repository.ActivityRepository;
+import com.career.recommendation.repository.RecommendationFeedbackRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.repository.TargetJobRepository;
@@ -59,6 +60,7 @@ class RecommendationServiceCacheRevalidationTest {
     @Mock private GeminiService geminiService;
     @Mock private PromptDataBuilder promptDataBuilder;
     @Mock private AiDailyAttemptLimiter aiDailyAttemptLimiter;
+    @Mock private RecommendationFeedbackRepository recommendationFeedbackRepository;
     @Mock private Authentication authentication;
     @Mock private User user;
 
@@ -140,7 +142,7 @@ class RecommendationServiceCacheRevalidationTest {
         assertThat(response.getActivities()).extracting(ActivityRecommendation::getId)
                 .containsExactly(activeId);
         // 남은 활동이 있어 캐시가 여전히 유효하므로 Gemini를 다시 부르지 않는다.
-        verify(geminiService, never()).generateRecommendation(any(), any(), any(), any(), any());
+        verify(geminiService, never()).generateRecommendation(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -163,7 +165,7 @@ class RecommendationServiceCacheRevalidationTest {
 
         assertThat(response.getActivities()).extracting(ActivityRecommendation::getId)
                 .containsExactly(alwaysOpenId);
-        verify(geminiService, never()).generateRecommendation(any(), any(), any(), any(), any());
+        verify(geminiService, never()).generateRecommendation(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -186,7 +188,7 @@ class RecommendationServiceCacheRevalidationTest {
         when(promptDataBuilder.serializeSpecForRecommendation(any())).thenReturn("{}");
         when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
         when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
-        when(geminiService.generateRecommendation(any(), any(), any(), any(), any()))
+        when(geminiService.generateRecommendation(any(), any(), any(), any(), any(), any()))
                 .thenReturn("{\"activities\":[{\"id\":\"" + freshId + "\",\"name\":\"새 활동\",\"reason\":\"새로 생성\"}]}");
 
         RecommendationResponse response = recommendationService.getRecommendations(authentication);
@@ -214,6 +216,6 @@ class RecommendationServiceCacheRevalidationTest {
         assertThat(response).isNotNull();
         assertThat(response.getActivities()).isEmpty();
         assertThat(response.getDailyLimitReached()).isTrue();
-        verify(geminiService, never()).generateRecommendation(any(), any(), any(), any(), any());
+        verify(geminiService, never()).generateRecommendation(any(), any(), any(), any(), any(), any());
     }
 }

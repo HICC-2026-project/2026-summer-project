@@ -66,8 +66,8 @@ class RecommendationRoadmapSameGapTest {
     void setUp() {
         cacheManager.getCacheNames().forEach(n -> cacheManager.getCache(n).clear());
         // Gemini는 항상 빈 응답 → 두 서비스 모두 폴백 경로. 프롬프트 입력만 검증하면 되므로 충분하다.
-        when(geminiService.generateRecommendation(any(), any(), any(), any(), any())).thenReturn("");
-        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any())).thenReturn("");
+        when(geminiService.generateRecommendation(any(), any(), any(), any(), any(), any())).thenReturn("");
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn("");
 
         User user = userRepository.save(User.builder()
                 .nickname("samegap").provider("KAKAO").providerId("samegap-" + System.nanoTime()).build());
@@ -95,8 +95,8 @@ class RecommendationRoadmapSameGapTest {
         ArgumentCaptor<String> recContext = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> roadmapContext = ArgumentCaptor.forClass(String.class);
         // 빈 응답이면 1회 재시도하므로 호출은 2회일 수 있다 — 모든 호출의 컨텍스트가 같아야 한다.
-        verify(geminiService, atLeastOnce()).generateRecommendation(any(), any(), recContext.capture(), any(), any());
-        verify(geminiService, atLeastOnce()).generateRoadmap(any(), any(), any(), roadmapContext.capture(), any(), any(), any());
+        verify(geminiService, atLeastOnce()).generateRecommendation(any(), any(), recContext.capture(), any(), any(), any());
+        verify(geminiService, atLeastOnce()).generateRoadmap(any(), any(), any(), roadmapContext.capture(), any(), any(), any(), any());
 
         assertThat(recContext.getAllValues()).isNotEmpty().containsOnly(roadmapContext.getValue());
         assertThat(roadmapContext.getAllValues()).containsOnly(recContext.getValue());

@@ -63,13 +63,15 @@ public class GeminiService {
      * @param userSpecJson          사용자 스펙 (JSON 문자열)
      * @param targetJob             목표 직무
      * @param positionContext       합격자 비교 데이터(직무 요구 프로필 내 위치·갭 요약 — PromptDataBuilder.buildPositionContextText)
+     * @param feedbackContext       사용자가 남긴 활동 피드백(LIKE/DISLIKE) 요약 — PromptDataBuilder.buildFeedbackContextText(E10-2)
      * @param availableActivitiesJson DB에 등록된 활성 활동 목록 (JSON 배열 문자열)
      * @return Gemini API 응답 JSON 텍스트 (파싱 실패 시 빈 문자열)
      */
     public String generateRecommendation(String userSpecJson, String targetJob,
-                                         String positionContext, String availableActivitiesJson,
+                                         String positionContext, String feedbackContext,
+                                         String availableActivitiesJson,
                                          java.time.LocalDate today) {
-        String prompt = buildRecommendationPrompt(userSpecJson, targetJob, positionContext, availableActivitiesJson, today);
+        String prompt = buildRecommendationPrompt(userSpecJson, targetJob, positionContext, feedbackContext, availableActivitiesJson, today);
         String systemInstruction = "당신은 취업 커리어 어드바이저입니다. 사용자의 스펙을 분석하고, 제공된 활동 목록 중에서만 맞춤형 활동을 추천해 주세요. 목록에 없는 활동을 임의로 만들지 마세요. 반드시 JSON 형식으로만 응답하세요.";
         String raw = callGeminiApi(systemInstruction, prompt);
         return extractJsonBlock(raw);
@@ -81,13 +83,14 @@ public class GeminiService {
      * @param targetJob                  목표 직무
      * @param grade                      현재 학년 (null이면 학기 구분 없이 월별 단위)
      * @param positionContext            합격자 비교 데이터(직무 요구 프로필 내 위치·갭 요약)
+     * @param feedbackContext            사용자가 남긴 활동 피드백(LIKE/DISLIKE) 요약(E10-2)
      * @param topRecommendedActivities  F-03에서 우선 추천된 활동 목록 요약 (JSON 문자열)
      * @param availableActivitiesJson     DB에 등록된 활성 활동 목록 (JSON 배열 문자열)
      */
     public String generateRoadmap(String userSpecJson, String targetJob, Integer grade,
-                                  String positionContext, String topRecommendedActivities,
+                                  String positionContext, String feedbackContext, String topRecommendedActivities,
                                   String availableActivitiesJson, java.time.LocalDate today) {
-        String prompt = buildRoadmapPrompt(userSpecJson, targetJob, grade, positionContext, topRecommendedActivities, availableActivitiesJson, today);
+        String prompt = buildRoadmapPrompt(userSpecJson, targetJob, grade, positionContext, feedbackContext, topRecommendedActivities, availableActivitiesJson, today);
         // ⚠️ 이 systemInstruction은 buildRoadmapPrompt의 규칙 4·5와 반드시 같은 매칭 정책을
         // 말해야 한다. 예전엔 여기서 "단기 기간에는 DB 활동 매칭, 먼 미래는 가이드 제안"이라는
         // 2분할을 못박아 규칙 4("각 시기마다 매칭")·5("적합한 공고가 없는 시기만 가이드")와
@@ -103,8 +106,8 @@ public class GeminiService {
         return extractJsonBlock(raw);
     }
 
-    private String buildRecommendationPrompt(String spec, String job, String cases, String availableActivities,
-                                             java.time.LocalDate today) {
+    private String buildRecommendationPrompt(String spec, String job, String cases, String feedback,
+                                             String availableActivities, java.time.LocalDate today) {
         // ⚠️ 오늘 날짜를 명시하지 않으면 Gemini는 학습 시점의 날짜 감각으로 마감일의 임박도를
         // 추측한다 — "마감이 임박한/여유 있는 활동" 판단이 실제 오늘과 어긋날 수 있다.
         return String.format("""
@@ -118,6 +121,9 @@ public class GeminiService {
                 %s
 
                 [합격자 비교 데이터 — 분포 내 위치와 갭]
+                %s
+
+                [사용자 활동 피드백]
                 %s
 
                 [추천 가능한 활동 목록 (DB 등록 활동)]
@@ -137,12 +143,13 @@ public class GeminiService {
                 9. 각 추천에는 id(UUID), name, type, reason(이 사용자에게 추천하는 구체적 이유), deadline(YYYY-MM-DD), targetGap 필드를 포함하세요.
                    targetGap은 이 활동이 메우는 갭으로, [합격자 비교 데이터]의 "targetGap에 쓸 수 있는 갭 이름" 중 하나를 글자 그대로 쓰거나, 해당 없으면 null로 두세요. 목록에 없는 이름을 만들지 마세요.
                 10. 추천 이유(reason)에는 사용자가 충족한 조건과 확인이 필요한 조건을 구분하여 작성하세요.
-                11. 응답은 {"activities": [...]} JSON 형식으로만 출력하세요.
-                """, today, spec, job, cases, availableActivities);
+                11. [사용자 활동 피드백]에서 "관심 없다고 표시한 활동"과 유형·태그가 비슷한 활동은 추천에서 제외하거나 우선순위를 낮추고, "관심 있다고 표시한 활동"과 비슷한 유형은 우선순위를 높이세요.
+                12. 응답은 {"activities": [...]} JSON 형식으로만 출력하세요.
+                """, today, spec, job, cases, feedback, availableActivities);
     }
 
     private String buildRoadmapPrompt(String spec, String job, Integer grade,
-                                      String cases, String topRecommended, String availableActivities,
+                                      String cases, String feedback, String topRecommended, String availableActivities,
                                       java.time.LocalDate today) {
         // ⚠️ periodGuide에 오늘 날짜를 반드시 명시한다. 예전엔 날짜 없이 학기/방학 구분
         // 규칙만 줘서, Gemini가 타임라인의 "시작 시기"를 활동 마감일 등에서 추측했다 —
@@ -176,12 +183,15 @@ public class GeminiService {
 
                 %s
 
+                [사용자 활동 피드백]
+                %s
+
                 [우선 반영할 AI 추천 활동 (F-03 결과)]
                 %s
-                
+
                 [전체 DB 등록 활동 목록]
                 %s
-                
+
                 ## 규칙
                 1. 12개월 커리어 로드맵을 위 기간 단위로 작성해 주세요.
                 2. [합격자 비교 데이터]의 갭(부족한 항목)을 이른 시기부터 우선 보완하는 방향으로 흐름을 구성하세요. "targetGap에 쓸 수 있는 갭 이름"의 순서가 보완 우선순위입니다 — 앞에 있는 갭을 더 이른 시기에 배치하세요.
@@ -192,8 +202,9 @@ public class GeminiService {
                 7. 각 시기에 최대 3개의 활동 또는 준비 가이드를 추천하세요.
                 8. 각 항목에는 period(시기 설명), priority(HIGH/MEDIUM/LOW), activity(활동명 또는 역량 준비 가이드 텍스트), reason(이유), activityIds(UUID 배열, 적합한 DB 활동이 없는 경우 빈 배열 []) 필드를 포함하세요.
                    ⚠️ priority 규칙: 가장 이른 시기(당장 시작할 단기 단계)에만 "HIGH"(화면 표기: "지금 집중")를 부여하세요. 그 다음 시기에는 "MEDIUM"("중요")을, 그 이후의 나머지 모든 시기에는 "LOW"("준비")를 부여하세요. (학년이 없으면 월 단위로 4~6개 시기가 나올 수 있습니다 — 시기 개수와 무관하게 이 규칙을 적용하세요.)
-                9. 응답은 {"timeline": [...]} JSON 형식으로만 출력하세요.
-                """, spec, job, cases, periodGuide, topRecommended, availableActivities);
+                9. [사용자 활동 피드백]에서 "관심 없다고 표시한 활동"과 유형·태그가 비슷한 활동·가이드는 매칭·제안에서 피하고, "관심 있다고 표시한 활동"과 비슷한 유형은 우선적으로 배치하세요.
+                10. 응답은 {"timeline": [...]} JSON 형식으로만 출력하세요.
+                """, spec, job, cases, periodGuide, feedback, topRecommended, availableActivities);
     }
 
     /**

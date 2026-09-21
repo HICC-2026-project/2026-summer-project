@@ -8,9 +8,11 @@ import { BADGE, JOB_OPTIONS, PRIMARY } from "@/features/spec-road/data";
 import { StateMessage } from "@/features/spec-road/components/StateMessage";
 import {
   fetchProofObjectUrl,
+  getActivityFeedbackSummary,
   getAdminReports,
   getOpsSummary,
   reviewReport,
+  type ActivityFeedbackSummary,
   type AdminPasserReport,
   type PageResponse,
   type ReviewAction,
@@ -18,8 +20,15 @@ import {
   type ReviewStatus,
 } from "./api";
 
-// 합격자 제보 검수 화면 (팀 내부용). 기능 최소: 상태별 목록 → 증빙 보기 → 승인/반려.
+// 관리자 화면 (팀 내부용). 합격자 제보 검수 + 추천 피드백(E10-2) 두 화면을 상단 탭으로 오간다.
 // 권한은 서버가 판정한다. 여기서는 403을 "권한 없음" 안내로 바꿀 뿐이다.
+
+type AdminView = "reports" | "feedback";
+
+const VIEW_TABS: { key: AdminView; label: string }[] = [
+  { key: "reports", label: "합격자 제보 검수" },
+  { key: "feedback", label: "추천 피드백" },
+];
 
 const STATUS_TABS: { key: ReviewStatus; label: string }[] = [
   { key: "PENDING", label: "검수 대기" },
@@ -60,6 +69,7 @@ function formatLang(scores: AdminPasserReport["languageScores"]): string {
 }
 
 export function AdminReviewPage() {
+  const [view, setView] = useState<AdminView>("reports");
   const [status, setStatus] = useState<ReviewStatus>("PENDING");
   const [page, setPage] = useState(0);
   // data === null이 "불러오는 중". 탭·페이지 전환 핸들러에서 null로 되돌리고, effect는 응답이 온 뒤에만 상태를 만진다.
@@ -117,8 +127,12 @@ export function AdminReviewPage() {
     <div style={{ minHeight: "100dvh", background: "#F6F6F9", color: "#15141B", fontFamily: "inherit" }}>
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", background: "#fff", borderBottom: "1px solid #EDEDF2" }}>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>합격자 제보 검수</div>
-          <div style={{ fontSize: 12, color: "#9797A1" }}>승인하면 즉시 비교 데이터에 반영돼요. 반려는 데이터를 보존하고 사유만 남겨요.</div>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>관리자</div>
+          <div style={{ fontSize: 12, color: "#9797A1" }}>
+            {view === "reports"
+              ? "승인하면 즉시 비교 데이터에 반영돼요. 반려는 데이터를 보존하고 사유만 남겨요."
+              : "활동별로 사용자가 남긴 좋아요/싫어요 수예요. 시드 품질 점검용이에요."}
+          </div>
         </div>
         <Link href="/" style={{ fontSize: 13, color: PRIMARY, fontWeight: 700, textDecoration: "none" }}>
           ← 앱으로
@@ -126,6 +140,35 @@ export function AdminReviewPage() {
       </header>
 
       <main style={{ maxWidth: 1080, margin: "0 auto", padding: "20px 24px 60px" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          {VIEW_TABS.map((t) => {
+            const active = t.key === view;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setView(t.key)}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: 999,
+                  border: `1px solid ${active ? PRIMARY : "#E1E0EA"}`,
+                  background: active ? PRIMARY : "#fff",
+                  color: active ? "#fff" : "#4A4954",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {view === "feedback" && <FeedbackSummaryPanel />}
+
+        {view === "reports" && (
+      <>
         {!error && <OpsStrip reloadKey={reloadKey} />}
         <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
           {STATUS_TABS.map((t) => {
@@ -205,6 +248,8 @@ export function AdminReviewPage() {
 
             {selected && <DetailPanel key={selected.reportId} report={selected} onClose={() => setSelected(null)} onReviewed={onReviewed} />}
           </div>
+        )}
+      </>
         )}
       </main>
     </div>
@@ -306,6 +351,76 @@ function DetailPanel({ report, onClose, onReviewed }: { report: AdminPasserRepor
         </button>
       </div>
     </aside>
+  );
+}
+
+/** E10-2(F-09) 추천 피드백 탭 — 활동별 좋아요/싫어요 수(dislike 많은 순). 시드 품질 점검용. */
+function FeedbackSummaryPanel() {
+  const [rows, setRows] = useState<ActivityFeedbackSummary[] | null>(null);
+  const [error, setError] = useState<keyof typeof ERROR_TEXT | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!getAccessToken()) {
+        setError("unauthenticated");
+        return;
+      }
+      try {
+        const res = await getActivityFeedbackSummary();
+        if (!cancelled) {
+          setError(null);
+          setRows(res);
+        }
+      } catch (e) {
+        if (cancelled) return;
+        if (e instanceof ApiError && e.status === 403) setError("forbidden");
+        else if (e instanceof ApiError && e.status === 401) setError("unauthenticated");
+        else setError("failed");
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (error) {
+    return <StateMessage variant="error" title={ERROR_TEXT[error].title} description={ERROR_TEXT[error].description} />;
+  }
+
+  const loading = rows === null;
+  const items = rows ?? [];
+
+  return (
+    <div style={{ background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16, overflow: "hidden" }}>
+      {loading || items.length === 0 ? (
+        <div style={{ padding: 40, textAlign: "center", color: "#9797A1", fontSize: 14 }}>
+          {loading ? "불러오는 중…" : "아직 피드백이 없어요."}
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "#FAFAFC", color: "#9797A1", textAlign: "left" }}>
+                {["활동", "좋아요", "싫어요"].map((h) => (
+                  <th key={h} style={{ ...CELL_NOWRAP, fontWeight: 600 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((row) => (
+                <tr key={row.activityId} style={{ borderTop: "1px solid #F1F0F6" }}>
+                  <td style={CELL}>{row.activityName}</td>
+                  <td style={{ ...CELL_NOWRAP, color: BADGE.ok.color, fontWeight: 700 }}>👍 {row.likeCount}</td>
+                  <td style={{ ...CELL_NOWRAP, color: BADGE.bad.color, fontWeight: 700 }}>👎 {row.dislikeCount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
 

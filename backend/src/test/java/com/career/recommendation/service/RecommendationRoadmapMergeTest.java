@@ -11,6 +11,7 @@ import com.career.recommendation.entity.Recommendation;
 import com.career.recommendation.entity.RoadmapCache;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.repository.ActivityRepository;
+import com.career.recommendation.repository.RecommendationFeedbackRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.repository.TargetJobRepository;
@@ -65,6 +66,7 @@ class RecommendationRoadmapMergeTest {
     @Mock private GeminiService geminiService;
     @Mock private PromptDataBuilder promptDataBuilder;
     @Mock private AiDailyAttemptLimiter aiDailyAttemptLimiter;
+    @Mock private RecommendationFeedbackRepository recommendationFeedbackRepository;
     @Mock private Authentication authentication;
     @Mock private User user;
 
@@ -184,7 +186,7 @@ class RecommendationRoadmapMergeTest {
         assertThat(appended.getType()).isEqualTo("EXTERNAL");
         assertThat(appended.getTargetGap()).isNull();
         // Gemini를 새로 호출하지 않는다 — 병합은 순수 읽기 시점 표시용이다.
-        verify(geminiService, never()).generateRecommendation(any(), any(), any(), any(), any());
+        verify(geminiService, never()).generateRecommendation(any(), any(), any(), any(), any(), any());
     }
 
     @Test
