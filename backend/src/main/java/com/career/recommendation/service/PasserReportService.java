@@ -10,6 +10,7 @@ import com.career.recommendation.entity.User;
 import com.career.recommendation.exception.DuplicatePasserReportException;
 import com.career.recommendation.repository.PasserDataRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -32,6 +34,7 @@ public class PasserReportService {
     private final CurrentUserService currentUserService;
     private final PasserDataRepository passerDataRepository;
     private final LocalProofStorageService localProofStorageService;
+    private final PasserGithubContributionRunner passerGithubContributionRunner;
 
     @Transactional
     public PasserReportResponse submit(
@@ -67,15 +70,30 @@ public class PasserReportService {
                 .proofFileSize(storedProof.fileSize())
                 .build();
 
+        PasserData savedReport;
         try {
             // 파일은 DB 트랜잭션 대상이 아니므로 즉시 flush해 DB 오류를 여기서 감지한다.
-            PasserData savedReport = passerDataRepository.saveAndFlush(report);
-            return PasserReportResponse.pending(savedReport);
+            savedReport = passerDataRepository.saveAndFlush(report);
         } catch (RuntimeException exception) {
             // DB 저장이 실패하면 먼저 저장한 로컬 파일을 제거해 고아 파일을 남기지 않는다.
             localProofStorageService.deleteQuietly(storedProof.storedName());
             throw exception;
         }
+
+        // E11-5 — GitHub 아이디를 입력하고 동의했을 때만, 제보 저장이 끝난 뒤 비동기로 분석을
+        // 시작한다. username은 이 지역 변수 밖으로 나가지 않는다(로그·엔티티 어디에도 남기지
+        // 않음 — PasserGithubContributionRunner의 클래스 주석 참고). 분석 시작 자체가 실패해도
+        // (예: 실행기 큐 포화) 이미 저장된 제보는 그대로 유효하다.
+        String githubUsername = request.getGithubUsername() != null ? request.getGithubUsername().trim() : null;
+        if (githubUsername != null && !githubUsername.isBlank() && Boolean.TRUE.equals(request.getGithubConsent())) {
+            try {
+                passerGithubContributionRunner.analyze(savedReport.getId(), githubUsername, request.getYear());
+            } catch (RuntimeException e) {
+                log.warn("합격자 제보 GitHub 분석 시작 실패 (reportId={}): {}", savedReport.getId(), e.getClass().getSimpleName());
+            }
+        }
+
+        return PasserReportResponse.pending(savedReport);
     }
 
     /** 본인이 제보한 목록(최신순). 검수 여부만 확인하는 용도. */

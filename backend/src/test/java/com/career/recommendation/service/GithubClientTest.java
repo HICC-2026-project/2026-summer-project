@@ -430,6 +430,77 @@ class GithubClientTest {
         assertThat(server.getRequestCount()).isEqualTo(4);
     }
 
+    // --- E11-5: 합격 연도 컷오프 ---
+
+    @Test
+    void 컷오프가_있으면_커밋_조회에_until_파라미터가_붙는다() throws InterruptedException {
+        server.enqueue(jsonResponse(Map.of("login", "octocat", "type", "User"))
+                .setHeader("X-RateLimit-Remaining", "100"));
+        server.enqueue(jsonResponse(List.of(repo("owned-repo", false, false))));
+        server.enqueue(emptySearchResponse());
+
+        server.enqueue(jsonResponse(Map.of("Java", 1000)));
+        server.enqueue(jsonResponse(List.of(Map.of())));
+        server.enqueue(jsonResponse(List.of(Map.of())));
+        server.enqueue(jsonResponse(Map.of("tree", List.of())));
+
+        GithubClient.GithubAnalysisRawResult result =
+                client.analyze("octocat", java.time.LocalDate.of(2026, 12, 31));
+
+        assertThat(result.rateLimited()).isFalse();
+        assertThat(result.repos()).hasSize(1);
+
+        takeRequest(); // user
+        takeRequest(); // owned repos
+        takeRequest(); // search
+        takeRequest(); // languages
+        // 컷 날짜(2026-12-31, 포함)의 다음날 00:00 UTC를 배타적 until로 보낸다(콜론 인코딩
+        // 여부와 무관하게 연-월-일 접두사만 확인해 인코딩 구현에 덜 취약하게 한다).
+        assertThat(takeRequest().getPath()).contains("until=2027-01-01");
+        assertThat(takeRequest().getPath()).contains("until=2027-01-01");
+    }
+
+    @Test
+    void 컷오프_적용시_컷_이전_커밋이_0건인_레포는_결과에서_제외된다() {
+        server.enqueue(jsonResponse(Map.of("login", "octocat", "type", "User"))
+                .setHeader("X-RateLimit-Remaining", "100"));
+        server.enqueue(jsonResponse(List.of(repo("too-new-repo", false, false))));
+        server.enqueue(emptySearchResponse());
+
+        server.enqueue(jsonResponse(Map.of("Java", 1000)));
+        server.enqueue(jsonResponse(List.of())); // 샘플: 컷 이전 커밋 0건
+        server.enqueue(jsonResponse(List.of())); // 정확 총수: 0건
+        server.enqueue(jsonResponse(Map.of("tree", List.of())));
+
+        GithubClient.GithubAnalysisRawResult result =
+                client.analyze("octocat", java.time.LocalDate.of(2020, 12, 31));
+
+        assertThat(result.rateLimited()).isFalse();
+        assertThat(result.repos()).isEmpty();
+    }
+
+    @Test
+    void 컷오프가_없으면_기존_사용자_플로우와_동일하게_until_파라미터가_없다() throws InterruptedException {
+        server.enqueue(jsonResponse(Map.of("login", "octocat", "type", "User"))
+                .setHeader("X-RateLimit-Remaining", "100"));
+        server.enqueue(jsonResponse(List.of(repo("owned-repo", false, false))));
+        server.enqueue(emptySearchResponse());
+
+        server.enqueue(jsonResponse(Map.of("Java", 1000)));
+        server.enqueue(jsonResponse(List.of()));
+        server.enqueue(jsonResponse(List.of()));
+        server.enqueue(jsonResponse(Map.of("tree", List.of())));
+
+        client.analyze("octocat");
+
+        takeRequest(); // user
+        takeRequest(); // owned repos
+        takeRequest(); // search
+        takeRequest(); // languages
+        assertThat(takeRequest().getPath()).doesNotContain("until=");
+        assertThat(takeRequest().getPath()).doesNotContain("until=");
+    }
+
     private RecordedRequest takeRequest() throws InterruptedException {
         return server.takeRequest();
     }

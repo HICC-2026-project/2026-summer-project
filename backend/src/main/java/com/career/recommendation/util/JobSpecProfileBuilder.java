@@ -10,10 +10,12 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * BE-1 담당 — 합격자 목록을 JobSpecProfile(직무별 분포·보유율 집계)로 변환한다.
@@ -88,6 +90,31 @@ public class JobSpecProfileBuilder {
                 || PasserData.ORIGIN_DEMO.equalsIgnoreCase(p.getDataOrigin())
                 || "UNKNOWN".equalsIgnoreCase(p.getDataOrigin()));
 
+        // E11-5 — github_derived가 있는(GitHub 아이디 제보·분석 성공) 합격자만 영역 보유율의
+        // 표본으로 삼는다. areas가 null/빈 배열이어도 github_derived가 있으면 "레포는 분석됐지만
+        // 감지된 영역이 없다"는 실측이므로 분모에는 포함하고 보유 영역만 0개로 집계한다.
+        List<PasserData> withGithub = valid.stream()
+                .filter(p -> p.getGithubDerived() != null && !p.getGithubDerived().isEmpty())
+                .toList();
+        int githubSampleSize = withGithub.size();
+        Map<String, Integer> areaHolderCounts = new LinkedHashMap<>();
+        for (PasserData passer : withGithub) {
+            Set<String> areasOfPasser = passer.getAreas() == null
+                    ? Set.of()
+                    : new LinkedHashSet<>(Arrays.asList(passer.getAreas()));
+            for (String area : areasOfPasser) {
+                areaHolderCounts.merge(area, 1, Integer::sum);
+            }
+        }
+        Map<String, Double> areaRatios = areaHolderCounts.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()
+                        .thenComparing(Map.Entry::getKey))
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> (double) e.getValue() / githubSampleSize,
+                        (a, b) -> a,
+                        LinkedHashMap::new));
+
         return JobSpecProfile.builder()
                 .jobType(jobType)
                 .sampleSize(sampleSize)
@@ -97,6 +124,8 @@ public class JobSpecProfileBuilder {
                 .experienceCounts(experienceCounts)
                 .certStats(List.copyOf(certStats))
                 .containsDemoData(containsDemoData)
+                .areaRatios(areaRatios)
+                .githubSampleSize(githubSampleSize)
                 .build();
     }
 

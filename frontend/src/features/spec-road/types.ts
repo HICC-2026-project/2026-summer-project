@@ -82,6 +82,10 @@ export interface PasserReportRequest {
   certifications: string[];
   experienceCount: number;
   consent: boolean;
+  // E11-5 — 선택 입력. 입력하면 githubConsent가 true여야 한다(백엔드 @AssertTrue와 동일 규칙).
+  // 서버는 접수 직후 비동기 분석에만 쓰고 아이디 자체는 어디에도 저장하지 않는다.
+  githubUsername?: string;
+  githubConsent?: boolean;
 }
 
 export interface PasserReportResponse {

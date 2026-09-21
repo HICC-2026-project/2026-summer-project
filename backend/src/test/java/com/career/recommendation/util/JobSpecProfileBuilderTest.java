@@ -117,6 +117,64 @@ class JobSpecProfileBuilderTest {
         assertThat(profile.getSampleSize()).isEqualTo(1);
     }
 
+    // --- E11-5: areaRatios · githubSampleSize ---
+
+    @Test
+    void githubSampleSize는_githubDerived가_있는_합격자_수만_센다() {
+        JobSpecProfile profile = builder.build("BACKEND", List.of(
+                passerWithGithub(new String[]{"API"}, Map.of("repos", 1)),
+                passerWithGithub(new String[]{"API", "DB"}, Map.of("repos", 2)),
+                passer("3.80", "4.50", 800, new String[]{}, 1))); // github_derived 없음
+
+        assertThat(profile.getGithubSampleSize()).isEqualTo(2);
+        assertThat(profile.getSampleSize()).isEqualTo(3); // 전체 표본은 그대로 3
+    }
+
+    @Test
+    void areaRatios는_githubSampleSize를_분모로_영역별_보유율을_계산한다() {
+        // 4명 중 github_derived 있는 2명만 분모. 그 중 1명이 AUTH 보유 = 50%.
+        JobSpecProfile profile = builder.build("BACKEND", List.of(
+                passerWithGithub(new String[]{"AUTH", "API"}, Map.of("repos", 1)),
+                passerWithGithub(new String[]{"API"}, Map.of("repos", 1)),
+                passer("3.80", "4.50", 800, new String[]{}, 1),
+                passer("3.80", "4.50", 800, new String[]{}, 1)));
+
+        assertThat(profile.getGithubSampleSize()).isEqualTo(2);
+        assertThat(profile.getAreaRatios()).containsEntry("API", 1.0);
+        assertThat(profile.getAreaRatios()).containsEntry("AUTH", 0.5);
+    }
+
+    @Test
+    void areaRatios는_보유율_내림차순으로_정렬된다() {
+        JobSpecProfile profile = builder.build("BACKEND", List.of(
+                passerWithGithub(new String[]{"API", "DB"}, Map.of("repos", 1)),
+                passerWithGithub(new String[]{"API"}, Map.of("repos", 1)),
+                passerWithGithub(new String[]{"DB"}, Map.of("repos", 1))));
+
+        assertThat(profile.getAreaRatios().keySet()).containsExactly("API", "DB");
+    }
+
+    @Test
+    void github_표본이_없으면_areaRatios는_비어있고_githubSampleSize는_0이다() {
+        JobSpecProfile profile = builder.build("BACKEND", List.of(
+                passer("3.80", "4.50", 800, new String[]{"SQLD"}, 1)));
+
+        assertThat(profile.getGithubSampleSize()).isZero();
+        assertThat(profile.getAreaRatios()).isEmpty();
+    }
+
+    private PasserData passerWithGithub(String[] areas, Map<String, Object> githubDerived) {
+        return PasserData.builder()
+                .gpa(new BigDecimal("3.80"))
+                .gpaMax(new BigDecimal("4.50"))
+                .languageScores(List.of(Map.of("type", "TOEIC", "score", 800)))
+                .certifications(new String[]{})
+                .experienceCount(1)
+                .areas(areas)
+                .githubDerived(githubDerived)
+                .build();
+    }
+
     private PasserData passer(String gpa, String gpaMax, int toeic, String[] certs, int expCount) {
         return PasserData.builder()
                 .gpa(new BigDecimal(gpa))

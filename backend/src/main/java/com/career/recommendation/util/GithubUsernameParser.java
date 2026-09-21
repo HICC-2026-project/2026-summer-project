@@ -39,4 +39,13 @@ public final class GithubUsernameParser {
         }
         return candidate;
     }
+
+    /**
+     * URL이 아닌 순수 GitHub 아이디 형식만 검증한다(E11-5 합격자 제보 폼처럼 URL을 받지 않고
+     * 아이디만 입력받는 곳에서 사용). {@link #parse(String)}과 달리 예외를 던지지 않고
+     * boolean을 돌려줘 Bean Validation의 {@code @AssertTrue} 메서드에서 그대로 쓸 수 있다.
+     */
+    public static boolean isValidUsername(String candidate) {
+        return candidate != null && USERNAME_PATTERN.matcher(candidate).matches();
+    }
 }

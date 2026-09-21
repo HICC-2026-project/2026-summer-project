@@ -55,6 +55,56 @@ class PasserReportRequestValidationTest {
                 .contains("학점은 학점 기준값보다 클 수 없습니다.");
     }
 
+    // --- E11-5: GitHub 아이디(선택) + 동의 조합 ---
+
+    @Test
+    void github_아이디를_입력하지_않으면_동의_없이도_검증을_통과한다() {
+        PasserReportRequest request = validRequest();
+        request.setGithubUsername(null);
+        request.setGithubConsent(null);
+
+        assertThat(validator.validate(request)).isEmpty();
+    }
+
+    @Test
+    void github_아이디와_동의를_함께_주면_검증을_통과한다() {
+        PasserReportRequest request = validRequest();
+        request.setGithubUsername("octocat");
+        request.setGithubConsent(true);
+
+        assertThat(validator.validate(request)).isEmpty();
+    }
+
+    @Test
+    void github_아이디만_있고_동의가_없으면_검증에_실패한다() {
+        PasserReportRequest request = validRequest();
+        request.setGithubUsername("octocat");
+        request.setGithubConsent(false);
+
+        assertThat(messages(validator.validate(request)))
+                .contains("GitHub 아이디를 입력했다면 GitHub 분석 동의가 필요합니다.");
+    }
+
+    @Test
+    void github_아이디만_있고_동의_필드가_null이면_검증에_실패한다() {
+        PasserReportRequest request = validRequest();
+        request.setGithubUsername("octocat");
+        request.setGithubConsent(null);
+
+        assertThat(messages(validator.validate(request)))
+                .contains("GitHub 아이디를 입력했다면 GitHub 분석 동의가 필요합니다.");
+    }
+
+    @Test
+    void github_아이디_형식이_잘못되면_동의해도_검증에_실패한다() {
+        PasserReportRequest request = validRequest();
+        request.setGithubUsername("-invalid-");
+        request.setGithubConsent(true);
+
+        assertThat(messages(validator.validate(request)))
+                .contains("올바른 GitHub 아이디 형식이 아닙니다.");
+    }
+
     private Set<String> messages(Set<ConstraintViolation<PasserReportRequest>> violations) {
         return violations.stream()
                 .map(ConstraintViolation::getMessage)

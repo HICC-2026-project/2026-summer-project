@@ -85,6 +85,24 @@ public class PasserData {
     @Column(name = "proof_file_size")
     private Long proofFileSize;
 
+    // --- E11-5(V29) — 합격자 측 동의 기반 GitHub 파생값. 아이디·레포명·URL은 저장하지 않는다. ---
+
+    /** 기여 영역(ExperienceArea 코드) 상위 목록. GitHub 아이디 제보·동의가 없으면 null. */
+    @Column(columnDefinition = "text[]")
+    private String[] areas;
+
+    /** 사용 스택(라이브러리명) 상위 목록. GitHub 아이디 제보·동의가 없으면 null. */
+    @Column(columnDefinition = "text[]")
+    private String[] stack;
+
+    /**
+     * GitHub 분석 집계값만 담는다: {repos, commits, activeMonths, jobRatios}. 레포명·URL·
+     * 커밋 메시지 등 식별 가능한 원본은 절대 담지 않는다(PasserGithubContributionRunner 참고).
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "github_derived", columnDefinition = "jsonb")
+    private Map<String, Object> githubDerived;
+
     // --- 검수 이력 (V21) ---
     /** 검수 시각. null이면 아직 검수 전(PENDING). 승인·반려 모두 채운다. */
     @Column(name = "reviewed_at")
