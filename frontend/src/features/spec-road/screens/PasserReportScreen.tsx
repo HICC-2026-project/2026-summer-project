@@ -16,6 +16,9 @@ interface PasserReportScreenProps {
 const MAX_PROOF_FILE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_PROOF_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
+// 백엔드 GithubUsernameParser.isValidUsername과 같은 규칙(영숫자·하이픈, 하이픈 연속/시작/끝 불가, ≤39자).
+const GITHUB_USERNAME_PATTERN = /^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/;
+
 const cardStyle: CSSProperties = {
   background: "#fff",
   border: `1px solid ${LINE}`,
@@ -86,6 +89,8 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofError, setProofError] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
+  const [githubUsername, setGithubUsername] = useState("");
+  const [githubConsent, setGithubConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<PasserReportResponse | null>(null);
@@ -94,6 +99,7 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
   const numericYear = Number(year);
   const numericGpa = Number(gpa);
   const numericExperienceCount = Number(experienceCount);
+  const trimmedGithubUsername = githubUsername.trim();
   const validationMessage =
     jobType === ""
       ? "합격 직무를 선택해주세요."
@@ -113,7 +119,11 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
                     ? "합격 증빙 이미지를 첨부해주세요."
                 : !consent
                   ? "익명 데이터 활용에 동의해주세요."
-                  : null;
+                  : trimmedGithubUsername !== "" && !GITHUB_USERNAME_PATTERN.test(trimmedGithubUsername)
+                    ? "올바른 GitHub 아이디 형식이 아닙니다."
+                    : trimmedGithubUsername !== "" && !githubConsent
+                      ? "GitHub 아이디를 입력했다면 GitHub 분석 동의가 필요해요."
+                      : null;
 
   function updateLanguageScore(type: string, value: string) {
     setLangScores((scores) => ({ ...scores, [type]: value }));
@@ -175,6 +185,8 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
           certifications,
           experienceCount: numericExperienceCount,
           consent,
+          githubUsername: trimmedGithubUsername === "" ? undefined : trimmedGithubUsername,
+          githubConsent,
         },
         proofFile,
       );
@@ -402,6 +414,48 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
             />
             <span style={{ fontSize: 14, fontWeight: 600, color: INK_FAINT }}>건</span>
           </div>
+        </section>
+
+        <section style={cardStyle} aria-labelledby="report-github-label">
+          <div id="report-github-label" style={{ ...fieldLabelStyle, marginBottom: 4 }}>GitHub 아이디 (선택)</div>
+          <p style={{ margin: "0 0 12px", fontSize: 12, color: "#B0B0BA", lineHeight: 1.5 }}>
+            입력하면 공개 레포를 분석해 보유 영역·스택 통계에 반영해요. 없으면 비워두세요.
+          </p>
+          <input
+            id="report-github-username"
+            value={githubUsername}
+            onChange={(event) => setGithubUsername(event.target.value.slice(0, 39))}
+            type="text"
+            maxLength={39}
+            placeholder="예: octocat"
+            style={inputStyle}
+          />
+          {trimmedGithubUsername !== "" && (
+            <label
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 11,
+                marginTop: 13,
+                padding: "15px 16px",
+                borderRadius: 16,
+                border: `1px solid ${githubConsent ? `color-mix(in srgb, ${PRIMARY} 32%, #E1E0EA)` : "#E1E0EA"}`,
+                background: githubConsent ? `color-mix(in srgb, ${PRIMARY} 5%, #fff)` : "#fff",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                checked={githubConsent}
+                onChange={(event) => setGithubConsent(event.target.checked)}
+                type="checkbox"
+                style={{ width: 18, height: 18, margin: "1px 0 0", accentColor: PRIMARY, flexShrink: 0 }}
+              />
+              <span style={{ fontSize: 13, color: "#4A4954", lineHeight: 1.55 }}>
+                GitHub 분석에 동의합니다: 공개 레포만 분석 · 파생값(영역·스택·집계 수치)만 저장 ·
+                아이디·레포명·URL은 저장하지 않음 · 분석 직후 아이디 폐기.
+              </span>
+            </label>
+          )}
         </section>
 
         <section style={cardStyle}>

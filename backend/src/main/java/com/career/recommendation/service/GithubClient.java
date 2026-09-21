@@ -121,6 +121,24 @@ public class GithubClient {
      * @throws GithubOrganizationAccountException 대상이 조직(Organization) 계정
      */
     public GithubAnalysisRawResult analyze(String username) {
+        return analyze(username, null);
+    }
+
+    /**
+     * E11-5 — 합격자 제보 시점 컷 버전. {@code commitCutoffInclusive}가 주어지면 그 날짜(포함)
+     * 이후 커밋은 집계하지 않는다("합격 당시 상태 복원"). null이면 기존 사용자 본인 동의 플로우와
+     * 동일하게 컷 없이 전체 커밋을 본다.
+     *
+     * 컷을 적용하면 레포 단위 커밋 조회에 {@code until} 쿼리 파라미터가 붙어 그 시점 이후
+     * 커밋은 애초에 응답에 담기지 않는다. 그 결과 author 커밋 수가 0인 레포(컷 시점엔
+     * 아직 기여하지 않았던 레포)는 결과에서 제외한다 — fork/archived 제외와 같은 층위의 필터다.
+     * 단, 파일 트리·의존성 조회는 현재 default 브랜치 기준이라 컷을 반영하지 않는다(레포 존재
+     * 자체가 컷 이전 기여로 확인된 것만 남기는 근사치 — 과거 스냅샷 트리 조회는 비용이 커 범위 밖).
+     *
+     * @throws GithubUserNotFoundException      GET /users/{u}가 404
+     * @throws GithubOrganizationAccountException 대상이 조직(Organization) 계정
+     */
+    public GithubAnalysisRawResult analyze(String username, LocalDate commitCutoffInclusive) {
         Clients clients = buildClients();
         WebClient client = clients.authClient();
         WebClient anonymousClient = clients.anonymousClient();
@@ -196,10 +214,14 @@ public class GithubClient {
         boolean rateLimited = false;
         for (Map<String, Object> repo : filtered) {
             String repoOwnerLogin = ownerLoginOf(repo, username);
-            RepoFetchOutcome outcome = fetchRepoData(client, anonymousClient, repoOwnerLogin, username, repo);
+            RepoFetchOutcome outcome = fetchRepoData(client, anonymousClient, repoOwnerLogin, username, repo, commitCutoffInclusive);
             if (outcome.rateLimited()) {
                 rateLimited = true;
                 break;
+            }
+            if (commitCutoffInclusive != null && outcome.data().commitCount() == 0) {
+                // 컷 이전엔 이 레포에 author 커밋이 없었다 — 합격 당시 상태엔 존재하지 않던 기여.
+                continue;
             }
             results.add(outcome.data());
         }
@@ -303,7 +325,12 @@ public class GithubClient {
     }
 
     private RepoFetchOutcome fetchRepoData(
-            WebClient client, WebClient anonymousClient, String repoOwnerLogin, String authorUsername, Map<String, Object> repoMeta) {
+            WebClient client, WebClient anonymousClient, String repoOwnerLogin, String authorUsername,
+            Map<String, Object> repoMeta, LocalDate commitCutoffInclusive) {
+        // GitHub의 until은 "이 시각 이전"(배타)이므로 컷 날짜를 포함하려면 다음날 00:00 UTC를 넘긴다.
+        String untilParam = commitCutoffInclusive != null
+                ? commitCutoffInclusive.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toString()
+                : null;
         String repoName = String.valueOf(repoMeta.get("name"));
         String fullName = repoOwnerLogin + "/" + repoName;
         String description = repoMeta.get("description") != null ? String.valueOf(repoMeta.get("description")) : null;
@@ -341,10 +368,15 @@ public class GithubClient {
         try {
             ResponseEntity<List> resp = requestWithAnonymousFallback(client, anonymousClient, fullName,
                     c -> c.get()
-                            .uri(uriBuilder -> uriBuilder.path("/repos/{owner}/{repo}/commits")
-                                    .queryParam("author", authorUsername)
-                                    .queryParam("per_page", commitsPerRepo)
-                                    .build(repoOwnerLogin, repoName))
+                            .uri(uriBuilder -> {
+                                uriBuilder.path("/repos/{owner}/{repo}/commits")
+                                        .queryParam("author", authorUsername)
+                                        .queryParam("per_page", commitsPerRepo);
+                                if (untilParam != null) {
+                                    uriBuilder.queryParam("until", untilParam);
+                                }
+                                return uriBuilder.build(repoOwnerLogin, repoName);
+                            })
                             .retrieve()
                             .toEntity(List.class)
                             .block(CALL_TIMEOUT));
@@ -384,10 +416,15 @@ public class GithubClient {
         try {
             ResponseEntity<List> countResp = requestWithAnonymousFallback(client, anonymousClient, fullName,
                     c -> c.get()
-                            .uri(uriBuilder -> uriBuilder.path("/repos/{owner}/{repo}/commits")
-                                    .queryParam("author", authorUsername)
-                                    .queryParam("per_page", 1)
-                                    .build(repoOwnerLogin, repoName))
+                            .uri(uriBuilder -> {
+                                uriBuilder.path("/repos/{owner}/{repo}/commits")
+                                        .queryParam("author", authorUsername)
+                                        .queryParam("per_page", 1);
+                                if (untilParam != null) {
+                                    uriBuilder.queryParam("until", untilParam);
+                                }
+                                return uriBuilder.build(repoOwnerLogin, repoName);
+                            })
                             .retrieve()
                             .toEntity(List.class)
                             .block(CALL_TIMEOUT));

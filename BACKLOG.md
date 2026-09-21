@@ -288,12 +288,15 @@
 - [ ] 모든 외부 소스: 사용자당 재조회 쿨다운 24h, 실패 시 마지막 성공값 유지
 
 ### E11-5. 합격자 측 동의 기반 수집 (BE-2/BE-3)
-- [ ] 제보 폼: GitHub 아이디 **선택 입력** + 동의 체크(분석 범위: 공개 레포만 / 저장: 파생값만 / 아이디·레포명·URL 미저장 / 분석 직후 폐기)
-- [ ] 서버: 제보 수신 시 즉시 `ContributionProfiler` 실행(서버 토큰, 공개 레포, `year` 이전 커밋) → `PasserData`에 `areas TEXT[]`, `stack TEXT[]`, `github_derived JSONB {repos, commits, activeMonths, jobRatios}` 저장. 아이디는 요청 처리 후 어디에도 남기지 않음(로그 마스킹 테스트)
-- [ ] `V14__passer_data_contribution.sql`
-- [ ] `JobSpecProfileBuilder`에 영역 보유율 집계 추가(`areaRatios`, `githubSampleSize`)
-- [ ] 자소서·포트폴리오 파일은 받지 않음 (결정). 증빙 이미지(합격 통보)만 유지
-- [ ] solved.ac 핸들도 동일 방식(선택·즉시 조회·핸들 미저장)
+
+> **2026-09-22 GitHub 수집 구현 완료** (solved.ac는 E11-4 사용자 측 codingTest와 세트라 이월)
+
+- [x] 제보 폼: GitHub 아이디 **선택 입력** + 동의 체크(공개 레포만 / 파생값만 저장 / 아이디·레포명·URL 미저장 / 분석 직후 폐기 — 4문구 명시). 아이디 입력 시 동의 필수(400)
+- [x] 서버: 제보 저장 후 `PasserGithubContributionRunner` 비동기 실행(서버 토큰, 공개 레포, **합격 연도 12/31까지의 커밋만** — `GithubClient.analyze(username, cutoff)` 오버로드, 파일 트리·의존성은 현재 브랜치 기준 근사치로 주석 명시) → `PasserData.areas/stack/github_derived {repos, commits, activeMonths, jobRatios}` 저장. 아이디 미저장(엔티티 리플렉션 테스트) + 로그 마스킹(예외 클래스명만, Logback ListAppender 테스트 2건). 분석 실패해도 제보 유효
+- [x] `V29__add_passer_data_contribution.sql` (백로그의 V14 표기는 구번호 — 실제 이력은 V29)
+- [x] `JobSpecProfileBuilder`에 영역 보유율 집계 추가(`areaRatios`, `githubSampleSize`) + 테스트
+- [x] 자소서·포트폴리오 파일은 받지 않음 (결정). 증빙 이미지(합격 통보)만 유지
+- [ ] solved.ac 핸들도 동일 방식(선택·즉시 조회·핸들 미저장) — E11-4와 함께
 
 ### E11-6. Gemini 심층 질문 (BE-1/FE) — UX, E11-3 이후
 - [ ] 경험 입력 직후 Gemini가 내용 기반 후속 질문 2~3개 생성("토큰 만료는 어떻게 처리했나요?") → 답변을 `areas` 확정·`roleSummary` 보강에 사용. **점수 없음**

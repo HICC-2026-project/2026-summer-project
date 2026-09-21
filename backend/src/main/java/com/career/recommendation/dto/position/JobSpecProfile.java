@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * BE-1 담당 — 직무별 합격자 요구 프로필. 새 계산 체계의 중심 데이터 구조.
@@ -54,6 +55,17 @@ public class JobSpecProfile {
      * 보여주면 안 된다는 기존 원칙(sampleComparisonData)을 프로필 체계에서도 유지한다.
      */
     private final boolean containsDemoData;
+
+    /**
+     * E11-5(2차 커버리지) — 영역(ExperienceArea 코드)별 보유율. 분모는 sampleSize가 아니라
+     * {@link #githubSampleSize}다(전원이 아니라 GitHub 아이디를 제보·동의해 파생값이 있는
+     * 합격자만 대상 — 코드 신호가 없는 사람은 영역을 "안 가졌다"고 판정할 근거가 없다).
+     * 보유율 내림차순, 키는 ExperienceArea.name().
+     */
+    private final Map<String, Double> areaRatios;
+
+    /** areaRatios의 분모 — github_derived가 있는(GitHub 아이디 제보·분석 성공) 비교 가능 합격자 수. */
+    private final int githubSampleSize;
 
     /**
      * 자격증 하나의 프로필 내 통계.

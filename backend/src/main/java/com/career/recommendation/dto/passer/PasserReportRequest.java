@@ -1,6 +1,7 @@
 package com.career.recommendation.dto.passer;
 
 import com.career.recommendation.dto.user.LanguageScoreRequest;
+import com.career.recommendation.util.GithubUsernameParser;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
@@ -68,6 +69,17 @@ public class PasserReportRequest {
     @AssertTrue(message = "데이터 이용에 동의해야 제보할 수 있습니다.")
     private Boolean consent;
 
+    /**
+     * E11-5 — 선택 입력. 입력하면 {@link #githubConsent}가 true여야 한다(아래 {@code
+     * isGithubConsentGivenWhenUsernamePresent} 참고). 서버는 이 값을 절대 저장하지 않는다
+     * (PasserData에 대응 컬럼 없음) — 접수 직후 비동기 분석에만 쓰고 버린다.
+     */
+    @Size(max = 39, message = "GitHub 아이디는 39자 이하여야 합니다.")
+    private String githubUsername;
+
+    /** GitHub 공개 레포 분석에 대한 동의. githubUsername이 비어 있으면 값과 무관하게 분석하지 않는다. */
+    private Boolean githubConsent;
+
     @AssertTrue(message = "학점은 학점 기준값보다 클 수 없습니다.")
     @JsonIgnore
     public boolean isGpaWithinMaximum() {
@@ -101,5 +113,23 @@ public class PasserReportRequest {
                 .count();
 
         return validTypeCount == distinctTypeCount;
+    }
+
+    @AssertTrue(message = "올바른 GitHub 아이디 형식이 아닙니다.")
+    @JsonIgnore
+    public boolean isGithubUsernameFormatValid() {
+        if (githubUsername == null || githubUsername.isBlank()) {
+            return true;
+        }
+        return GithubUsernameParser.isValidUsername(githubUsername.trim());
+    }
+
+    @AssertTrue(message = "GitHub 아이디를 입력했다면 GitHub 분석 동의가 필요합니다.")
+    @JsonIgnore
+    public boolean isGithubConsentGivenWhenUsernamePresent() {
+        if (githubUsername == null || githubUsername.isBlank()) {
+            return true;
+        }
+        return Boolean.TRUE.equals(githubConsent);
     }
 }

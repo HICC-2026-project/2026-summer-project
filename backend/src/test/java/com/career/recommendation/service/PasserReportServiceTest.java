@@ -41,6 +41,9 @@ class PasserReportServiceTest {
     private LocalProofStorageService localProofStorageService;
 
     @Mock
+    private PasserGithubContributionRunner passerGithubContributionRunner;
+
+    @Mock
     private Authentication authentication;
 
     @InjectMocks
@@ -148,6 +151,103 @@ class PasserReportServiceTest {
         assertThat(result.get(0).getJobTypeLabel()).isEqualTo("백엔드");
         assertThat(result.get(1).getStatus()).isEqualTo("VERIFIED");
         assertThat(result.get(1).getJobTypeLabel()).isEqualTo("보안");
+    }
+
+    @Test
+    void github_아이디와_동의가_있으면_저장_직후_비동기_분석을_트리거한다() {
+        UUID reportId = UUID.randomUUID();
+        User user = User.builder().id(UUID.randomUUID()).provider("KAKAO").providerId("p").build();
+        PasserReportRequest request = validRequest();
+        request.setGithubUsername("octocat");
+        request.setGithubConsent(true);
+        request.setYear(2026);
+        MockMultipartFile proof = new MockMultipartFile("proof", "a.png", "image/png", new byte[]{1});
+
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+        when(localProofStorageService.store(proof)).thenReturn(
+                new LocalProofStorageService.StoredProof("a.png", "stored.png", "image/png", 1L));
+        when(passerDataRepository.saveAndFlush(any(PasserData.class))).thenAnswer(invocation -> {
+            PasserData report = invocation.getArgument(0);
+            report.setId(reportId);
+            return report;
+        });
+
+        passerReportService.submit(authentication, request, proof);
+
+        verify(passerGithubContributionRunner).analyze(reportId, "octocat", 2026);
+    }
+
+    @Test
+    void github_아이디가_없으면_분석을_트리거하지_않는다() {
+        User user = User.builder().id(UUID.randomUUID()).provider("KAKAO").providerId("p").build();
+        PasserReportRequest request = validRequest();
+        MockMultipartFile proof = new MockMultipartFile("proof", "a.png", "image/png", new byte[]{1});
+
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+        when(localProofStorageService.store(proof)).thenReturn(
+                new LocalProofStorageService.StoredProof("a.png", "stored.png", "image/png", 1L));
+        when(passerDataRepository.saveAndFlush(any(PasserData.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        passerReportService.submit(authentication, request, proof);
+
+        verify(passerGithubContributionRunner, never()).analyze(any(), any(), any());
+    }
+
+    @Test
+    void github_동의가_false면_아이디가_있어도_분석을_트리거하지_않는다() {
+        User user = User.builder().id(UUID.randomUUID()).provider("KAKAO").providerId("p").build();
+        PasserReportRequest request = validRequest();
+        request.setGithubUsername("octocat");
+        request.setGithubConsent(false);
+        MockMultipartFile proof = new MockMultipartFile("proof", "a.png", "image/png", new byte[]{1});
+
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+        when(localProofStorageService.store(proof)).thenReturn(
+                new LocalProofStorageService.StoredProof("a.png", "stored.png", "image/png", 1L));
+        when(passerDataRepository.saveAndFlush(any(PasserData.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        passerReportService.submit(authentication, request, proof);
+
+        verify(passerGithubContributionRunner, never()).analyze(any(), any(), any());
+    }
+
+    @Test
+    void github_분석_시작이_실패해도_제보_자체는_성공한다() {
+        UUID reportId = UUID.randomUUID();
+        User user = User.builder().id(UUID.randomUUID()).provider("KAKAO").providerId("p").build();
+        PasserReportRequest request = validRequest();
+        request.setGithubUsername("octocat");
+        request.setGithubConsent(true);
+        MockMultipartFile proof = new MockMultipartFile("proof", "a.png", "image/png", new byte[]{1});
+
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+        when(localProofStorageService.store(proof)).thenReturn(
+                new LocalProofStorageService.StoredProof("a.png", "stored.png", "image/png", 1L));
+        when(passerDataRepository.saveAndFlush(any(PasserData.class))).thenAnswer(invocation -> {
+            PasserData report = invocation.getArgument(0);
+            report.setId(reportId);
+            return report;
+        });
+        org.mockito.Mockito.doThrow(new RuntimeException("실행기 큐 포화"))
+                .when(passerGithubContributionRunner).analyze(any(), any(), any());
+
+        PasserReportResponse response = passerReportService.submit(authentication, request, proof);
+
+        assertThat(response.getReportId()).isEqualTo(reportId);
+        assertThat(response.getStatus()).isEqualTo("PENDING");
+    }
+
+    /**
+     * E11-5 요구사항 "아이디는 DB 컬럼 없음" — PasserData에 GitHub 아이디를 담을 getter/필드
+     * 자체가 존재하지 않음을 리플렉션으로 못 박아둔다(존재한다면 어떻게 채워지든 저장·직렬화될
+     * 잠재 경로가 생긴다).
+     */
+    @Test
+    void PasserData_엔티티에_github_아이디를_담는_필드가_없다() {
+        assertThatThrownBy(() -> PasserData.class.getDeclaredField("githubUsername"))
+                .isInstanceOf(NoSuchFieldException.class);
+        assertThatThrownBy(() -> PasserData.class.getMethod("getGithubUsername"))
+                .isInstanceOf(NoSuchMethodException.class);
     }
 
     private PasserReportRequest validRequest() {
