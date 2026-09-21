@@ -26,8 +26,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 같은 합격자 데이터·같은 사용자로 나란히 돌려 차이를 보여주는 데모.
  *
  * 실행: backend 디렉토리에서
- *   ./mvnw test -Dtest=OldVsNewScoreComparisonDemo
- * (콘솔에 비교표가 출력된다. 통과/실패보다 출력을 읽는 용도의 파일이다.)
+ *   ./mvnw test -Pdemo
+ * (@Tag("demo")라 기본 테스트 실행에서는 제외된다. 콘솔에 비교표가 출력된다.
+ * 통과/실패보다 출력을 읽는 용도의 파일이다.)
  *
  * 옛 계산기(MatchScoreCalculator)는 v9 교체 때 삭제됐으므로, 이 파일 안의
  * OldFormulaV8이 그 공식의 핵심(유사 Top5 검색 → 축별 비율 점수 → 40/33.3/26.7
@@ -154,7 +155,9 @@ class OldVsNewScoreComparisonDemo {
     void 옛_점수와_새_위치를_나란히_비교한다() {
         JobSpecProfile profile = profileBuilder.build("BACKEND", PASSERS);
 
-        UserSpec average = user("3.60", 850, "SQLD");
+        UserSpec average = user("3.60", 850, List.of(
+                experience("PROJECT", "팀 프로젝트 - 추천 시스템"),
+                experience("INTERNSHIP", "백엔드 인턴")), "SQLD");
         UserSpec highGpaOnly = user("4.30", 0);                       // 고학점, 어학·자격증 없음
         UserSpec lowGpaCerts = user("3.00", 700, "정보처리기사", "SQLD", "ADsP"); // 저학점, 자격증 부자
         UserSpec withJunk = user("3.60", 850, "SQLD", "정크자격1", "정크자격2");
@@ -254,10 +257,20 @@ class OldVsNewScoreComparisonDemo {
     }
 
     private static UserSpec user(String gpa, int toeic, String... certs) {
+        return user(gpa, toeic, null, certs);
+    }
+
+    /** experiences를 채운 버전 — EXPERIENCE 축 percentile이 실제로 계산되는 케이스용(V26 리스트 구조). */
+    private static UserSpec user(String gpa, int toeic, List<Map<String, Object>> experiences, String... certs) {
         return UserSpec.builder()
                 .gpa(new BigDecimal(gpa)).gpaMax(new BigDecimal("4.50"))
                 .languageScores(toeic > 0 ? List.of(Map.of("type", "TOEIC", "score", toeic)) : List.of())
                 .certifications(certs)
+                .experiences(experiences)
                 .build();
+    }
+
+    private static Map<String, Object> experience(String type, String title) {
+        return Map.of("type", type, "title", title);
     }
 }
