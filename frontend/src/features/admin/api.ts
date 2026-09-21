@@ -75,3 +75,15 @@ export interface OpsSummary {
 export function getOpsSummary(): Promise<OpsSummary> {
   return apiFetch<OpsSummary>("/api/v1/admin/ops/summary");
 }
+
+// E10-2(F-09) — 활동별 추천 피드백(LIKE/DISLIKE) 집계. dislike가 많은 순으로 온다.
+export interface ActivityFeedbackSummary {
+  activityId: string;
+  activityName: string;
+  likeCount: number;
+  dislikeCount: number;
+}
+
+export function getActivityFeedbackSummary(): Promise<ActivityFeedbackSummary[]> {
+  return apiFetch<ActivityFeedbackSummary[]>("/api/v1/admin/activities/feedback-summary");
+}

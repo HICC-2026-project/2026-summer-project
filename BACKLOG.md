@@ -325,10 +325,13 @@
 - [ ] `GET /api/v1/users/me/notifications` + 읽음 처리, 홈 탭 배지(FE)
 
 ### E10-2. F-09 추천 피드백 (BE-1)
-- [ ] `POST /api/v1/recommendations/{activityId}/feedback` `{reaction: LIKE|DISLIKE}` + 테이블
-- [ ] `PromptDataBuilder`에 "사용자가 싫어한 활동 유형" 반영
-- [ ] 7/14 결정(유저당 1건 + 24시간 캐시)과 충돌 — 피드백 시 1회 재생성 허용(`dailyUpdateCount` 소모)할지, 다음 갱신 때 반영한다고 안내만 할지 결정
-- [ ] 관리자 집계: 활동별 LIKE/DISLIKE 비율 → 시드 품질 점검(E2-5 관리자 화면에 탭 추가)
+
+> **2026-09-21 구현 완료** (1인 개발 단독 결정으로 진행)
+
+- [x] `POST/DELETE /api/v1/recommendations/{activityId}/feedback` `{reaction: LIKE|DISLIKE}` + `V28 recommendation_feedback`(UNIQUE(user_id, activity_id), 탈퇴·활동 삭제 CASCADE). upsert, 같은 반응 재클릭은 DELETE로 해제. 추천 응답에 `myReaction` 주입(캐시 JSON에는 미저장 — `dailyLimitReached`와 같은 패턴). FE 홈 카드 👍/👎ᆞ"다음 추천 갱신 때 반영돼요" 안내
+- [x] `PromptDataBuilder.buildFeedbackContextText` — DISLIKE "유사 유형 피할 것"·LIKE 선호 신호, 각 최근 10건 상한. 추천·로드맵 두 서비스가 같은 신호를 봄
+- [x] **결정: 24h 캐시 유지** — 피드백 시 즉시 재생성 없음(7/14 결정 유지), 다음 갱신 때 반영 + FE 안내 문구
+- [x] 관리자 집계: `GET /api/v1/admin/activities/feedback-summary`(dislike 많은 순) + 관리자 화면 "추천 피드백" 탭
 
 ---
 

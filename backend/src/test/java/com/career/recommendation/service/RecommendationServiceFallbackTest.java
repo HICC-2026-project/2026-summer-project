@@ -5,6 +5,7 @@ import com.career.recommendation.dto.recommendation.RecommendationResponse;
 import com.career.recommendation.entity.Activity;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.repository.ActivityRepository;
+import com.career.recommendation.repository.RecommendationFeedbackRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.repository.TargetJobRepository;
@@ -55,6 +56,7 @@ class RecommendationServiceFallbackTest {
     @Mock private PromptDataBuilder promptDataBuilder;
     @Mock private ObjectMapper objectMapper;
     @Mock private AiDailyAttemptLimiter aiDailyAttemptLimiter;
+    @Mock private RecommendationFeedbackRepository recommendationFeedbackRepository;
     @Mock private Authentication authentication;
     @Mock private User user;
 
@@ -81,7 +83,7 @@ class RecommendationServiceFallbackTest {
         when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
         when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
 
-        when(geminiService.generateRecommendation(any(), any(), any(), any(), any()))
+        when(geminiService.generateRecommendation(any(), any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("Gemini 장애 시뮬레이션"));
     }
 

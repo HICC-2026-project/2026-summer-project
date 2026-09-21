@@ -102,5 +102,14 @@ public class RecommendationResponse {
          * 목록에 있을 때만 채우고, 폴백 추천은 규칙 매칭으로 채운다.
          */
         private String targetGap;
+
+        /**
+         * 이 활동에 대해 지금 로그인한 유저가 남긴 반응("LIKE"|"DISLIKE", 없으면 null).
+         * E10-2(F-09). ⚠️ 캐시(Recommendation.resultJson)에는 절대 싣지 않는다 — 캐시는
+         * 유저 1명당 1행이라도 반응은 캐시 재생성 없이 즉시 바뀔 수 있어야 하므로,
+         * RecommendationService가 캐시를 읽고 반환하기 직전(toBuilder)에만 채워 넣는다
+         * (dailyLimitReached와 같은 "반환 전용" 패턴 — 그 필드 주석 참고).
+         */
+        private String myReaction;
     }
 }

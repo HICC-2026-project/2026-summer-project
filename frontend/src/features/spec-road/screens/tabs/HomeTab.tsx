@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
+import { deleteRecommendationFeedback, postRecommendationFeedback } from "../../api";
 import { BADGE, DEMO_SPEC_POSITION, DEMO_USER_NAME, INK, INK_FAINT, INK_MUTED, LINE, PRIMARY, SURFACE_MUTED } from "../../data";
 import { StateMessage } from "../../components/StateMessage";
 import { dday, ddayColor, hasMeaningfulLangScore, jobLabel, percentileLabel } from "../../helpers";
-import type { Recommendation, RecommendationMeta, Spec, Target } from "../../types";
+import type { ReactionType, Recommendation, RecommendationMeta, Spec, Target } from "../../types";
 
 interface HomeTabProps {
   spec: Spec;
@@ -23,6 +25,29 @@ const HERO_CHIP = { fontSize: 12.5, fontWeight: 700, background: "rgba(255,255,2
 export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMeta, recLoading, recError, onOpenDetail }: HomeTabProps) {
   const targetSummary = `${target.size} ${jobLabel(target.job)}`;
   const displayName = nickname ?? DEMO_USER_NAME;
+
+  // E10-2(F-09) — 서버가 준 myReaction 위에, 이번 세션에서 클릭한 결과만 낙관적으로 덮어쓴다.
+  // recommendations가 새로 오면(재조회) 초기화된다 — 옛 오버라이드가 새 응답과 어긋나지 않도록.
+  const [reactionOverrides, setReactionOverrides] = useState<Record<string, ReactionType | null>>({});
+  // 첫 피드백 등록·반응 변경 직후 "다음 추천 갱신 때 반영돼요" 안내를 보여줄 활동 id 집합.
+  const [feedbackNotice, setFeedbackNotice] = useState<Record<string, boolean>>({});
+
+  async function handleReaction(activityId: string, reaction: ReactionType) {
+    const current = reactionOverrides[activityId] ?? recommendations.find((r) => String(r.id) === activityId)?.myReaction ?? null;
+    const next = current === reaction ? null : reaction;
+    try {
+      if (next === null) {
+        await deleteRecommendationFeedback(activityId);
+      } else {
+        await postRecommendationFeedback(activityId, reaction);
+      }
+      setReactionOverrides((prev) => ({ ...prev, [activityId]: next }));
+      setFeedbackNotice((prev) => ({ ...prev, [activityId]: true }));
+    } catch {
+      // 부가 기능이라 별도 에러 카드는 띄우지 않는다(닉네임 변경 등과 같은 정책) — 버튼 상태가
+      // 그대로면 사용자가 다시 눌러볼 수 있다.
+    }
+  }
 
   // 입력한 어학·자격증을 요약한다. 둘 다 없으면 안내 문구를 보여준다.
   // 어학은 0점 입력을 미입력으로 취급한다(hasMeaningfulLangScore 주석 참고).
@@ -252,9 +277,69 @@ export function HomeTab({ spec, target, nickname, isDemo, recommendations, recMe
                 <span style={{ color: PRIMARY, fontWeight: 700 }}>추천 이유 </span>
                 {r.reason}
               </div>
+              {/* E10-2(F-09) — 둘러보기(목업)는 실제 활동이 아니라 피드백을 받지 않는다. */}
+              {!isDemo && typeof r.id === "string" && (
+                <ReactionButtons
+                  activityId={r.id}
+                  current={reactionOverrides[r.id] ?? r.myReaction ?? null}
+                  showNotice={feedbackNotice[r.id] === true}
+                  onReact={handleReaction}
+                />
+              )}
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+interface ReactionButtonsProps {
+  activityId: string;
+  current: ReactionType | null;
+  showNotice: boolean;
+  onReact: (activityId: string, reaction: ReactionType) => void;
+}
+
+// 활동 카드의 👍/👎 — 현재 반응을 활성 표시하고, 같은 버튼을 다시 누르면 해제한다(handleReaction).
+// 카드 자체에 onOpenDetail이 걸려 있어 클릭 전파를 막아야 한다.
+function ReactionButtons({ activityId, current, showNotice, onReact }: ReactionButtonsProps) {
+  const buttonStyle = (active: boolean, activeColor: string) => ({
+    width: 34,
+    height: 34,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    border: `1px solid ${active ? activeColor : LINE}`,
+    background: active ? `color-mix(in srgb, ${activeColor} 14%, #fff)` : "#fff",
+    fontSize: 15,
+    lineHeight: 1,
+    cursor: "pointer",
+  });
+
+  return (
+    <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }} onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        aria-label="이 활동이 마음에 들어요"
+        aria-pressed={current === "LIKE"}
+        onClick={() => onReact(activityId, "LIKE")}
+        style={buttonStyle(current === "LIKE", BADGE.ok.color)}
+      >
+        👍
+      </button>
+      <button
+        type="button"
+        aria-label="이 활동은 관심 없어요"
+        aria-pressed={current === "DISLIKE"}
+        onClick={() => onReact(activityId, "DISLIKE")}
+        style={buttonStyle(current === "DISLIKE", BADGE.bad.color)}
+      >
+        👎
+      </button>
+      {showNotice && (
+        <span style={{ fontSize: 11.5, color: INK_FAINT, lineHeight: 1.4 }}>다음 추천 갱신 때 반영돼요</span>
       )}
     </div>
   );

@@ -44,7 +44,7 @@ class GeminiServiceRequestTest {
     void 기본_설정에서는_API_키가_헤더로만_나가고_URL에는_없다() {
         GeminiService s = service(true, new GeminiDailyQuota(0), OK_BODY);
 
-        String out = s.generateRecommendation("{}", "BACKEND", "ctx", "[]", java.time.LocalDate.of(2026, 8, 23));
+        String out = s.generateRecommendation("{}", "BACKEND", "ctx", "fb", "[]", java.time.LocalDate.of(2026, 8, 23));
 
         ClientRequest req = captured.get();
         assertThat(req.headers().getFirst("x-goog-api-key")).isEqualTo("secret-key");
@@ -58,7 +58,7 @@ class GeminiServiceRequestTest {
     void 비상_복귀_플래그를_끄면_예전처럼_쿼리스트링으로_나간다() {
         GeminiService s = service(false, new GeminiDailyQuota(0), OK_BODY);
 
-        s.generateRecommendation("{}", "BACKEND", "ctx", "[]", java.time.LocalDate.of(2026, 8, 23));
+        s.generateRecommendation("{}", "BACKEND", "ctx", "fb", "[]", java.time.LocalDate.of(2026, 8, 23));
 
         ClientRequest req = captured.get();
         assertThat(req.headers().getFirst("x-goog-api-key")).isNull();
@@ -70,9 +70,9 @@ class GeminiServiceRequestTest {
         GeminiDailyQuota quota = new GeminiDailyQuota(1);
         GeminiService s = service(true, quota, OK_BODY);
 
-        assertThat(s.generateRecommendation("{}", "B", "c", "[]", java.time.LocalDate.of(2026, 8, 23))).isNotEmpty();
+        assertThat(s.generateRecommendation("{}", "B", "c", "fb", "[]", java.time.LocalDate.of(2026, 8, 23))).isNotEmpty();
         captured.set(null);
-        assertThat(s.generateRecommendation("{}", "B", "c", "[]", java.time.LocalDate.of(2026, 8, 23))).isEmpty();
+        assertThat(s.generateRecommendation("{}", "B", "c", "fb", "[]", java.time.LocalDate.of(2026, 8, 23))).isEmpty();
         assertThat(captured.get()).isNull();
     }
 
@@ -80,7 +80,7 @@ class GeminiServiceRequestTest {
     void candidates가_비어_있으면_실패로_집계하고_빈_문자열을_돌려준다() {
         GeminiService s = service(true, new GeminiDailyQuota(0), "{\"candidates\":[]}");
 
-        assertThat(s.generateRecommendation("{}", "B", "c", "[]", java.time.LocalDate.of(2026, 8, 23))).isEmpty();
+        assertThat(s.generateRecommendation("{}", "B", "c", "fb", "[]", java.time.LocalDate.of(2026, 8, 23))).isEmpty();
         assertThat(stats.snapshot().failure()).isEqualTo(1);
     }
 }

@@ -49,7 +49,7 @@ class GeminiServiceGenerationConfigTest {
         server.enqueue(new MockResponse().setResponseCode(200)
                 .setHeader("Content-Type", "application/json").setBody(OK_BODY));
 
-        service.generateRecommendation("{}", "BACKEND", "ctx", "[]", java.time.LocalDate.of(2026, 8, 23));
+        service.generateRecommendation("{}", "BACKEND", "ctx", "fb", "[]", java.time.LocalDate.of(2026, 8, 23));
 
         RecordedRequest recorded = server.takeRequest();
         String body = recorded.getBody().readUtf8();
