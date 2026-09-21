@@ -38,7 +38,7 @@ public class UserController {
     }
 
     @Operation(summary = "내 스펙 저장/수정 (F-01)",
-            description = "학점·학점 기준값·복수 어학성적·복수 자격증·학년을 저장한다. 이미 있으면 전체를 덮어쓴다(upsert).")
+            description = "학점·학점 기준값·복수 어학성적·복수 자격증·학년·경험 리스트(최대 20개)를 저장한다. 이미 있으면 전체를 덮어쓴다(upsert).")
     @PutMapping("/me/spec")
     public UserSpecResponse updateMySpec(
             Authentication authentication,
