@@ -80,21 +80,21 @@
 - [x] `UserSpecRequest`에 `experiences` 추가(최대 20개, 항목 검증) — `experienceCount`는 리스트 길이 파생이라 미도입
 - [x] `UserSpecResponse`, `UserMeResponse` 반영
 - [x] 경계값 검증 테스트 — `UserSpecRequestValidationTest` 8건
-- [ ] Swagger 설명 갱신
+- [x] Swagger 설명 갱신 — `PUT /users/me/spec` 설명에 경험 리스트(최대 20개) 반영 (2026-09-21)
 
 ### E1-3. 계산 (BE-1)
 - [x] `SpecPositionCalculator` EXPERIENCE 축: `percentile(null)` → `percentileOf(expCounts, userExp)`, `myValue` = "N개"
 - [x] 결정: 0개는 **0개로 percentile 계산**, `null`일 때만 미입력 (자격증 축과 동일 방식)
 - [x] `SpecPositionCalculatorTest`: 경험 있음/0개/null/동률 케이스
 - [x] `PromptDataBuilder`에 경험 리스트가 Gemini 프롬프트로 들어가도록 연결(F-03·F-05) + 테스트
-- [ ] `OldVsNewScoreComparisonDemo` 갱신 또는 삭제
+- [x] `OldVsNewScoreComparisonDemo` 갱신 — 경험 픽스처 추가(EXPERIENCE 축 실측 케이스), 실행법 주석 `-Pdemo`로 정정 (2026-09-21)
 
 ### E1-4. 프론트 (FE)
 - [x] `types.ts` Spec에 experiences 추가, `api.ts putSpec` 직렬화 (`null→[]` 정규화)
 - [x] `OnboardingScreen` 경험 입력 섹션 (항목 추가/삭제, 유형 선택 — 개월 수는 E11 심화 스키마와 함께)
 - [x] `ProfileTab` 수정 UI
-- [ ] `CompareTab` 경험 막대가 실제로 그려지는지 확인 (현재 미입력이면 막대 없음 로직 그대로 동작)
-- [ ] 로컬 캐시(`recommendationCache.ts`)가 스펙 변경 시 무효화되는지 확인
+- [x] `CompareTab` 경험 막대 — 제네릭 렌더로 이미 동작함을 확인, EXPERIENCE 축 회귀 테스트 2건 추가 (2026-09-21)
+- [x] 로컬 캐시(`recommendationCache.ts`) 무효화 — 온보딩 경로만 지우고 있었음. `refreshSpec()`(GitHub 분석 완료/해제·AI 심층 분석 저장 경로)에 `clearLastResult()` 추가 (2026-09-21)
 
 ---
 
@@ -221,7 +221,7 @@
 - [x] `GET /activities` 필터: `jobType`(태그 정규식, GapMatcher 키워드 공유)·`deadlineAfter`(상시 포함)·`keyword`(이름·주최·설명, LIKE 이스케이프). DB 테스트 5건
 - [x] `ActivityDeadlineScheduler` — 매일 00:05 KST `deadline < today` → `is_active=false` (당일 마감 유지), DB 테스트
 - [x] 크롤러 재수집 파이프라인 + 증분 시드 — 2026-09-17 실행: discover 30건 수집 → 검수 16건 채택(제외 14건은 `excluded_urls.txt`에 사유 기록), `backend/seed/linkareer-activity-seed-2026-09-17.sql` 스냅샷, RDS 반영(활성 활동 5→21). 중복 방지는 sourceUrl 기반 UUID v5 + ON CONFLICT(문서: crawler README)
-- [ ] `targetSpec` JSON 스키마 고정 및 검증 테스트
+- [x] `targetSpec` JSON 스키마 고정 및 검증 테스트 — `TargetSpecSchema`(허용 키 `required_qualifications` 문자열 리스트 단일) + 테스트 8건(9/17 시드 실샘플 포함). 런타임 강제는 안 함(크롤러가 유일 생산자) (2026-09-21)
 
 ---
 

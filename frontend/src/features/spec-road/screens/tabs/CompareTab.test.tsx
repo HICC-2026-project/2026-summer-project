@@ -41,6 +41,46 @@ describe("CompareTab", () => {
     expect(container.querySelectorAll<HTMLElement>('div[style*="width: 50%"]')).toHaveLength(2);
   });
 
+  it("EXPERIENCE 축은 percentile이 있으면 막대가 그려지고 myValue('N개')가 표시된다", () => {
+    const { container } = render(
+      <CompareTab
+        isDemo={false}
+        recMeta={meta({
+          ...base,
+          axes: [
+            ...base.axes,
+            { axis: "EXPERIENCE", label: "경험", myValue: "3개", medianValue: "2.0개", percentile: 60, coverage: 12 },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText("경험")).toBeInTheDocument();
+    expect(screen.getByText("3개")).toBeInTheDocument();
+    expect(screen.getByText("상위 40%")).toBeInTheDocument();
+    expect(container.querySelectorAll<HTMLElement>('div[style*="width: 60%"]')).toHaveLength(1);
+  });
+
+  it("EXPERIENCE 축은 percentile이 null이면 미입력 처리되고 막대가 없다", () => {
+    const { container } = render(
+      <CompareTab
+        isDemo={false}
+        recMeta={meta({
+          ...base,
+          axes: [
+            ...base.axes,
+            { axis: "EXPERIENCE", label: "경험", myValue: "미입력", medianValue: "2.0개", percentile: null, coverage: 12 },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText("경험")).toBeInTheDocument();
+    // "미입력"은 내 값 칸과 percentile 배지 두 곳(LANGUAGE 축과 합쳐 총 네 곳)에 뜬다.
+    expect(screen.getAllByText("미입력")).toHaveLength(4);
+    expect(container.querySelectorAll<HTMLElement>('div[style*="width: 50%"]')).toHaveLength(3);
+  });
+
   it("갭은 보유율과 함께 보이고, 직무 표본이 충분하면 제보 유도 카드가 없다", () => {
     render(<CompareTab isDemo={false} recMeta={meta(base)} onOpenPasserReport={() => {}} />);
 

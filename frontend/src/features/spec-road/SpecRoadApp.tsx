@@ -332,6 +332,11 @@ export function SpecRoadApp() {
           certs: me.spec.certifications ?? [],
           experiences: fromExperiencesPayload(me.spec.experiences),
         });
+        // refreshSpec은 경험이 실제로 바뀐 뒤(GithubSection 분석 완료·해제, ProfileTab 심층
+        // 분석 저장)에만 호출된다 — 초기 로드는 별도 getMe() 경로를 쓴다. 그래서 여기서 캐시를
+        // 지워도 안 바뀐 스펙까지 무효화해 불필요한 재요청을 유발하지 않는다. 안 지우면 옛
+        // 추천·로드맵이 홈 화면에 먼저 보이다가 뒤늦게 새 결과로 바뀐다.
+        clearLastResult();
       }
     } catch {
       // 프로필 탭의 부가 기능이라 오류 카드까지 띄우지 않는다(getMyPasserReports와 동일한 정책).
