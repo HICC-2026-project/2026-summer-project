@@ -194,41 +194,6 @@ class PromptDataBuilderTest {
         assertThat(recommendationJson).contains("targetSpec");
     }
 
-    @Test
-    void 피드백이_없으면_피드백_없음_문구를_반환한다() {
-        assertThat(builder.buildFeedbackContextText(null, null)).isEqualTo("사용자가 남긴 활동 피드백 없음");
-        assertThat(builder.buildFeedbackContextText(List.of(), List.of())).isEqualTo("사용자가 남긴 활동 피드백 없음");
-    }
-
-    @Test
-    void dislike한_활동은_피할_것으로_like한_활동은_선호_신호로_요약된다() {
-        // E10-2(F-09) — DISLIKE는 "관심 없다고 표시한 활동 — 유사한 유형은 피할 것"으로,
-        // LIKE는 선호 신호로 각각 이름·유형·태그만 요약해 프롬프트에 실린다.
-        Activity disliked = Activity.builder()
-                .id(UUID.randomUUID()).type("COMPETITION").name("알고리즘 대회")
-                .tags(new String[]{"algorithm", "contest"}).build();
-        Activity liked = Activity.builder()
-                .id(UUID.randomUUID()).type("INTERNSHIP").name("백엔드 인턴")
-                .tags(new String[]{"backend"}).build();
-
-        String text = builder.buildFeedbackContextText(List.of(liked), List.of(disliked));
-
-        assertThat(text).contains("사용자가 관심 없다고 표시한 활동 — 유사한 유형·태그의 활동은 추천에서 피하세요:")
-                .contains("알고리즘 대회 (COMPETITION, 태그: algorithm, contest)")
-                .contains("사용자가 관심 있다고 표시한 활동 — 선호 신호로 참고하세요:")
-                .contains("백엔드 인턴 (INTERNSHIP, 태그: backend)");
-    }
-
-    @Test
-    void 태그가_없는_활동은_태그_없음으로_표시된다() {
-        Activity noTags = Activity.builder()
-                .id(UUID.randomUUID()).type("EXTERNAL").name("태그없는활동").tags(null).build();
-
-        String text = builder.buildFeedbackContextText(null, List.of(noTags));
-
-        assertThat(text).contains("태그없는활동 (EXTERNAL, 태그: 태그 없음)");
-    }
-
     private SpecPositionResult.AreaCoverage areaCoverage(String area, String label, boolean covered) {
         return SpecPositionResult.AreaCoverage.builder().area(area).label(label).covered(covered).build();
     }

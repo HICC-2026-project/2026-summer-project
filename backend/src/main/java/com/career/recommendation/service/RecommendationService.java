@@ -9,16 +9,13 @@ import com.career.recommendation.dto.recommendation.RecommendationResponse.Activ
 import com.career.recommendation.dto.roadmap.RoadmapResponse;
 import com.career.recommendation.dto.roadmap.RoadmapResponse.MatchedActivity;
 import com.career.recommendation.dto.roadmap.RoadmapResponse.TimelineStep;
-import com.career.recommendation.domain.ReactionType;
 import com.career.recommendation.entity.Activity;
 import com.career.recommendation.entity.Recommendation;
-import com.career.recommendation.entity.RecommendationFeedback;
 import com.career.recommendation.entity.RoadmapCache;
 import com.career.recommendation.entity.TargetJob;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.entity.UserSpec;
 import com.career.recommendation.repository.ActivityRepository;
-import com.career.recommendation.repository.RecommendationFeedbackRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.repository.TargetJobRepository;
@@ -71,7 +68,6 @@ public class RecommendationService {
     private final PromptDataBuilder promptDataBuilder;
     private final ObjectMapper objectMapper;
     private final AiDailyAttemptLimiter aiDailyAttemptLimiter;
-    private final RecommendationFeedbackRepository recommendationFeedbackRepository;
 
     private static final int MAX_RECOMMENDABLE_ACTIVITIES = 20;
     private static final ZoneId SERVICE_ZONE_ID = ServiceTime.ZONE_ID;
@@ -140,10 +136,10 @@ public class RecommendationService {
             // (2026-08-11 실제 제보). 하루 한도는 Gemini 호출(활동 목록 재생성)에만 적용한다.
             // dailyLimitReached 플래그로 FE가 "활동 목록은 내일 갱신" 안내를 띄울 수 있게 한다.
             if (wantsRefresh) {
-                return applyMyReactions(mergeRoadmapActivities(
-                        rebuildPositionFromCurrentSpec(cachedResponse, userSpec, targetJob), user.getId(), today), user.getId());
+                return mergeRoadmapActivities(
+                        rebuildPositionFromCurrentSpec(cachedResponse, userSpec, targetJob), user.getId(), today);
             }
-            return applyMyReactions(mergeRoadmapActivities(cachedResponse, user.getId(), today), user.getId());
+            return mergeRoadmapActivities(cachedResponse, user.getId(), today);
         }
 
         // 3. 직무 요구 프로필 조회(캐시됨) 및 위치·갭 계산 — 로드맵과 같은 진입점을 쓴다.
@@ -167,68 +163,20 @@ public class RecommendationService {
         String positionContext = promptDataBuilder.buildPositionContextText(position);
 
         // 한도에 막혔는데 캐시까지 없거나 깨진 경우(위 조기 반환을 못 탄 경우): Gemini 없이 규칙 기반 폴백을 준다.
-        RecommendationResponse response;
-        if (needsNewAiCall) {
-            // E10-2(F-09) — 사용자가 남긴 활동 피드백을 프롬프트에 반영한다. Gemini를 실제로
-            // 부를 때만 조회한다(폴백 경로는 규칙 기반이라 필요 없다).
-            String feedbackContext = buildFeedbackContext(user.getId());
-            response = callGeminiWithRetry(
-                    userSpecJson, targetJobStr, positionContext, feedbackContext, availableActivitiesJson,
-                    position, activeActivities,
-                    jobType != null ? jobType : "미설정", today);
-        } else {
-            response = buildFallbackResponse(activeActivities, position, jobType != null ? jobType : "미설정")
-                    .toBuilder().dailyLimitReached(true).build();
-        }
+        RecommendationResponse response = needsNewAiCall
+                ? callGeminiWithRetry(
+                        userSpecJson, targetJobStr, positionContext, availableActivitiesJson,
+                        position, activeActivities,
+                        jobType != null ? jobType : "미설정", today)
+                : buildFallbackResponse(activeActivities, position, jobType != null ? jobType : "미설정")
+                        .toBuilder().dailyLimitReached(true).build();
 
         // 6. 결과 캐싱 — 별도 Bean에서 호출. (daily_update_count는 통계용으로만 남아 있고 하루 게이트는 AiDailyAttemptLimiter가 맡는다)
         if (response.isAiRecommendation()) {
             recommendationCacheService.save(user, response);
         }
 
-        return applyMyReactions(mergeRoadmapActivities(response, user.getId(), today), user.getId());
-    }
-
-    /**
-     * E10-2(F-09) — 유저가 남긴 반응(LIKE/DISLIKE)을 최근 갱신순 상한 개수까지 조회해
-     * Gemini 프롬프트용 텍스트로 변환한다. RoadmapService도 같은 방식으로 조회해 추천·로드맵이
-     * 같은 피드백 신호를 보게 한다.
-     */
-    private String buildFeedbackContext(UUID userId) {
-        List<Activity> liked = recommendationFeedbackRepository
-                .findByUser_IdAndReactionOrderByUpdatedAtDesc(
-                        userId, ReactionType.LIKE.name(),
-                        PageRequest.of(0, PromptDataBuilder.FEEDBACK_ACTIVITY_PROMPT_LIMIT))
-                .stream().map(RecommendationFeedback::getActivity).toList();
-        List<Activity> disliked = recommendationFeedbackRepository
-                .findByUser_IdAndReactionOrderByUpdatedAtDesc(
-                        userId, ReactionType.DISLIKE.name(),
-                        PageRequest.of(0, PromptDataBuilder.FEEDBACK_ACTIVITY_PROMPT_LIMIT))
-                .stream().map(RecommendationFeedback::getActivity).toList();
-        return promptDataBuilder.buildFeedbackContextText(liked, disliked);
-    }
-
-    /**
-     * E10-2(F-09) — 응답의 각 활동에 지금 로그인한 유저가 남긴 반응(myReaction)을 채운다.
-     * dailyLimitReached와 같은 "반환 전용" 패턴이다 — 캐시(Recommendation.resultJson)에는
-     * 절대 싣지 않는다. 반응은 캐시 재생성 없이도 즉시 바뀔 수 있어야 하므로, 캐시를 읽고
-     * 최종 응답을 만드는 모든 경로의 맨 마지막에 이 메서드를 거친다.
-     */
-    private RecommendationResponse applyMyReactions(RecommendationResponse response, UUID userId) {
-        if (response == null || response.getActivities() == null || response.getActivities().isEmpty()) {
-            return response;
-        }
-        Map<UUID, String> reactions = recommendationFeedbackRepository.findByUser_Id(userId).stream()
-                .collect(Collectors.toMap(f -> f.getActivity().getId(), RecommendationFeedback::getReaction));
-        if (reactions.isEmpty()) {
-            return response;
-        }
-        List<ActivityRecommendation> withReactions = response.getActivities().stream()
-                .map(a -> (a.getId() != null && reactions.containsKey(a.getId()))
-                        ? a.toBuilder().myReaction(reactions.get(a.getId())).build()
-                        : a)
-                .toList();
-        return response.toBuilder().activities(withReactions).build();
+        return mergeRoadmapActivities(response, user.getId(), today);
     }
 
     /**
@@ -433,15 +381,14 @@ public class RecommendationService {
      * Gemini API를 호출하고 JSON 파싱을 시도한다. 실패 시 1회 재시도 후 Fallback 반환.
      */
     private RecommendationResponse callGeminiWithRetry(
-            String userSpecJson, String targetJobStr, String positionContext, String feedbackContext,
-            String availableActivitiesJson,
+            String userSpecJson, String targetJobStr, String positionContext, String availableActivitiesJson,
             SpecPositionResult position, List<Activity> activeActivities,
             String targetJobName, LocalDate today) {
 
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
                 String rawJson = geminiService.generateRecommendation(
-                        userSpecJson, targetJobStr, positionContext, feedbackContext, availableActivitiesJson, today);
+                        userSpecJson, targetJobStr, positionContext, availableActivitiesJson, today);
                 if (rawJson != null && !rawJson.isBlank()) {
                     RecommendationResponse res = parseGeminiResponse(
                             rawJson, position, activeActivities, targetJobName);

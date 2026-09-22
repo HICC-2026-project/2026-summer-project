@@ -3,9 +3,6 @@ export type OnboardStep = 0 | 1;
 export type Tab = "home" | "roadmap" | "compare" | "profile";
 export type Priority = "HIGH" | "MEDIUM" | "LOW";
 
-// E10-2(F-09) 추천 피드백. 활동당 반응은 1개뿐 — 백엔드 domain.ReactionType과 같은 두 값.
-export type ReactionType = "LIKE" | "DISLIKE";
-
 // 백엔드 TargetJobRequest가 @Pattern으로 허용하는 직무 코드.
 // 화면에는 한글 라벨을 보여주고 저장할 때는 이 코드를 보낸다.
 export type JobCode = "BACKEND" | "FRONTEND" | "DATA_ENGINEER" | "AI_ML" | "PM" | "SECURITY";
@@ -158,8 +155,6 @@ export interface Recommendation {
   passers?: number;
   tags?: string[];
   bullets?: string[];
-  // E10-2(F-09) — 지금 로그인한 유저가 이 활동에 남긴 반응. 없으면 null/undefined.
-  myReaction?: ReactionType | null;
 }
 
 // GET /api/v1/recommendations 응답의 개별 활동 (실제 컨트롤러/DTO 기준).
@@ -171,8 +166,6 @@ export interface ApiRecommendationItem {
   reason: string;
   deadline: string;
   targetGap?: string | null;
-  // E10-2(F-09) — 캐시에는 저장되지 않고 응답 시점에 채워진다(백엔드 DTO 주석 참고).
-  myReaction?: ReactionType | null;
 }
 
 // specPosition의 축 하나 — 합격자 분포 내 내 위치.

@@ -185,7 +185,6 @@ export function fromRecommendationsResponse(res: RecommendationsResponse): Recom
     reason: a.reason,
     deadline: a.deadline,
     targetGap: a.targetGap ?? null,
-    myReaction: a.myReaction ?? null,
   }));
 }
 

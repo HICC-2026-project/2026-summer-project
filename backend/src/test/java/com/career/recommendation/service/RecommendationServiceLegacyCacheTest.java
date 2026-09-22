@@ -4,7 +4,6 @@ import com.career.recommendation.dto.position.SpecPositionResult;
 import com.career.recommendation.dto.recommendation.RecommendationResponse;
 import com.career.recommendation.entity.Recommendation;
 import com.career.recommendation.entity.User;
-import com.career.recommendation.repository.RecommendationFeedbackRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.repository.TargetJobRepository;
@@ -55,7 +54,6 @@ class RecommendationServiceLegacyCacheTest {
     @Mock private GeminiService geminiService;
     @Mock private SpecPositionService specPositionService;
     @Mock private AiDailyAttemptLimiter aiDailyAttemptLimiter;
-    @Mock private RecommendationFeedbackRepository recommendationFeedbackRepository;
     @Mock private Authentication authentication;
     @Mock private User user;
 
@@ -112,7 +110,7 @@ class RecommendationServiceLegacyCacheTest {
         RecommendationResponse response = recommendationService.getRecommendations(authentication);
 
         // 핵심 불변식: 하루 제한에 도달했으므로 legacy든 아니든 Gemini를 다시 부르지 않는다.
-        verify(geminiService, never()).generateRecommendation(any(), any(), any(), any(), any(), any());
+        verify(geminiService, never()).generateRecommendation(any(), any(), any(), any(), any());
         // 위치·갭은 옛 캐시 값이 아니라 현재 스펙으로 재계산된 값이다 —
         // 예전엔 캐시를 통째로 반환해 스펙을 바꾼 사용자에게 옛 결과가 그대로 보였다.
         assertThat(response.getSpecPosition()).isNotNull();

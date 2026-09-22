@@ -12,7 +12,6 @@ import type {
   MyPasserReport,
   PasserReportRequest,
   PasserReportResponse,
-  ReactionType,
   RecommendationsResponse,
   RoadmapResponse,
   Spec,
@@ -48,20 +47,6 @@ export function getActivity(activityId: string): Promise<ActivityDetailResponse>
 // isAiRecommendation이 false면 기본 추천(fallback)이다.
 export function getRecommendations(): Promise<RecommendationsResponse> {
   return apiFetch<RecommendationsResponse>("/api/v1/recommendations");
-}
-
-// E10-2(F-09) — 활동에 대한 반응 등록/변경(upsert). 즉시 추천을 재생성하지 않고
-// 다음 추천 갱신 때 반영된다(7/14 "유저당 1건 + 24시간 캐시" 결정 유지 — 백엔드 주석 참고).
-export function postRecommendationFeedback(activityId: string, reaction: ReactionType): Promise<void> {
-  return apiFetch<void>(`/api/v1/recommendations/${activityId}/feedback`, {
-    method: "POST",
-    body: JSON.stringify({ reaction }),
-  });
-}
-
-// 같은 반응 버튼을 다시 누르면 해제한다.
-export function deleteRecommendationFeedback(activityId: string): Promise<void> {
-  return apiFetch<void>(`/api/v1/recommendations/${activityId}/feedback`, { method: "DELETE" });
 }
 
 // F-05 커리어 로드맵. 실제 컨트롤러 경로는 /roadmaps (명세서의 /roadmap과 다름 — 실제 기준).

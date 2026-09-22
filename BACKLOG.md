@@ -327,14 +327,9 @@
 - [ ] 스케줄러: 매일 00:05 D-7/D-1 대상 조회 → `notifications` 적재 (v8 "D-day 자정 박제" 규칙과 동일 기준으로 `deadline` 비교)
 - [ ] `GET /api/v1/users/me/notifications` + 읽음 처리, 홈 탭 배지(FE)
 
-### E10-2. F-09 추천 피드백 (BE-1)
+### E10-2. F-09 추천 피드백 (BE-1) — **철회 (2026-09-23)**
 
-> **2026-09-21 구현 완료** (1인 개발 단독 결정으로 진행)
-
-- [x] `POST/DELETE /api/v1/recommendations/{activityId}/feedback` `{reaction: LIKE|DISLIKE}` + `V28 recommendation_feedback`(UNIQUE(user_id, activity_id), 탈퇴·활동 삭제 CASCADE). upsert, 같은 반응 재클릭은 DELETE로 해제. 추천 응답에 `myReaction` 주입(캐시 JSON에는 미저장 — `dailyLimitReached`와 같은 패턴). FE 홈 카드 👍/👎ᆞ"다음 추천 갱신 때 반영돼요" 안내
-- [x] `PromptDataBuilder.buildFeedbackContextText` — DISLIKE "유사 유형 피할 것"·LIKE 선호 신호, 각 최근 10건 상한. 추천·로드맵 두 서비스가 같은 신호를 봄
-- [x] **결정: 24h 캐시 유지** — 피드백 시 즉시 재생성 없음(7/14 결정 유지), 다음 갱신 때 반영 + FE 안내 문구
-- [x] 관리자 집계: `GET /api/v1/admin/activities/feedback-summary`(dislike 많은 순) + 관리자 화면 "추천 피드백" 탭
+> 2026-09-21 PR #67로 구현(LIKE/DISLIKE 버튼·프롬프트 반영·관리자 집계, V28)했다가 **2026-09-23 기능 전체 철회** — LIKE는 신호가 모호하고(선호와 "저장해 두고 싶다"가 섞임), DISLIKE만 남기기엔 기능 무게 대비 가치가 작다고 판단. "관심 표시"는 E10-1 북마크가 맡는다. PR #67 revert + V30으로 테이블 드롭(V28 파일은 운영 RDS 적용 이력이라 유지). 재추진 시 #67 diff 참고.
 
 ---
 

@@ -1,8 +1,6 @@
 package com.career.recommendation.controller;
 
-import com.career.recommendation.exception.ActivityNotFoundException;
 import com.career.recommendation.security.JwtTokenProvider;
-import com.career.recommendation.service.RecommendationFeedbackService;
 import com.career.recommendation.service.RecommendationService;
 import com.career.recommendation.service.RoadmapService;
 import org.junit.jupiter.api.Test;
@@ -11,18 +9,12 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.UUID;
-
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -43,9 +35,6 @@ class RecommendationControllerValidationTest {
 
     @MockBean
     private RoadmapService roadmapService;
-
-    @MockBean
-    private RecommendationFeedbackService recommendationFeedbackService;
 
     @MockBean
     private JwtTokenProvider jwtTokenProvider;
@@ -88,60 +77,5 @@ class RecommendationControllerValidationTest {
         mockMvc.perform(get("/api/v1/roadmaps"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("사용자가 존재하지 않습니다."));
-    }
-
-    @Test
-    void 피드백_등록시_존재하지_않는_활동이면_404를_반환한다() throws Exception {
-        UUID activityId = UUID.randomUUID();
-        doThrow(new ActivityNotFoundException(activityId))
-                .when(recommendationFeedbackService).upsert(any(), org.mockito.ArgumentMatchers.eq(activityId), any());
-
-        mockMvc.perform(post("/api/v1/recommendations/{activityId}/feedback", activityId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reaction\":\"LIKE\"}"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("ACTIVITY_NOT_FOUND"));
-    }
-
-    @Test
-    void 피드백_등록시_reaction이_없으면_400을_반환한다() throws Exception {
-        mockMvc.perform(post("/api/v1/recommendations/{activityId}/feedback", UUID.randomUUID())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void 피드백_등록시_알_수_없는_reaction_값이면_400을_반환한다() throws Exception {
-        // LIKE/DISLIKE가 아닌 값은 enum 역직렬화 단계에서 HttpMessageNotReadableException → 400.
-        mockMvc.perform(post("/api/v1/recommendations/{activityId}/feedback", UUID.randomUUID())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reaction\":\"NEUTRAL\"}"))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void 피드백_해제시_존재하지_않는_활동이면_404를_반환한다() throws Exception {
-        UUID activityId = UUID.randomUUID();
-        doThrow(new ActivityNotFoundException(activityId))
-                .when(recommendationFeedbackService).delete(any(), org.mockito.ArgumentMatchers.eq(activityId));
-
-        mockMvc.perform(delete("/api/v1/recommendations/{activityId}/feedback", activityId))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("ACTIVITY_NOT_FOUND"));
-    }
-
-    @Test
-    void 피드백_등록이_정상이면_204를_반환한다() throws Exception {
-        mockMvc.perform(post("/api/v1/recommendations/{activityId}/feedback", UUID.randomUUID())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reaction\":\"DISLIKE\"}"))
-                .andExpect(status().isNoContent());
-    }
-
-    @Test
-    void 피드백_해제가_정상이면_204를_반환한다() throws Exception {
-        mockMvc.perform(delete("/api/v1/recommendations/{activityId}/feedback", UUID.randomUUID()))
-                .andExpect(status().isNoContent());
     }
 }
