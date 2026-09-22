@@ -8,16 +8,13 @@ import com.career.recommendation.dto.roadmap.RoadmapResponse;
 import com.career.recommendation.dto.roadmap.RoadmapResponse.MatchedActivity;
 import com.career.recommendation.dto.roadmap.RoadmapResponse.TimelineStep;
 import com.career.recommendation.dto.position.SpecPositionResult;
-import com.career.recommendation.domain.ReactionType;
 import com.career.recommendation.entity.Activity;
-import com.career.recommendation.entity.RecommendationFeedback;
 import com.career.recommendation.entity.TargetJob;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.entity.UserSpec;
 import com.career.recommendation.entity.RoadmapCache;
 import com.career.recommendation.entity.Recommendation;
 import com.career.recommendation.repository.ActivityRepository;
-import com.career.recommendation.repository.RecommendationFeedbackRepository;
 import com.career.recommendation.repository.TargetJobRepository;
 import com.career.recommendation.repository.UserSpecRepository;
 import com.career.recommendation.repository.RoadmapCacheRepository;
@@ -67,7 +64,6 @@ public class RoadmapService {
     private final PromptDataBuilder promptDataBuilder;
     private final AiDailyAttemptLimiter aiDailyAttemptLimiter;
     private final ObjectMapper objectMapper;
-    private final RecommendationFeedbackRepository recommendationFeedbackRepository;
 
     private static final int MAX_RECOMMENDABLE_ACTIVITIES = 20;
     private static final ZoneId SERVICE_ZONE_ID = ServiceTime.ZONE_ID;
@@ -195,13 +191,9 @@ public class RoadmapService {
         activeActivities = GraduateOnlyActivityFilter.filterForGrade(activeActivities, grade);
         String availableActivitiesJson = promptDataBuilder.buildAvailableActivitiesJsonForRoadmap(activeActivities, topRecommendedIds);
 
-        // E10-2(F-09) — 사용자가 남긴 활동 피드백을 로드맵 프롬프트에도 반영한다. 추천(F-03)과
-        // 같은 방식으로 조회해 두 서비스가 같은 피드백 신호를 보게 한다.
-        String feedbackContextStr = buildFeedbackContext(user.getId());
-
         // 4. Gemini API 호출 (최대 2회 시도)
         RoadmapResponse response = callGeminiWithRetry(userSpecJson, targetJobStr, grade,
-                positionContextStr, feedbackContextStr, topRecommendedJson, availableActivitiesJson, activeActivities, today);
+                positionContextStr, topRecommendedJson, availableActivitiesJson, activeActivities, today);
 
         if (response.isAiRoadmap()) {
             roadmapCacheService.save(user, response);
@@ -210,34 +202,15 @@ public class RoadmapService {
         return response;
     }
 
-    /**
-     * E10-2(F-09) — 유저가 남긴 반응(LIKE/DISLIKE)을 최근 갱신순 상한 개수까지 조회해
-     * Gemini 프롬프트용 텍스트로 변환한다. RecommendationService.buildFeedbackContext와 같은
-     * 조회·상한 규칙을 쓴다 — 추천·로드맵이 같은 피드백 신호를 보게 하기 위함이다.
-     */
-    private String buildFeedbackContext(UUID userId) {
-        List<Activity> liked = recommendationFeedbackRepository
-                .findByUser_IdAndReactionOrderByUpdatedAtDesc(
-                        userId, ReactionType.LIKE.name(),
-                        PageRequest.of(0, PromptDataBuilder.FEEDBACK_ACTIVITY_PROMPT_LIMIT))
-                .stream().map(RecommendationFeedback::getActivity).toList();
-        List<Activity> disliked = recommendationFeedbackRepository
-                .findByUser_IdAndReactionOrderByUpdatedAtDesc(
-                        userId, ReactionType.DISLIKE.name(),
-                        PageRequest.of(0, PromptDataBuilder.FEEDBACK_ACTIVITY_PROMPT_LIMIT))
-                .stream().map(RecommendationFeedback::getActivity).toList();
-        return promptDataBuilder.buildFeedbackContextText(liked, disliked);
-    }
-
     private RoadmapResponse callGeminiWithRetry(String userSpecJson, String targetJobStr, Integer grade,
-                                                 String positionContextStr, String feedbackContextStr, String topRecommendedJson,
+                                                 String positionContextStr, String topRecommendedJson,
                                                  String availableActivitiesJson, List<Activity> activeActivities,
                                                  LocalDate today) {
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
                 String rawJson = geminiService.generateRoadmap(
                         userSpecJson, targetJobStr, grade,
-                        positionContextStr, feedbackContextStr, topRecommendedJson, availableActivitiesJson, today);
+                        positionContextStr, topRecommendedJson, availableActivitiesJson, today);
                 if (rawJson == null || rawJson.isBlank()) {
                     log.warn("Gemini 로드맵 응답 비어있음 (시도 {}회)", attempt);
                 } else {

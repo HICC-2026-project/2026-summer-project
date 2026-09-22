@@ -212,45 +212,6 @@ public class PromptDataBuilder {
         return sb.toString();
     }
 
-    /** 프롬프트에 실을 피드백 활동 상한(LIKE/DISLIKE 각각). 호출부(RecommendationService·RoadmapService)가
-     * RecommendationFeedbackRepository 조회를 이 상한으로 페이징해 넘긴다. */
-    public static final int FEEDBACK_ACTIVITY_PROMPT_LIMIT = 10;
-
-    /**
-     * E10-2(F-09) — 사용자가 남긴 활동 피드백(LIKE/DISLIKE)을 Gemini 프롬프트용 텍스트로 변환한다.
-     * DISLIKE는 "관심 없다고 표시한 활동 — 유사한 유형은 피할 것"으로, LIKE는 선호 신호로 각각
-     * 이름·유형·태그만 요약해 담는다(targetSpec 등 상세는 필요 없다). 추천(F-03)·로드맵(F-05)
-     * 두 서비스가 이 메서드를 함께 써서 같은 피드백 신호를 본다.
-     */
-    public String buildFeedbackContextText(List<Activity> likedActivities, List<Activity> dislikedActivities) {
-        boolean hasDisliked = dislikedActivities != null && !dislikedActivities.isEmpty();
-        boolean hasLiked = likedActivities != null && !likedActivities.isEmpty();
-        if (!hasDisliked && !hasLiked) {
-            return "사용자가 남긴 활동 피드백 없음";
-        }
-        StringBuilder sb = new StringBuilder();
-        if (hasDisliked) {
-            sb.append("사용자가 관심 없다고 표시한 활동 — 유사한 유형·태그의 활동은 추천에서 피하세요:\n");
-            for (Activity a : dislikedActivities) {
-                sb.append("- ").append(summarizeActivityForFeedback(a)).append('\n');
-            }
-        }
-        if (hasLiked) {
-            sb.append("사용자가 관심 있다고 표시한 활동 — 선호 신호로 참고하세요:\n");
-            for (Activity a : likedActivities) {
-                sb.append("- ").append(summarizeActivityForFeedback(a)).append('\n');
-            }
-        }
-        return sb.toString();
-    }
-
-    private String summarizeActivityForFeedback(Activity activity) {
-        String tags = (activity.getTags() != null && activity.getTags().length > 0)
-                ? String.join(", ", activity.getTags())
-                : "태그 없음";
-        return String.format("%s (%s, 태그: %s)", activity.getName(), activity.getType(), tags);
-    }
-
     /**
      * 목표 직무 정보를 프롬프트용 문자열로 변환한다.
      */

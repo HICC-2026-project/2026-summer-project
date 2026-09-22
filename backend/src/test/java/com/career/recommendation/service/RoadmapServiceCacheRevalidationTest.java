@@ -7,7 +7,6 @@ import com.career.recommendation.entity.Activity;
 import com.career.recommendation.entity.RoadmapCache;
 import com.career.recommendation.entity.User;
 import com.career.recommendation.repository.ActivityRepository;
-import com.career.recommendation.repository.RecommendationFeedbackRepository;
 import com.career.recommendation.repository.RecommendationRepository;
 import com.career.recommendation.repository.RoadmapCacheRepository;
 import com.career.recommendation.repository.TargetJobRepository;
@@ -55,7 +54,6 @@ class RoadmapServiceCacheRevalidationTest {
     @Mock private GeminiService geminiService;
     @Mock private PromptDataBuilder promptDataBuilder;
     @Mock private AiDailyAttemptLimiter aiDailyAttemptLimiter;
-    @Mock private RecommendationFeedbackRepository recommendationFeedbackRepository;
     @Mock private Authentication authentication;
     @Mock private User user;
 
@@ -140,7 +138,7 @@ class RoadmapServiceCacheRevalidationTest {
         assertThat(response.getTimeline().get(2).getMatchedActivities()).isEmpty();
 
         // 남은 활동(keepId)이 있어 캐시가 여전히 유효 판정되므로 Gemini를 다시 부르지 않는다.
-        verify(geminiService, never()).generateRoadmap(any(), any(), any(), any(), any(), any(), any(), any());
+        verify(geminiService, never()).generateRoadmap(any(), any(), any(), any(), any(), any(), any());
     }
 
     /**
@@ -191,7 +189,7 @@ class RoadmapServiceCacheRevalidationTest {
         when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
         when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
         when(promptDataBuilder.buildAvailableActivitiesJsonForRoadmap(any(), any())).thenReturn("[]");
-        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn("{\"timeline\":[{\"period\":\"3학년 2학기\",\"priority\":\"HIGH\","
                         + "\"activity\":\"새로 생성된 활동\",\"reason\":\"새 사유\",\"activityIds\":[]}]}");
 
@@ -199,7 +197,7 @@ class RoadmapServiceCacheRevalidationTest {
 
         RoadmapResponse response = roadmapService.getRoadmap(authentication);
 
-        verify(geminiService).generateRoadmap(any(), any(), any(), any(), any(), any(), any(), any());
+        verify(geminiService).generateRoadmap(any(), any(), any(), any(), any(), any(), any());
         assertThat(response.getTimeline()).hasSize(1);
         assertThat(response.getTimeline().get(0).getActivity()).isEqualTo("새로 생성된 활동");
     }
@@ -245,7 +243,7 @@ class RoadmapServiceCacheRevalidationTest {
 
         assertThat(response.getTimeline()).hasSize(1);
         assertThat(response.getTimeline().get(0).getActivity()).isEqualTo("자격증 취득 가이드");
-        verify(geminiService, never()).generateRoadmap(any(), any(), any(), any(), any(), any(), any(), any());
+        verify(geminiService, never()).generateRoadmap(any(), any(), any(), any(), any(), any(), any());
         // matchedActivities가 원래부터 비어 있어 필터 대상 id 자체가 없으므로 DB 대조도 생략된다.
         verify(activityRepository, never()).findAllById(any());
     }
@@ -301,6 +299,6 @@ class RoadmapServiceCacheRevalidationTest {
         assertThat(response.getTimeline().get(0).getMatchedActivities())
                 .as("필터된(빈) matchedActivities라도 캐시를 그대로 반환한다")
                 .isEmpty();
-        verify(geminiService, never()).generateRoadmap(any(), any(), any(), any(), any(), any(), any(), any());
+        verify(geminiService, never()).generateRoadmap(any(), any(), any(), any(), any(), any(), any());
     }
 }
