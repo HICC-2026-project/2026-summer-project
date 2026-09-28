@@ -428,7 +428,7 @@ export function PasserReportScreen({ initialSpec, initialJob, onBack, onSubmit }
             type="text"
             maxLength={39}
             placeholder="예: octocat"
-            style={inputStyle}
+            style={{ ...inputStyle, width: "100%" }}
           />
           {trimmedGithubUsername !== "" && (
             <label

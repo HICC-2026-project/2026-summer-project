@@ -28,15 +28,15 @@ export function ExperienceCard({ experience: exp, onAnalyzeDepth }: ExperienceCa
         {experienceTypeLabel(exp.type)}
         {exp.months != null && ` · ${exp.months}개월`}
       </div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: INK, overflowWrap: "anywhere" }}>
         {exp.title}
         {exp.source === "GITHUB" && <GithubExperienceBadge />}
       </div>
       {exp.role && (
-        <div style={{ fontSize: 12.5, color: "#4A4954", fontWeight: 600, marginTop: 2 }}>{exp.role}</div>
+        <div style={{ fontSize: 12.5, color: "#4A4954", fontWeight: 600, marginTop: 2, overflowWrap: "anywhere" }}>{exp.role}</div>
       )}
       {exp.description && (
-        <div style={{ fontSize: 12.5, color: INK_MUTED, marginTop: 2, lineHeight: 1.5 }}>{exp.description}</div>
+        <div style={{ fontSize: 12.5, color: INK_MUTED, marginTop: 2, lineHeight: 1.5, overflowWrap: "anywhere" }}>{exp.description}</div>
       )}
       {(hasStack || hasAreas || depth) && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
@@ -52,6 +52,8 @@ export function ExperienceCard({ experience: exp, onAnalyzeDepth }: ExperienceCa
                 border: `1px solid color-mix(in srgb, ${PRIMARY} 20%, #fff)`,
                 padding: "3px 9px",
                 borderRadius: 999,
+                maxWidth: "100%",
+                overflowWrap: "anywhere",
               }}
             >
               {s}

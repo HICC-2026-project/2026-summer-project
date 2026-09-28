@@ -520,7 +520,9 @@ export function OnboardingScreen({
                     border: "1px solid #EAE9F1",
                   }}
                 >
-                  <ExperienceCard experience={exp} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <ExperienceCard experience={exp} />
+                  </div>
                   <button
                     type="button"
                     onClick={() => onRemoveExperience(idx)}
