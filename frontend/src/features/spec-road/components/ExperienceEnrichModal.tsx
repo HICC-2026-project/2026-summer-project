@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ApiError } from "@/lib/api";
 import { postExperienceEnrich, postExperienceQuestions } from "../api";
 import { DEPTH_LABELS, INK, INK_FAINT, INK_MUTED, LINE, PRIMARY } from "../data";
@@ -26,11 +27,21 @@ type Phase =
   // 질문 생성·분석 API가 에러를 던진 경우(한도 초과 등) — ApiError.message를 그대로 보여준다.
   | { kind: "error"; message: string };
 
-// 실사용 피드백(2026-09-17): 예전엔 position:absolute였는데, 가까운 positioned 조상이 없으면
-// 문서 전체(스크롤 가능한 긴 프로필 탭)가 컨테이닝 블록이 되어 alignItems:flex-end가 시트를
-// "현재 보이는 화면"이 아니라 "문서 맨 아래"에 붙였다 — 사용자에겐 창이 엉뚱한 위치에 뜨고,
+// 실사용 피드백(2026-09-17, PR #65/33926ea): 예전엔 position:absolute였는데, 가까운 positioned
+// 조상이 없으면 문서 전체(스크롤 가능한 긴 프로필 탭)가 컨테이닝 블록이 되어 alignItems:flex-end가
+// 시트를 "현재 보이는 화면"이 아니라 "문서 맨 아래"에 붙였다 — 사용자에겐 창이 엉뚱한 위치에 뜨고,
 // 시트 맨 아래에 있는 제출 버튼은 그 아래로 한참 스크롤해야 보였다("제출 버튼이 없다"는
-// 제보의 실제 원인). position:fixed로 바꿔 뷰포트 기준 중앙에 고정한다.
+// 제보의 실제 원인). position:fixed로 바꿔 뷰포트 기준 중앙에 고정했었다.
+//
+// ⚠️ 그런데도 재발했다 — 이 모달을 렌더링하는 조상(예: ProfileTab 최상위 div)이 진입 애니메이션
+// `animation: cfUp .35s ease both`를 쓴다. fill-mode "both"는 애니메이션이 끝난 뒤에도 마지막
+// 키프레임의 `transform: translateY(0)`을 계속 적용 상태로 남긴다 — translateY(0)처럼 항등이어도
+// "none이 아닌 transform" 값이 있으면 CSS Transforms 스펙상 그 조상이 하위 position:fixed 요소의
+// 컨테이닝 블록이 되어버린다. 즉 이 모달의 오버레이는 더 이상 "뷰포트" 기준이 아니라 "그 조상의
+// 스크롤 가능한 콘텐츠 박스" 기준으로 배치된다 — 조상의 콘텐츠가 길면(경험 카드가 많은 프로필
+// 탭) inset:0이 뷰포트가 아닌 그 긴 박스 전체를 덮어, 중앙 정렬된 모달이 현재 스크롤 위치와
+// 무관한 곳(박스 전체 높이의 중간)에 떠서 화면 밖으로 밀린 것처럼 보인다. 어떤 조상의
+// transform·overflow와도 무관하도록 document.body에 직접 포털로 렌더링해 근본적으로 고친다.
 const overlayStyle = {
   position: "fixed",
   inset: 0,
@@ -149,7 +160,17 @@ export function ExperienceEnrichModalView({
   const canSubmit = phase.kind === "questions" && answers.some((a) => a.trim().length > 0);
   const showEmptyAnswerHint = phase.kind === "questions" && !canSubmit;
 
-  return (
+  // 모달이 떠 있는 동안 배경(body) 스크롤을 잠근다 — 잠그지 않으면 모바일에서 오버레이 뒤
+  // 배경이 함께 스크롤되며 모달이 화면에 안 뜬 것처럼 보일 수 있다. 언마운트 시 원래 값으로 복원한다.
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  const modal = (
     <div style={overlayStyle}>
       <div role="dialog" aria-modal="true" aria-label="AI 깊이 분석" style={modalStyle}>
         <div style={modalHeaderStyle}>
@@ -261,6 +282,11 @@ export function ExperienceEnrichModalView({
       </div>
     </div>
   );
+
+  // document.body에 직접 포털로 렌더링한다 — 이 뷰는 항상 사용자 상호작용(버튼 클릭) 뒤에만
+  // 클라이언트에서 마운트되므로 document는 항상 존재하지만, 방어적으로 한 번 더 확인한다.
+  if (typeof document === "undefined") return null;
+  return createPortal(modal, document.body);
 }
 
 interface ExperienceEnrichModalProps {

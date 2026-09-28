@@ -68,6 +68,7 @@ export function GithubSectionView({
             placeholder="username 또는 github.com/username"
             style={{
               flex: 1,
+              minWidth: 0,
               height: 44,
               padding: "0 14px",
               borderRadius: 12,

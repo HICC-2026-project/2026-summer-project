@@ -307,6 +307,7 @@ export function OnboardingScreen({
                 placeholder="예: 정보처리기사"
                 style={{
                   flex: 1,
+                  minWidth: 0,
                   height: 42,
                   padding: "0 14px",
                   borderRadius: 12,
@@ -328,6 +329,8 @@ export function OnboardingScreen({
                   fontSize: 14,
                   fontWeight: 700,
                   cursor: "pointer",
+                  flexShrink: 0,
+                  whiteSpace: "nowrap",
                 }}
               >
                 추가

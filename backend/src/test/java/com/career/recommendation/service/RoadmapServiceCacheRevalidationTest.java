@@ -184,7 +184,10 @@ class RoadmapServiceCacheRevalidationTest {
                 .thenReturn(List.of(dbActivity(expiredId, true, today.minusDays(1))));
 
         when(aiDailyAttemptLimiter.tryAcquire(eq(userId), any())).thenReturn(true);
-        when(activityRepository.findRecommendableActivities(any(), any())).thenReturn(List.of());
+        // DB에 추천 가능한 후보가 살아있어야 재생성이 의미 있다(hasRecommendableCandidates).
+        UUID candidateId = UUID.randomUUID();
+        when(activityRepository.findRecommendableActivities(any(), any()))
+                .thenReturn(List.of(dbActivity(candidateId, true, today.plusDays(30))));
         when(promptDataBuilder.serializeSpecForRoadmap(any())).thenReturn("{}");
         when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
         when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
@@ -203,12 +206,73 @@ class RoadmapServiceCacheRevalidationTest {
     }
 
     /**
-     * 원래부터 matchedActivities가 하나도 없던 캐시(activity 텍스트 가이드만 있는 스텝)는
-     * 필터를 거쳐도 항상 0건이므로, 이 사실만으로 재생성을 트리거하면 안 된다 — 불필요한
-     * Gemini 재호출을 막는다.
+     * 실사용 확인: 처음부터 매칭 활동이 0개로 생성·캐시된 로드맵(activity 텍스트 가이드만
+     * 있는 스텝)도, 현재 DB에 추천 가능한 후보 활동이 있으면 재생성 대상이 되어야 한다.
+     * 2026-08-11 커밋 4a4b74b가 이 문제를 고쳤다가 PR #63(1b9b8eb)이
+     * originallyHadMatchedActivities 가드를 넣으며 재발했다 — 그 가드 때문에 "처음부터
+     * 매칭이 0개였던 캐시"는 스펙을 다시 저장하기 전까지 영원히 재생성되지 않았다.
      */
     @Test
-    void 원래_매칭_활동이_없던_캐시는_재생성하지_않고_그대로_반환한다() throws Exception {
+    void 원래_매칭_활동이_없던_캐시도_후보가_있으면_재생성된다() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(user.getId()).thenReturn(userId);
+        when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
+        when(userSpecRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(targetJobRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+        when(recommendationRepository.findByUser_Id(userId)).thenReturn(Optional.empty());
+
+        LocalDate today = LocalDate.now(KST);
+        RoadmapResponse cachedRoadmap = RoadmapResponse.builder()
+                .aiRoadmap(true)
+                .timeline(List.of(
+                        TimelineStep.builder()
+                                .period("1학년 1학기 (3~6월)").priority("HIGH")
+                                .activity("자격증 취득 가이드").reason("가이드")
+                                .matchedActivities(List.of())
+                                .build()
+                ))
+                .build();
+
+        ObjectMapper realMapper = new ObjectMapper().findAndRegisterModules();
+        String json = realMapper.writeValueAsString(cachedRoadmap);
+        RoadmapCache cached = RoadmapCache.builder()
+                .id(UUID.randomUUID())
+                .resultJson(json)
+                .createdAt(LocalDateTime.now())
+                .lastUpdatedDate(today)
+                .build();
+        when(roadmapCacheRepository.findByUser_Id(userId)).thenReturn(Optional.of(cached));
+
+        UUID candidateId = UUID.randomUUID();
+        when(aiDailyAttemptLimiter.tryAcquire(eq(userId), any())).thenReturn(true);
+        when(activityRepository.findRecommendableActivities(any(), any()))
+                .thenReturn(List.of(dbActivity(candidateId, true, today.plusDays(30))));
+        when(promptDataBuilder.serializeSpecForRoadmap(any())).thenReturn("{}");
+        when(promptDataBuilder.buildTargetJobString(any())).thenReturn("미설정");
+        when(promptDataBuilder.buildPositionContextText(any())).thenReturn("");
+        when(promptDataBuilder.buildAvailableActivitiesJsonForRoadmap(any(), any())).thenReturn("[]");
+        when(geminiService.generateRoadmap(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn("{\"timeline\":[{\"period\":\"3학년 2학기\",\"priority\":\"HIGH\","
+                        + "\"activity\":\"새로 생성된 활동\",\"reason\":\"새 사유\",\"activityIds\":[]}]}");
+
+        ReflectionTestUtils.setField(roadmapService, "objectMapper", realMapper);
+
+        RoadmapResponse response = roadmapService.getRoadmap(authentication);
+
+        verify(geminiService).generateRoadmap(any(), any(), any(), any(), any(), any(), any());
+        assertThat(response.getTimeline()).hasSize(1);
+        assertThat(response.getTimeline().get(0).getActivity()).isEqualTo("새로 생성된 활동");
+        // 원래 캐시엔 matchedActivities가 없어 필터 대상 id 자체가 없으므로 스테일 필터용 DB 대조는 생략된다.
+        verify(activityRepository, never()).findAllById(any());
+    }
+
+    /**
+     * 매칭 활동이 0건이 되어 재생성이 필요해 보여도, 현재 DB에 추천 가능한 후보 활동이 하나도
+     * 없으면(GraduateOnlyActivityFilter 적용 후에도 0건) 재생성 결과가 어차피 똑같은 0건이라 —
+     * 무의미한 Gemini 재호출을 막기 위해 기존 캐시를 그대로 반환해야 한다.
+     */
+    @Test
+    void 후보_활동이_0건이면_재생성하지_않고_그대로_반환한다() throws Exception {
         UUID userId = UUID.randomUUID();
         when(user.getId()).thenReturn(userId);
         when(currentUserService.getCurrentUser(authentication)).thenReturn(user);
@@ -236,6 +300,7 @@ class RoadmapServiceCacheRevalidationTest {
                 .lastUpdatedDate(today)
                 .build();
         when(roadmapCacheRepository.findByUser_Id(userId)).thenReturn(Optional.of(cached));
+        when(activityRepository.findRecommendableActivities(any(), any())).thenReturn(List.of());
 
         ReflectionTestUtils.setField(roadmapService, "objectMapper", realMapper);
 
@@ -288,6 +353,10 @@ class RoadmapServiceCacheRevalidationTest {
         when(activityRepository.findAllById(List.of(expiredId)))
                 .thenReturn(List.of(dbActivity(expiredId, true, today.minusDays(1))));
 
+        // 후보가 있어야 invalidatedByFilter=true가 되어 재생성 경로(하루 상한 체크)로 들어간다.
+        UUID candidateId = UUID.randomUUID();
+        when(activityRepository.findRecommendableActivities(any(), any()))
+                .thenReturn(List.of(dbActivity(candidateId, true, today.plusDays(30))));
         when(aiDailyAttemptLimiter.tryAcquire(eq(userId), any())).thenReturn(false);
 
         ReflectionTestUtils.setField(roadmapService, "objectMapper", realMapper);
