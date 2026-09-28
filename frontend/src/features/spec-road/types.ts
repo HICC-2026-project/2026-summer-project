@@ -191,7 +191,17 @@ export interface AreaCoverageItem {
   area: string;
   label: string;
   covered: boolean;
+  // coverageSource가 PASSER_DISTRIBUTION일 때만 채워지는 합격자 보유율(0~1). CHECKLIST
+  // 폴백이거나 옛 캐시 응답엔 필드 자체가 없을 수 있어 undefined/null을 모두 "표시 안 함"으로 다룬다.
+  passerRatio?: number | null;
 }
+
+// specPosition.areaCoverage를 채운 방식. PASSER_DISTRIBUTION(합격자 areas 실측 분포 —
+// AreaCoverageItem.passerRatio가 채워지고, coverageSampleSize가 그 분모) |
+// CHECKLIST(1차 고정 체크리스트 폴백 — passerRatio 없음). 옛 캐시 응답엔 필드 자체가 없을 수
+// 있어(undefined) CHECKLIST와 같게 취급한다(백엔드가 areaCoverage 자체를 예전과 같은 체크리스트
+// 모양으로 채워 보내므로 화면이 깨지지 않는다).
+export type CoverageSource = "PASSER_DISTRIBUTION" | "CHECKLIST" | string;
 
 // GET /api/v1/recommendations의 specPosition — 합격자 분포 내 위치·갭 계산 결과.
 // 예전의 matchScore(가중 총점)·compareRows(충족/부족 행)·comparisonMessage·
@@ -216,6 +226,11 @@ export interface SpecPosition {
   // 목표 직무 미설정이면 null. 옛 캐시 응답엔 필드 자체가 없을 수 있어(undefined) 화면에서
   // undefined/null을 모두 "섹션 숨김"으로 같이 취급한다.
   areaCoverage?: AreaCoverageItem[] | null;
+  // E11-2(2차) — areaCoverage를 채운 방식. areaCoverage가 null/undefined면 이 필드도
+  // 의미가 없다(같이 무시). undefined는 CHECKLIST와 같게 취급한다(옛 캐시 응답 호환).
+  coverageSource?: CoverageSource | null;
+  // coverageSource가 PASSER_DISTRIBUTION일 때만 의미 있는 분모(github_derived가 있는 합격자 수).
+  coverageSampleSize?: number | null;
 }
 
 // GET /api/v1/recommendations 전체 응답.

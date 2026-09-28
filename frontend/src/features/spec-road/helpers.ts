@@ -199,6 +199,12 @@ export function percentileLabel(percentile: number | null): string {
   return `상위 ${100 - percentile}%`;
 }
 
+// 합격자 보유율(0~1)을 사람이 읽는 정수 퍼센트 표기로 바꾼다. 0.823 → "82%".
+// 반올림한다(내림/올림 어느 쪽도 아니라 홀더율 표시치고 자연스러운 값).
+export function passerRatioPercent(ratio: number): number {
+  return Math.round(ratio * 100);
+}
+
 export function toRecommendationMeta(res: RecommendationsResponse): RecommendationMeta {
   return {
     specPosition: res.specPosition ?? null,

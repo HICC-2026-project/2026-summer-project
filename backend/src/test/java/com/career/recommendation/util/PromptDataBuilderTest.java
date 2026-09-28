@@ -1,7 +1,9 @@
 package com.career.recommendation.util;
 
+import com.career.recommendation.dto.position.JobSpecProfile;
 import com.career.recommendation.dto.position.SpecPositionResult;
 import com.career.recommendation.entity.Activity;
+import com.career.recommendation.entity.PasserData;
 import com.career.recommendation.entity.TargetJob;
 import com.career.recommendation.entity.UserSpec;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -116,6 +118,34 @@ class PromptDataBuilderTest {
 
         assertThat(builder.buildPositionContextText(noCoverage)).doesNotContain("요구 영역");
         assertThat(builder.buildPositionContextText(emptyCoverage)).doesNotContain("요구 영역");
+    }
+
+    @Test
+    void 분포_모드_커버리지의_영역_순서가_그대로_보유_미보유_문구_순서에_반영된다() {
+        // E11-2(2차) — SpecPositionCalculator가 만드는 분포 모드 areaCoverage는 이미 보유율
+        // 내림차순이다(JobSpecProfileBuilder.areaRatios). PromptDataBuilder는 이 리스트 순서를
+        // 그대로 나눠 담으므로, 최종 프롬프트의 미보유 목록도 "합격자 보유율 높은 순"이 된다 —
+        // 화면 갭 정렬과 프롬프트 주입이 같은 순서를 보게 하기 위한 통합 검증.
+        JobSpecProfileBuilder profileBuilder = new JobSpecProfileBuilder();
+        SpecPositionCalculator calculator = new SpecPositionCalculator();
+        JobSpecProfile job = profileBuilder.build("BACKEND", List.of(
+                passerWithAreas("API", "AUTH"),
+                passerWithAreas("API"),
+                passerWithAreas("API", "DB")));
+        UserSpec userWithApi = UserSpec.builder()
+                .experiences(List.of(Map.of("type", "PROJECT", "title", "API 서버", "areas", List.of("API"))))
+                .build();
+
+        SpecPositionResult position = calculator.calculate(userWithApi, job, () -> null);
+        String text = builder.buildPositionContextText(position);
+
+        assertThat(position.getCoverageSource()).isEqualTo(SpecPositionCalculator.COVERAGE_SOURCE_PASSER_DISTRIBUTION);
+        // 보유율: API 100%(보유) > AUTH 33%(미보유) > DB 33%(미보유, 동률은 키순으로 AUTH 다음).
+        assertThat(text).contains("목표 직무 요구 영역 — 보유: API 개발 / 미보유: 인증, 데이터베이스");
+    }
+
+    private PasserData passerWithAreas(String... areas) {
+        return PasserData.builder().areas(areas).githubDerived(Map.of("repos", 1)).build();
     }
 
     @Test

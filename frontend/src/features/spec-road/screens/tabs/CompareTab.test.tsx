@@ -151,6 +151,49 @@ describe("CompareTab", () => {
     expect(screen.getByText("비어 있는 영역은 추천 활동으로 채워보세요")).toBeInTheDocument();
   });
 
+  it("coverageSource가 PASSER_DISTRIBUTION이면 영역별 합격자 보유율과 표본 캡션을 보여준다", () => {
+    render(
+      <CompareTab
+        isDemo={false}
+        recMeta={meta({
+          ...base,
+          coverageSource: "PASSER_DISTRIBUTION",
+          coverageSampleSize: 8,
+          areaCoverage: [
+            { area: "API", label: "API 개발", covered: true, passerRatio: 0.875 },
+            { area: "AUTH", label: "인증", covered: false, passerRatio: 0.375 },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText("영역 커버리지")).toBeInTheDocument();
+    expect(screen.getByText(/합격자 88% 보유/)).toBeInTheDocument();
+    expect(screen.getByText(/합격자 38% 보유/)).toBeInTheDocument();
+    expect(screen.getByText("합격자 GitHub 표본 8명 기준")).toBeInTheDocument();
+  });
+
+  it("coverageSource가 CHECKLIST(또는 미기재)면 합격자 보유율·표본 캡션 없이 기존 표시를 유지한다", () => {
+    render(
+      <CompareTab
+        isDemo={false}
+        recMeta={meta({
+          ...base,
+          areaCoverage: [
+            { area: "API", label: "API 개발", covered: true, passerRatio: null },
+            { area: "AUTH", label: "인증", covered: false, passerRatio: null },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText("✓ API 개발")).toBeInTheDocument();
+    // 영역 커버리지 카드 안에서만 쓰는 표기(칩 안의 "· 합격자 N% 보유")가 없어야 한다 — 아래
+    // 갭 카드의 "합격자 70% 보유"(base.gaps)는 별개 섹션이라 이 쿼리와 겹치지 않게 구분한다.
+    expect(screen.queryByText(/·\s*합격자.*% 보유/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/GitHub 표본/)).not.toBeInTheDocument();
+  });
+
   it("areaCoverage가 undefined/null/빈 배열이면 영역 커버리지 섹션 자체를 렌더하지 않는다", () => {
     const { rerender } = render(<CompareTab isDemo={false} recMeta={meta(base)} />);
     expect(screen.queryByText("영역 커버리지")).not.toBeInTheDocument();

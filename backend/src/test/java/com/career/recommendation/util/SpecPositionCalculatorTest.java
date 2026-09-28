@@ -227,15 +227,18 @@ class SpecPositionCalculatorTest {
                 .isEqualTo(SpecPositionCalculator.percentileOf(new int[]{2, 3, 5}, 0));
     }
 
-    // --- E11-2(1차) 요구 영역 커버리지 ---
+    // --- E11-2(1차) 요구 영역 커버리지 — 목표 직무 프로필의 githubSampleSize가 MIN_SAMPLE 미만이라
+    // 체크리스트로 폴백하는 경로다(아래 passer들은 areas/githubDerived를 전혀 주지 않으므로 항상 0명). ---
 
     @Test
-    void 목표_직무가_없으면_areaCoverage는_null이다() {
+    void 목표_직무가_없으면_areaCoverage와_coverageSource가_모두_null이다() {
         JobSpecProfile emptyJob = profile(null);
 
         SpecPositionResult result = calculator.calculate(user("3.80", 850), emptyJob, () -> null);
 
         assertThat(result.getAreaCoverage()).isNull();
+        assertThat(result.getCoverageSource()).isNull();
+        assertThat(result.getCoverageSampleSize()).isNull();
     }
 
     @Test
@@ -262,6 +265,11 @@ class SpecPositionCalculatorTest {
                         org.assertj.core.groups.Tuple.tuple("INFRA", false));
         assertThat(result.getAreaCoverage()).extracting(SpecPositionResult.AreaCoverage::getLabel)
                 .contains("API 개발", "데이터베이스");
+        // 체크리스트 폴백이므로 섹션 레벨 메타는 CHECKLIST, 항목별 passerRatio는 전부 null.
+        assertThat(result.getCoverageSource()).isEqualTo(SpecPositionCalculator.COVERAGE_SOURCE_CHECKLIST);
+        assertThat(result.getCoverageSampleSize()).isNull();
+        assertThat(result.getAreaCoverage()).extracting(SpecPositionResult.AreaCoverage::getPasserRatio)
+                .allMatch(java.util.Objects::isNull);
     }
 
     @Test
@@ -294,6 +302,106 @@ class SpecPositionCalculatorTest {
                 .filteredOn(c -> c.getArea().equals("API"))
                 .extracting(SpecPositionResult.AreaCoverage::isCovered)
                 .containsExactly(true);
+    }
+
+    // --- E11-2(2차) — 합격자 areas 분포 기반 커버리지 (githubSampleSize >= MIN_SAMPLE) ---
+
+    @Test
+    void github_표본이_MIN_SAMPLE_이상이면_합격자_분포_기준으로_전환되고_보유율_내림차순으로_정렬된다() {
+        // API 3/3, AUTH 1/3, DB 1/3(동률은 키 알파벳순 — AUTH < DB) — JobSpecProfileBuilder가
+        // 이미 이 순서로 정렬해 준다(보유율 내림차순, 동률은 이름순).
+        JobSpecProfile job = profileOf("BACKEND", List.of(
+                passerWithAreas("API", "AUTH"),
+                passerWithAreas("API"),
+                passerWithAreas("API", "DB")));
+        UserSpec userWithApi = UserSpec.builder()
+                .experiences(List.of(Map.of("type", "PROJECT", "title", "API 서버", "areas", List.of("API"))))
+                .build();
+
+        SpecPositionResult result = calculator.calculate(userWithApi, job, () -> null);
+
+        assertThat(result.getCoverageSource()).isEqualTo(SpecPositionCalculator.COVERAGE_SOURCE_PASSER_DISTRIBUTION);
+        assertThat(result.getCoverageSampleSize()).isEqualTo(3);
+        assertThat(result.getAreaCoverage()).extracting(
+                        SpecPositionResult.AreaCoverage::getArea,
+                        SpecPositionResult.AreaCoverage::isCovered,
+                        SpecPositionResult.AreaCoverage::getPasserRatio)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("API", true, 1.0),
+                        org.assertj.core.groups.Tuple.tuple("AUTH", false, 1.0 / 3),
+                        org.assertj.core.groups.Tuple.tuple("DB", false, 1.0 / 3));
+    }
+
+    @Test
+    void github_표본이_MIN_SAMPLE_미만이면_분포_기준을_쓰지_않고_체크리스트로_폴백한다() {
+        // 2명만 github_derived를 가짐 → MIN_SAMPLE(3) 미달 → 1차 체크리스트.
+        JobSpecProfile job = profileOf("BACKEND", List.of(
+                passerWithAreas("API"), passerWithAreas("API", "AUTH"), passer("3.50", 800)));
+
+        SpecPositionResult result = calculator.calculate(user("3.50", 800), job, () -> null);
+
+        assertThat(result.getCoverageSource()).isEqualTo(SpecPositionCalculator.COVERAGE_SOURCE_CHECKLIST);
+        assertThat(result.getCoverageSampleSize()).isNull();
+        // 체크리스트 6개 전체(API, DB, AUTH, TEST, CI_CD, INFRA)가 내려온다 — 분포 상위 N개가 아니다.
+        assertThat(result.getAreaCoverage()).hasSize(6);
+        assertThat(result.getAreaCoverage()).extracting(SpecPositionResult.AreaCoverage::getPasserRatio)
+                .allMatch(java.util.Objects::isNull);
+    }
+
+    @Test
+    void githubSampleSize가_정확히_MIN_SAMPLE이면_분포_기준을_쓴다() {
+        // 경계값 — 3명(MIN_SAMPLE과 동일)이면 이미 충분(>=)하다고 판정한다.
+        JobSpecProfile job = profileOf("BACKEND", List.of(
+                passerWithAreas("API"), passerWithAreas("API"), passerWithAreas("DB")));
+
+        SpecPositionResult result = calculator.calculate(user("3.50", 800), job, () -> null);
+
+        assertThat(result.getCoverageSource()).isEqualTo(SpecPositionCalculator.COVERAGE_SOURCE_PASSER_DISTRIBUTION);
+        assertThat(result.getCoverageSampleSize()).isEqualTo(3);
+    }
+
+    @Test
+    void githubSampleSize가_MIN_SAMPLE보다_하나_적으면_체크리스트로_폴백한다() {
+        // 경계값 — 2명(MIN_SAMPLE - 1)이면 아직 미달이다.
+        JobSpecProfile job = profileOf("BACKEND", List.of(
+                passerWithAreas("API"), passerWithAreas("DB")));
+
+        SpecPositionResult result = calculator.calculate(user("3.50", 800), job, () -> null);
+
+        assertThat(result.getCoverageSource()).isEqualTo(SpecPositionCalculator.COVERAGE_SOURCE_CHECKLIST);
+    }
+
+    @Test
+    void 분포_모드는_체크리스트에_없던_영역도_실측_데이터에_있으면_보여준다() {
+        // PM 체크리스트는 PLANNING·DOCS·UI뿐이지만, 합격자 분포에는 API가 실제로 잡힐 수 있다.
+        JobSpecProfile job = profileOf("PM", List.of(
+                passerWithAreas("API"), passerWithAreas("API"), passerWithAreas("API")));
+
+        SpecPositionResult result = calculator.calculate(user("3.50", 800), job, () -> null);
+
+        assertThat(result.getAreaCoverage()).extracting(SpecPositionResult.AreaCoverage::getArea)
+                .containsExactly("API");
+    }
+
+    @Test
+    void 분포_모드_영역_개수는_체크리스트_길이를_5에서_7사이로_clamp한다() {
+        // PM 체크리스트는 3개뿐이라 그대로 쓰면 너무 짧다 — 5개로 올려서 보여준다.
+        // AUTH 6/6, API 5/6, DB 4/6, CI_CD 3/6, TEST 2/6, INFRA 1/6 — 서로 다른 보유율로
+        // 동률 없이 순서를 고정한다.
+        JobSpecProfile job = profileOf("PM", List.of(
+                passerWithAreas("AUTH", "API", "DB", "CI_CD", "TEST", "INFRA"),
+                passerWithAreas("AUTH", "API", "DB", "CI_CD", "TEST"),
+                passerWithAreas("AUTH", "API", "DB", "CI_CD"),
+                passerWithAreas("AUTH", "API", "DB"),
+                passerWithAreas("AUTH", "API"),
+                passerWithAreas("AUTH")));
+
+        SpecPositionResult result = calculator.calculate(user("3.50", 800), job, () -> null);
+
+        assertThat(result.getCoverageSampleSize()).isEqualTo(6);
+        // 상위 5개만(INFRA는 6번째라 제외), 보유율 내림차순.
+        assertThat(result.getAreaCoverage()).extracting(SpecPositionResult.AreaCoverage::getArea)
+                .containsExactly("AUTH", "API", "DB", "CI_CD", "TEST");
     }
 
     // --- 갭 리스트 ---
@@ -356,6 +464,17 @@ class SpecPositionCalculatorTest {
         return PasserData.builder()
                 .gpa(new BigDecimal(gpa)).gpaMax(new BigDecimal("4.50"))
                 .experienceCount(expCount)
+                .build();
+    }
+
+    /**
+     * E11-2(2차) — GitHub 아이디 제보·분석이 성공한(github_derived가 있는) 합격자.
+     * JobSpecProfileBuilder.githubSampleSize/areaRatios의 분모·분자에 들어간다.
+     */
+    private PasserData passerWithAreas(String... areas) {
+        return PasserData.builder()
+                .areas(areas)
+                .githubDerived(Map.of("repos", 1))
                 .build();
     }
 

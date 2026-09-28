@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { BADGE, DEMO_SPEC_POSITION, INK, INK_FAINT, INK_MUTED, LINE, PRIMARY, SURFACE_MUTED } from "../../data";
 import type { AreaCoverageItem, AxisPosition, RecommendationMeta, SpecPosition } from "../../types";
-import { percentileLabel } from "../../helpers";
+import { passerRatioPercent, percentileLabel } from "../../helpers";
 import { StateMessage } from "../../components/StateMessage";
 
 interface CompareTabProps {
@@ -177,7 +177,11 @@ export function CompareTab({ isDemo, recMeta, onOpenPasserReport }: CompareTabPr
           무관한 별도 신호라 독립된 카드로 분리한다. undefined/null/빈 배열이면 섹션 자체를 숨긴다
           (목표 직무 미설정, 또는 이 필드가 아예 없는 옛 캐시 응답 모두 같은 처리). */}
       {position.areaCoverage != null && position.areaCoverage.length > 0 && (
-        <AreaCoverageCard areaCoverage={position.areaCoverage} />
+        <AreaCoverageCard
+          areaCoverage={position.areaCoverage}
+          coverageSource={position.coverageSource}
+          coverageSampleSize={position.coverageSampleSize}
+        />
       )}
 
       {/* 갭 — 이 직무 합격자 다수가 가진 것 중 나에게 없는 것. "다음 할 일" 리스트다. */}
@@ -237,14 +241,30 @@ function Shell({ children, footer }: { children: ReactNode; footer?: ReactNode }
   );
 }
 
-/** 영역 커버리지 카드 — covered=true는 채워진 칩(체크+라벨), false는 회색 테두리 칩(미보유). */
-function AreaCoverageCard({ areaCoverage }: { areaCoverage: AreaCoverageItem[] }) {
+/**
+ * 영역 커버리지 카드 — covered=true는 채워진 칩(체크+라벨), false는 회색 테두리 칩(미보유).
+ * E11-2(2차): coverageSource가 PASSER_DISTRIBUTION이면(합격자 areas 실측 분포 기준) 칩마다
+ * "합격자 N% 보유"를 함께 보여주고, 카드 하단에 표본 캡션을 단다. CHECKLIST 폴백(또는 옛 캐시
+ * 응답처럼 coverageSource 자체가 없는 경우)은 기존 표시를 그대로 유지한다.
+ */
+function AreaCoverageCard({
+  areaCoverage,
+  coverageSource,
+  coverageSampleSize,
+}: {
+  areaCoverage: AreaCoverageItem[];
+  coverageSource?: SpecPosition["coverageSource"];
+  coverageSampleSize?: number | null;
+}) {
   const hasUncovered = areaCoverage.some((a) => !a.covered);
+  const isDistribution = coverageSource === "PASSER_DISTRIBUTION";
   return (
     <div style={{ background: "#fff", border: `1px solid ${LINE}`, borderRadius: 22, padding: "18px 20px", marginBottom: 14 }}>
       <div style={{ fontSize: 14.5, fontWeight: 800, color: INK, marginBottom: 4 }}>영역 커버리지</div>
       <p style={{ fontSize: 12.5, color: INK_MUTED, margin: "0 0 12px", lineHeight: 1.5 }}>
-        목표 직무가 요구하는 영역 기준 — 합격자 표본·점수와 무관해요
+        {isDistribution
+          ? "이 직무 합격자들이 실제로 보유한 영역 기준 — 합격자 표본·점수와 무관해요"
+          : "목표 직무가 요구하는 영역 기준 — 합격자 표본·점수와 무관해요"}
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {areaCoverage.map((a) => (
@@ -265,12 +285,22 @@ function AreaCoverageCard({ areaCoverage }: { areaCoverage: AreaCoverageItem[] }
           >
             {a.covered && "✓ "}
             {a.label}
+            {isDistribution && a.passerRatio != null && (
+              <span style={{ fontWeight: 600, opacity: 0.75 }}>
+                &nbsp;· 합격자 {passerRatioPercent(a.passerRatio)}% 보유
+              </span>
+            )}
           </span>
         ))}
       </div>
       {hasUncovered && (
         <p style={{ margin: "12px 0 0", fontSize: 12, color: INK_FAINT, lineHeight: 1.5 }}>
           비어 있는 영역은 추천 활동으로 채워보세요
+        </p>
+      )}
+      {isDistribution && coverageSampleSize != null && (
+        <p style={{ margin: "12px 0 0", fontSize: 11.5, color: "#B0B0BA", lineHeight: 1.5 }}>
+          합격자 GitHub 표본 {coverageSampleSize}명 기준
         </p>
       )}
     </div>
