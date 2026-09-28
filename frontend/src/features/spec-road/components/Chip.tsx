@@ -27,6 +27,8 @@ export function Chip({ selected, onClick, children, style }: ChipProps) {
         background,
         color,
         transition: "all .15s ease",
+        maxWidth: "100%",
+        overflowWrap: "anywhere",
         ...style,
       }}
     >

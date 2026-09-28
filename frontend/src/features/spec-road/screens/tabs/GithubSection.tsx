@@ -203,6 +203,7 @@ export function GithubSectionView({
                 fontSize: 12.5,
                 color: "#4A4954",
                 lineHeight: 1.5,
+                overflowWrap: "anywhere",
               }}
             >
               <span style={{ fontWeight: 700, color: INK }}>{repo.name}</span> · {repo.primaryJobLabel} · 커밋{" "}

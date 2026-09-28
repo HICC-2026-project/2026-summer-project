@@ -156,7 +156,7 @@ export function AdminReviewPage() {
         {error && <StateMessage variant="error" title={ERROR_TEXT[error].title} description={ERROR_TEXT[error].description} />}
 
         {!error && (
-          <div style={{ display: "grid", gridTemplateColumns: selected ? "minmax(0, 1fr) minmax(320px, 420px)" : "1fr", gap: 16, alignItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: selected ? "minmax(0, 1fr) minmax(0, 420px)" : "1fr", gap: 16, alignItems: "start" }}>
             <div style={{ background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16, overflow: "hidden" }}>
               {loading || items.length === 0 ? (
                 <div style={{ padding: 40, textAlign: "center", color: "#9797A1", fontSize: 14 }}>{loading ? "불러오는 중…" : "이 상태의 제보가 없어요."}</div>
