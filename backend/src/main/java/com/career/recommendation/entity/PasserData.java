@@ -21,6 +21,13 @@ public class PasserData {
     public static final String ORIGIN_USER_REPORT = "USER_REPORT";
     /** 발표·검증용 합성 데이터 — 검수 없이 비교 가능 집합에 포함(PasserDataRepository 참고). */
     public static final String ORIGIN_DEMO = "DEMO";
+    /**
+     * 관리자가 공개된 커뮤니티·블로그 합격 후기를 보고 직접 등록한 건. 검수 없이 저장 시점에
+     * isVerified=true로 확정된다(관리자 신뢰) — PasserDataRepository의 비교 가능 조건
+     * {@code isVerified = true OR dataOrigin = 'DEMO'}에서 isVerified=true로 이미 포함되므로
+     * 별도 필터 변경이 필요 없다.
+     */
+    public static final String ORIGIN_ADMIN_ENTRY = "ADMIN_ENTRY";
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -115,6 +122,13 @@ public class PasserData {
     /** 반려 사유. 승인이면 null. */
     @Column(name = "reject_reason", length = 300)
     private String rejectReason;
+
+    /**
+     * 관리자 수기 등록(ADMIN_ENTRY) 건의 출처 URL·메모(V31). 사용자 제보·DEMO 등 다른 출처는
+     * null. 출처 없는 수기 입력을 막기 위해 AdminPasserEntryRequest에서 필수로 받는다.
+     */
+    @Column(name = "source_note", columnDefinition = "text")
+    private String sourceNote;
 
     /** 검수 상태 — isVerified와 reviewedAt 두 컬럼에서 파생한다. 세 값의 단일 정의는 domain.ReviewStatus. */
     public ReviewStatus reviewStatus() {

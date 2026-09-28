@@ -6,6 +6,7 @@ import { ApiError } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { BADGE, JOB_OPTIONS, PRIMARY } from "@/features/spec-road/data";
 import { StateMessage } from "@/features/spec-road/components/StateMessage";
+import { AdminPasserEntryTab } from "./AdminPasserEntryTab";
 import {
   fetchProofObjectUrl,
   getAdminReports,
@@ -20,11 +21,19 @@ import {
 
 // 합격자 제보 검수 화면 (팀 내부용). 기능 최소: 상태별 목록 → 증빙 보기 → 승인/반려.
 // 권한은 서버가 판정한다. 여기서는 403을 "권한 없음" 안내로 바꿀 뿐이다.
+// 최상단 탭으로 "검수"(기존)와 "수기 등록"(관리자가 직접 합격자 데이터 입력)을 오간다.
 
 const STATUS_TABS: { key: ReviewStatus; label: string }[] = [
   { key: "PENDING", label: "검수 대기" },
   { key: "VERIFIED", label: "반영 완료" },
   { key: "REJECTED", label: "반려" },
+];
+
+type PageTab = "review" | "entry";
+
+const PAGE_TABS: { key: PageTab; label: string }[] = [
+  { key: "review", label: "합격자 제보 검수" },
+  { key: "entry", label: "합격자 수기 등록" },
 ];
 
 const ERROR_TEXT = {
@@ -60,6 +69,7 @@ function formatLang(scores: AdminPasserReport["languageScores"]): string {
 }
 
 export function AdminReviewPage() {
+  const [pageTab, setPageTab] = useState<PageTab>("review");
   const [status, setStatus] = useState<ReviewStatus>("PENDING");
   const [page, setPage] = useState(0);
   // data === null이 "불러오는 중". 탭·페이지 전환 핸들러에서 null로 되돌리고, effect는 응답이 온 뒤에만 상태를 만진다.
@@ -115,39 +125,41 @@ export function AdminReviewPage() {
 
   return (
     <div style={{ minHeight: "100dvh", background: "#F6F6F9", color: "#15141B", fontFamily: "inherit" }}>
-      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", background: "#fff", borderBottom: "1px solid #EDEDF2" }}>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>합격자 제보 검수</div>
-          <div style={{ fontSize: 12, color: "#9797A1" }}>승인하면 즉시 비교 데이터에 반영돼요. 반려는 데이터를 보존하고 사유만 남겨요.</div>
+      <header style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "16px 24px", background: "#fff", borderBottom: "1px solid #EDEDF2" }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>합격자 데이터 관리</div>
+          <div style={{ fontSize: 12, color: "#9797A1" }}>
+            {pageTab === "review"
+              ? "승인하면 즉시 비교 데이터에 반영돼요. 반려는 데이터를 보존하고 사유만 남겨요."
+              : "공개 후기를 직접 등록하면 검수 없이 바로 비교 데이터에 반영돼요."}
+          </div>
         </div>
-        <Link href="/" style={{ fontSize: 13, color: PRIMARY, fontWeight: 700, textDecoration: "none" }}>
+        <Link href="/" style={{ fontSize: 13, color: PRIMARY, fontWeight: 700, textDecoration: "none", flexShrink: 0 }}>
           ← 앱으로
         </Link>
       </header>
 
       <main style={{ maxWidth: 1080, margin: "0 auto", padding: "20px 24px 60px" }}>
-        {!error && <OpsStrip reloadKey={reloadKey} />}
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          {STATUS_TABS.map((t) => {
-            const active = t.key === status;
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+          {PAGE_TABS.map((t) => {
+            const active = t.key === pageTab;
             return (
               <button
                 key={t.key}
                 type="button"
-                onClick={() => go({ status: t.key })}
+                onClick={() => setPageTab(t.key)}
                 style={{
-                  padding: "8px 14px",
-                  borderRadius: 999,
+                  padding: "9px 16px",
+                  borderRadius: 12,
                   border: `1px solid ${active ? PRIMARY : "#E1E0EA"}`,
                   background: active ? PRIMARY : "#fff",
                   color: active ? "#fff" : "#4A4954",
-                  fontSize: 13,
+                  fontSize: 13.5,
                   fontWeight: 700,
                   cursor: "pointer",
                 }}
               >
                 {t.label}
-                {active && !loading && !error ? ` ${total}` : ""}
               </button>
             );
           })}
@@ -155,56 +167,87 @@ export function AdminReviewPage() {
 
         {error && <StateMessage variant="error" title={ERROR_TEXT[error].title} description={ERROR_TEXT[error].description} />}
 
-        {!error && (
-          <div style={{ display: "grid", gridTemplateColumns: selected ? "minmax(0, 1fr) minmax(0, 420px)" : "1fr", gap: 16, alignItems: "start" }}>
-            <div style={{ background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16, overflow: "hidden" }}>
-              {loading || items.length === 0 ? (
-                <div style={{ padding: 40, textAlign: "center", color: "#9797A1", fontSize: 14 }}>{loading ? "불러오는 중…" : "이 상태의 제보가 없어요."}</div>
-              ) : (
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                    <thead>
-                      <tr style={{ background: "#FAFAFC", color: "#9797A1", textAlign: "left" }}>
-                        {["직무", "연도", "학점", "어학", "자격증", "경험", "제보일", "증빙"].map((h) => (
-                          <th key={h} style={{ ...CELL_NOWRAP, fontWeight: 600 }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((r) => {
-                        const isSel = selected?.reportId === r.reportId;
-                        return (
-                          <tr
-                            key={r.reportId}
-                            onClick={() => setSelected(r)}
-                            style={{ cursor: "pointer", background: isSel ? `color-mix(in srgb, ${PRIMARY} 8%, #fff)` : "transparent", borderTop: "1px solid #F1F0F6" }}
-                          >
-                            <td style={{ ...CELL_NOWRAP, fontWeight: 700 }}>{r.jobTypeLabel}</td>
-                            <td style={CELL}>{r.year}</td>
-                            <td style={CELL_NOWRAP}>{r.gpa ?? "-"} / {r.gpaMax ?? "-"}</td>
-                            <td style={CELL}>{formatLang(r.languageScores)}</td>
-                            <td style={CELL}>{r.certifications.length ? r.certifications.join(", ") : "없음"}</td>
-                            <td style={CELL}>{r.experienceCount ?? 0}개</td>
-                            <td style={{ ...CELL_NOWRAP, color: "#61616C" }}>{r.createdAt.slice(0, 10)}</td>
-                            <td style={CELL_NOWRAP}>{r.proof ? "있음" : <span style={{ color: BADGE.bad.color }}>없음</span>}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              {totalPages > 1 && (
-                <div style={{ display: "flex", justifyContent: "center", gap: 8, padding: 12, borderTop: "1px solid #F1F0F6" }}>
-                  <PageButton label="이전" disabled={page === 0} onClick={() => go({ page: page - 1 })} />
-                  <span style={{ fontSize: 12, color: "#61616C", alignSelf: "center" }}>{page + 1} / {totalPages}</span>
-                  <PageButton label="다음" disabled={page + 1 >= totalPages} onClick={() => go({ page: page + 1 })} />
-                </div>
-              )}
+        {!error && pageTab === "entry" && <AdminPasserEntryTab />}
+
+        {!error && pageTab === "review" && (
+          <>
+            <OpsStrip reloadKey={reloadKey} />
+            <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+              {STATUS_TABS.map((t) => {
+                const active = t.key === status;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => go({ status: t.key })}
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: 999,
+                      border: `1px solid ${active ? PRIMARY : "#E1E0EA"}`,
+                      background: active ? PRIMARY : "#fff",
+                      color: active ? "#fff" : "#4A4954",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {t.label}
+                    {active && !loading ? ` ${total}` : ""}
+                  </button>
+                );
+              })}
             </div>
 
-            {selected && <DetailPanel key={selected.reportId} report={selected} onClose={() => setSelected(null)} onReviewed={onReviewed} />}
-          </div>
+            <div style={{ display: "grid", gridTemplateColumns: selected ? "minmax(0, 1fr) minmax(0, 420px)" : "1fr", gap: 16, alignItems: "start" }}>
+              <div style={{ background: "#fff", border: "1px solid #EDEDF2", borderRadius: 16, overflow: "hidden" }}>
+                {loading || items.length === 0 ? (
+                  <div style={{ padding: 40, textAlign: "center", color: "#9797A1", fontSize: 14 }}>{loading ? "불러오는 중…" : "이 상태의 제보가 없어요."}</div>
+                ) : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: "#FAFAFC", color: "#9797A1", textAlign: "left" }}>
+                          {["직무", "연도", "학점", "어학", "자격증", "경험", "제보일", "증빙"].map((h) => (
+                            <th key={h} style={{ ...CELL_NOWRAP, fontWeight: 600 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.map((r) => {
+                          const isSel = selected?.reportId === r.reportId;
+                          return (
+                            <tr
+                              key={r.reportId}
+                              onClick={() => setSelected(r)}
+                              style={{ cursor: "pointer", background: isSel ? `color-mix(in srgb, ${PRIMARY} 8%, #fff)` : "transparent", borderTop: "1px solid #F1F0F6" }}
+                            >
+                              <td style={{ ...CELL_NOWRAP, fontWeight: 700 }}>{r.jobTypeLabel}</td>
+                              <td style={CELL}>{r.year}</td>
+                              <td style={CELL_NOWRAP}>{r.gpa ?? "-"} / {r.gpaMax ?? "-"}</td>
+                              <td style={CELL}>{formatLang(r.languageScores)}</td>
+                              <td style={CELL}>{r.certifications.length ? r.certifications.join(", ") : "없음"}</td>
+                              <td style={CELL}>{r.experienceCount ?? 0}개</td>
+                              <td style={{ ...CELL_NOWRAP, color: "#61616C" }}>{r.createdAt.slice(0, 10)}</td>
+                              <td style={CELL_NOWRAP}>{r.proof ? "있음" : <span style={{ color: BADGE.bad.color }}>없음</span>}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {totalPages > 1 && (
+                  <div style={{ display: "flex", justifyContent: "center", gap: 8, padding: 12, borderTop: "1px solid #F1F0F6" }}>
+                    <PageButton label="이전" disabled={page === 0} onClick={() => go({ page: page - 1 })} />
+                    <span style={{ fontSize: 12, color: "#61616C", alignSelf: "center" }}>{page + 1} / {totalPages}</span>
+                    <PageButton label="다음" disabled={page + 1 >= totalPages} onClick={() => go({ page: page + 1 })} />
+                  </div>
+                )}
+              </div>
+
+              {selected && <DetailPanel key={selected.reportId} report={selected} onClose={() => setSelected(null)} onReviewed={onReviewed} />}
+            </div>
+          </>
         )}
       </main>
     </div>
