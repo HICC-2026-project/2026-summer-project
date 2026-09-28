@@ -266,12 +266,12 @@
 - [ ] 골든 테스트: 이 레포로 BE-3 → `AUTH, API, CI_CD`, BE-1 → `API`(추천), FE 기여 → `UI`
 
 ### E11-2. 직무별 요구 영역 커버리지 (BE-1)
-- [ ] 1차: 팀 정의 체크리스트 `JobAreaRequirements` (6직무 × 5~7영역, YAML). 예) BACKEND: API, DB, AUTH, TEST, CI_CD, INFRA
-- [ ] 2차(E11-5 이후): 합격자 `areas` 분포로 교체 — "BACKEND 합격자 80%가 AUTH 보유". 표본 `coverage` 별도 표시, `MIN_SAMPLE` 동일 적용
-- [ ] `SpecPositionResult`에 `areaCoverage: [{area, label, hasEvidence, verification, passerRatio?}]` 추가 — **percentile 축이 아님**, 별도 섹션
-- [ ] 갭 정렬: 없는 영역 중 합격자 보유율 높은 순 (2차) / 체크리스트 순 (1차)
-- [ ] `PromptDataBuilder`: 보유/미보유 영역 + 각 경험의 `role`·`stack`을 프롬프트에 포함 → 추천이 "배포 경험을 쌓을 활동"처럼 좁혀지도록. 스냅샷 테스트
-- [ ] 로드맵: 미보유 영역을 채우는 순서로 스텝 구성 검증
+- [x] 1차: 팀 정의 체크리스트 `JobAreaRequirements` (9/17, PR #60)
+- [x] 2차(E11-5 이후): `githubSampleSize >= MIN_SAMPLE`이면 합격자 `areaRatios` 분포로 전환("합격자 N% 보유"), 미만이면 1차 체크리스트 폴백. 영역은 보유율 상위 5~7개(체크리스트 길이 기준 클램프), 체크리스트에 없던 영역도 데이터에 있으면 표시. 점수식 버전 9→10으로 기존 캐시 재계산 유도 (2026-09-28)
+- [x] `SpecPositionResult.areaCoverage`에 `passerRatio` + 섹션 레벨 `coverageSource(PASSER_DISTRIBUTION|CHECKLIST)`·`coverageSampleSize` — 구캐시 JSON 역직렬화 하위 호환 테스트 포함 (2026-09-28)
+- [x] 갭 정렬: 분포 모드는 보유율 내림차순(areaRatios 정렬 그대로), 폴백은 체크리스트 순 — 프롬프트 주입 순서 동일함을 통합 테스트로 고정 (2026-09-28)
+- [x] `PromptDataBuilder`: 보유/미보유 영역 + role·stack 프롬프트 포함 (9/17, PR #60)
+- [~] 로드맵: 미보유 영역을 채우는 순서로 스텝 구성 — 출력 순서는 Gemini 의존이라 프롬프트 입력 순서까지만 고정(E5와 동일 판정)
 
 ### E11-3. Gemini 깊이 판정 (BE-1) — 선택, 캐시·상한 뒤에
 - [ ] 레포당 본인 diff 샘플 최대 20개(파일당 200줄 컷) → Gemini에 "이 기여가 어떤 영역이고, 직접 구현/설정/반복 CRUD 중 어디에 해당하는지" JSON 요청. 코드 원문은 요청 후 폐기, 응답의 `areas`·`depth(IMPLEMENTED|CONFIGURED|BOILERPLATE)`·`roleSummary`만 저장

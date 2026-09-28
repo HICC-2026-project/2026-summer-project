@@ -50,12 +50,21 @@ public class SpecPositionCalculator {
      * 전부 재계산 대상이 된다.
      *
      * 9: 가중 총점(matchScore)·비교 행(compareRows)을 percentile 위치(specPosition)로 교체.
+     * 10: E11-2(2차) — areaCoverage가 표본 충분 시 합격자 areas 분포 기준으로 바뀐다
+     * (coverageSource/coverageSampleSize/passerRatio 신설). 새 필드는 옛 캐시 JSON에 없어도
+     * 역직렬화는 깨지지 않지만(Jackson 기본 설정이 FAIL_ON_UNKNOWN_PROPERTIES 꺼둠 + 추가 필드는
+     * 단순 null), 값 자체가 비어 있으면 옛 캐시가 이미 표본을 채웠어도 여전히 체크리스트로
+     * 보인다 — 버전을 올려 그 캐시들을 한 번 재계산 대상으로 돌린다.
      */
-    public static final int CURRENT_SCORE_FORMULA_VERSION = 9;
+    public static final int CURRENT_SCORE_FORMULA_VERSION = 10;
 
     public static final String BASIS_JOB = "JOB";
     public static final String BASIS_OVERALL = "OVERALL";
     public static final String BASIS_NONE = "NONE";
+
+    /** E11-2(2차) — areaCoverage를 합격자 areas 실측 분포로 채웠는지, 1차 체크리스트로 폴백했는지. */
+    public static final String COVERAGE_SOURCE_PASSER_DISTRIBUTION = "PASSER_DISTRIBUTION";
+    public static final String COVERAGE_SOURCE_CHECKLIST = "CHECKLIST";
 
     /**
      * 비교 결과를 신뢰하기 위한 최소 표본 수(예전 SimilarSpecFinder.MIN_SAMPLE 원칙 계승).
@@ -73,6 +82,14 @@ public class SpecPositionCalculator {
 
     /** 갭 리스트 최대 길이. "다음 할 일"은 짧아야 행동으로 이어진다. */
     private static final int MAX_GAPS = 5;
+
+    /**
+     * E11-2(2차) — 분포 모드에서 보여줄 영역 개수의 하한·상한. BACKLOG 요구사항 "1차 체크리스트
+     * 영역 수와 비슷한 5~7개"를 그대로 상수화한다 — 직무별 체크리스트 길이(3~6개, JobAreaRequirements
+     * 참고)를 그대로 쓰면 PM(3개)처럼 너무 짧아지므로, 그 길이를 이 범위로 clamp한다.
+     */
+    private static final int DISTRIBUTION_AREA_COUNT_MIN = 5;
+    private static final int DISTRIBUTION_AREA_COUNT_MAX = 7;
 
     /** 학점 표시용 4.5 환산 기준. */
     private static final double GPA_DISPLAY_SCALE = 4.5;
@@ -98,14 +115,18 @@ public class SpecPositionCalculator {
         // 목표 직무 식별 정보 — 비교에 쓰였든 아니든 항상 내려준다(FE 제보 유도 CTA용).
         String targetJobType = (jobProfile != null && jobProfile.getJobType() != null && !jobProfile.getJobType().isBlank())
                 ? jobProfile.getJobType() : null;
+        // E11-2 — 합격자 표본(basis, 즉 axes/gaps에 쓰인 프로필)과 무관하게 목표 직무의
+        // githubSampleSize만으로 분포/체크리스트를 고르고 사용자 경험만으로 보유 여부를 판정하므로,
+        // 아래 JOB/OVERALL/NONE 분기보다 앞에서 한 번만 계산해 모든 경로에 싣는다.
+        AreaCoverageSection coverageSection = buildAreaCoverage(targetJobType, userSpec, jobProfile);
         SpecPositionResult.SpecPositionResultBuilder base = SpecPositionResult.builder()
                 .targetJobType(targetJobType)
                 .targetJobLabel(JobType.labelOf(targetJobType))
                 .jobSampleSize(targetJobType != null ? jobProfile.getSampleSize() : 0)
                 .minSampleSize(MIN_SAMPLE)
-                // E11-2(1차) — 합격자 표본(basis)과 무관하게 사용자 경험만으로 판정하므로,
-                // 아래 JOB/OVERALL/NONE 분기보다 앞에서 한 번만 계산해 모든 경로에 싣는다.
-                .areaCoverage(buildAreaCoverage(targetJobType, userSpec));
+                .areaCoverage(coverageSection.items())
+                .coverageSource(coverageSection.source())
+                .coverageSampleSize(coverageSection.sampleSize());
         if (jobProfile != null && jobProfile.getJobType() != null && jobProfile.getSampleSize() >= MIN_SAMPLE) {
             profile = jobProfile;
             basis = BASIS_JOB;
@@ -230,32 +251,79 @@ public class SpecPositionCalculator {
         return axes;
     }
 
+    /** buildAreaCoverage 내부 반환값 — areaCoverage 리스트와 그 섹션 레벨 메타(coverageSource/coverageSampleSize)를 함께 나른다. */
+    private record AreaCoverageSection(List<AreaCoverage> items, String source, Integer sampleSize) {
+        static final AreaCoverageSection NONE = new AreaCoverageSection(null, null, null);
+    }
+
     /**
-     * E11-2(1차) — 목표 직무의 요구 영역 체크리스트(JobAreaRequirements) 대비 사용자 보유 여부.
-     * 목표 직무가 없거나(targetJobType null) 알 수 없는 코드면 null — FE와 확정된 계약대로
-     * "목표 직무 미설정이면 null"을 그대로 지킨다. 정의된 직무인데 요구 영역이 비어 있는
-     * 경우(현재는 없음)는 빈 리스트를 준다.
+     * E11-2 — 목표 직무의 요구 영역 커버리지. 목표 직무가 없거나(targetJobType null) 알 수 없는
+     * 코드면 items=null(FE와 확정된 계약대로 "목표 직무 미설정이면 null"을 그대로 지킨다).
+     *
+     * 목표 직무 프로필의 githubSampleSize(github_derived가 있는 합격자 수)가 MIN_SAMPLE 이상이면
+     * 2차(합격자 areas 실측 분포), 미만이면 1차(고정 체크리스트)로 폴백한다 — 기존 표본 최소값
+     * 상수(MIN_SAMPLE)를 그대로 재사용한다(BACKLOG 요구사항).
      */
-    private List<AreaCoverage> buildAreaCoverage(String targetJobType, UserSpec userSpec) {
+    private AreaCoverageSection buildAreaCoverage(String targetJobType, UserSpec userSpec, JobSpecProfile jobProfile) {
         if (targetJobType == null) {
-            return null;
+            return AreaCoverageSection.NONE;
         }
-        return JobType.from(targetJobType).<List<AreaCoverage>>map(jobType -> {
-            List<ExperienceArea> required = JobAreaRequirements.requiredAreasFor(jobType);
-            if (required.isEmpty()) {
-                return List.of();
-            }
+        return JobType.from(targetJobType).map(jobType -> {
             Set<ExperienceArea> userAreas = collectUserAreas(userSpec);
-            List<AreaCoverage> coverage = new ArrayList<>(required.size());
-            for (ExperienceArea area : required) {
-                coverage.add(AreaCoverage.builder()
-                        .area(area.name())
-                        .label(area.getLabel())
-                        .covered(userAreas.contains(area))
-                        .build());
+            if (jobProfile != null && jobProfile.getGithubSampleSize() >= MIN_SAMPLE) {
+                return buildDistributionAreaCoverage(jobType, jobProfile, userAreas);
             }
-            return coverage;
-        }).orElse(null);
+            return buildChecklistAreaCoverage(jobType, userAreas);
+        }).orElse(AreaCoverageSection.NONE);
+    }
+
+    /** 1차 — 팀 정의 체크리스트(JobAreaRequirements) 대비 보유 여부. 선언 순서 유지, passerRatio는 항상 null. */
+    private AreaCoverageSection buildChecklistAreaCoverage(JobType jobType, Set<ExperienceArea> userAreas) {
+        List<ExperienceArea> required = JobAreaRequirements.requiredAreasFor(jobType);
+        if (required.isEmpty()) {
+            return new AreaCoverageSection(List.of(), COVERAGE_SOURCE_CHECKLIST, null);
+        }
+        List<AreaCoverage> coverage = new ArrayList<>(required.size());
+        for (ExperienceArea area : required) {
+            coverage.add(AreaCoverage.builder()
+                    .area(area.name())
+                    .label(area.getLabel())
+                    .covered(userAreas.contains(area))
+                    .passerRatio(null)
+                    .build());
+        }
+        return new AreaCoverageSection(coverage, COVERAGE_SOURCE_CHECKLIST, null);
+    }
+
+    /**
+     * 2차 — 목표 직무 합격자의 areas 실측 분포에서 보유율 상위 N개(DISTRIBUTION_AREA_COUNT_MIN~MAX,
+     * 1차 체크리스트 길이에 맞춰 clamp)를 보유율 내림차순으로 담는다. jobProfile.getAreaRatios()가
+     * 이미 보유율 내림차순(동률이면 키순)으로 정렬돼 있으므로(JobSpecProfileBuilder) 그대로 앞에서부터
+     * 자르기만 하면 된다 — 이 순서가 곧 갭 정렬(미보유를 보유율 높은 순으로)과
+     * PromptDataBuilder의 보유/미보유 주입 순서도 함께 결정한다(리스트 순서 하나로 통일).
+     * 체크리스트에 없던 영역도 실측 데이터에 있으면 등장할 수 있다(요구사항) — ExperienceArea 13종
+     * 라벨을 그대로 재사용한다.
+     */
+    private AreaCoverageSection buildDistributionAreaCoverage(
+            JobType jobType, JobSpecProfile jobProfile, Set<ExperienceArea> userAreas) {
+        int checklistSize = JobAreaRequirements.requiredAreasFor(jobType).size();
+        int limit = Math.min(DISTRIBUTION_AREA_COUNT_MAX, Math.max(DISTRIBUTION_AREA_COUNT_MIN, checklistSize));
+
+        List<AreaCoverage> coverage = new ArrayList<>(limit);
+        for (Map.Entry<String, Double> entry : jobProfile.getAreaRatios().entrySet()) {
+            if (coverage.size() >= limit) break;
+            // areaRatios 키는 ExperienceArea.name()이 계약이지만(JobSpecProfile 참고), 방어적으로
+            // 미지 코드는 라벨을 붙일 수 없으므로 건너뛴다.
+            ExperienceArea area = ExperienceArea.from(entry.getKey()).orElse(null);
+            if (area == null) continue;
+            coverage.add(AreaCoverage.builder()
+                    .area(area.name())
+                    .label(area.getLabel())
+                    .covered(userAreas.contains(area))
+                    .passerRatio(entry.getValue())
+                    .build());
+        }
+        return new AreaCoverageSection(coverage, COVERAGE_SOURCE_PASSER_DISTRIBUTION, jobProfile.getGithubSampleSize());
     }
 
     /** 사용자 experiences 각 항목의 areas 배열을 합집합으로 모은다. 미지 코드는 걸러진다. */

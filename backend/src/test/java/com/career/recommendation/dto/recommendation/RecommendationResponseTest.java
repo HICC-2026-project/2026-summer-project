@@ -133,4 +133,47 @@ class RecommendationResponseTest {
         assertThat(firstArea.path("covered").asBoolean()).isTrue();
         assertThat(uncovered.path("areaCoverage").isNull()).isTrue();
     }
+
+    /**
+     * E11-2(2차) — coverageSource/coverageSampleSize(SpecPositionResult)와 passerRatio
+     * (AreaCoverage)는 이번에 새로 추가된 필드다. v9(CURRENT_SCORE_FORMULA_VERSION 도입 전)
+     * 캐시 JSON에는 이 필드들이 아예 없는데, RecommendationService.deserialize()가 이런 옛
+     * Recommendation.resultJson을 읽을 때 예외 없이 역직렬화되고(스프링 기본 ObjectMapper는
+     * FAIL_ON_UNKNOWN_PROPERTIES가 꺼져 있고, 반대로 이 응답엔 없던 필드가 늘어난 경우라
+     * 단순히 없는 필드는 null이 된다) 새 필드는 그냥 null로 채워져야 한다 — 캐시를 지우지
+     * 않고 배포해도 기존 사용자 캐시를 읽다가 깨지면 안 된다.
+     */
+    @Test
+    void 신규_필드가_없는_구버전_캐시_JSON도_예외_없이_역직렬화되고_새_필드는_null이다() throws Exception {
+        String legacyJson = """
+                {
+                  "activities": [],
+                  "aiRecommendation": true,
+                  "targetJobName": "BACKEND",
+                  "scoreFormulaVersion": 9,
+                  "specPosition": {
+                    "basis": "JOB",
+                    "basisMessage": "백엔드 합격자 12명의 분포와 비교한 결과입니다.",
+                    "sampleSize": 12,
+                    "areaCoverage": [
+                      {"area": "API", "label": "API 개발", "covered": true}
+                    ]
+                  }
+                }
+                """;
+
+        RecommendationResponse restored = objectMapper.readValue(legacyJson, RecommendationResponse.class);
+
+        assertThat(restored).isNotNull();
+        assertThat(restored.getScoreFormulaVersion()).isEqualTo(9);
+        SpecPositionResult position = restored.getSpecPosition();
+        assertThat(position).isNotNull();
+        assertThat(position.getAreaCoverage()).hasSize(1);
+        // 새로 추가된 필드는 JSON에 없었으므로 전부 null — 이 값을 보고
+        // RecommendationService가 scoreFormulaVersion으로 legacy 여부를 판정한다(coverageSource
+        // 자체를 legacy 판정에 쓰지 않는 이유: 목표 직무 미설정이면 원래도 null이라 구분이 안 된다).
+        assertThat(position.getCoverageSource()).isNull();
+        assertThat(position.getCoverageSampleSize()).isNull();
+        assertThat(position.getAreaCoverage().get(0).getPasserRatio()).isNull();
+    }
 }
