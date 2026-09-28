@@ -84,6 +84,7 @@ public class RoadmapService {
         UserSpec userSpec   = userSpecRepository.findByUser_Id(user.getId()).orElse(null);
         TargetJob targetJob = targetJobRepository.findByUser_Id(user.getId()).orElse(null);
         LocalDate today = LocalDate.now(SERVICE_ZONE_ID);
+        Integer grade = (userSpec != null) ? userSpec.getGrade() : null;
         boolean attemptAcquired = false;
 
         if (cached != null) {
@@ -94,20 +95,19 @@ public class RoadmapService {
                     // 비활성화하거나 관리자가 활동을 내리면 캐시가 그 활동을 로드맵 스텝에
                     // 계속 노출한다(RecommendationService.filterStaleActivities와 같은 문제).
                     // 스텝 자체는 유지하고, 스텝 안의 matchedActivities만 DB와 대조해 걸러낸다.
-                    // ⚠️ 필터링 전 "원래 매칭이 있었는지"를 먼저 기록해 둔다 — 실사용 확인: 매칭
-                    // 활동이 전부 마감·비활성화돼 필터 후 모든 스텝이 0건이 되어도(추천은 이 경우
-                    // 재생성이 발동하는데) 로드맵은 스텝을 유지한 채 영원히 낡은 채로 남아 있었다.
-                    // 반대로 원래부터 매칭이 하나도 없던 캐시(activity 텍스트만 있는 스텝)까지
-                    // 매번 재생성 대상으로 잡으면 불필요한 Gemini 재호출만 늘어난다 — 두 경우를
-                    // 구분하려면 필터 "전" 상태를 따로 봐야 한다.
-                    boolean originallyHadMatchedActivities = hasAnyMatchedActivities(deserialized);
                     deserialized = filterStaleMatchedActivities(deserialized, today);
                     boolean isSpecChanged = isSpecModifiedSince(userSpec, targetJob, cached.getCreatedAt());
-                    // 마감이 지난 활동이 캐시에 남아 있으면 스펙이 그대로여도 다시 만든다.
-                    // 그러지 않으면 이미 마감된 활동을 로드맵에 무기한 보여주게 된다. 단, 원래부터
-                    // 매칭 활동이 없던 캐시는 "필터 후 0건"이 항상 참이라 이 규칙에서 제외한다
-                    // (불필요 재생성 방지 — hasAnyMatchedActivities 주석 참고).
-                    boolean invalidatedByFilter = originallyHadMatchedActivities && !hasUsableCachedActivities(deserialized, today);
+                    // ⚠️ 필터 후 매칭 활동이 0건이면 재생성 대상으로 본다 — "처음부터 매칭 0개로
+                    // 캐시된 로드맵"과 "마감·비활성화로 나중에 0개가 된 캐시"를 더 이상 구분하지
+                    // 않는다(2026-08-11 4a4b74b가 고쳤다가 PR #63(1b9b8eb)의
+                    // originallyHadMatchedActivities 가드로 재발한 문제 — 처음부터 매칭이 0개였던
+                    // 로드맵은 이 가드 때문에 스펙을 바꾸기 전까지 영원히 재생성되지 않았다).
+                    // 다만 현재 DB에 추천 가능한 후보 활동이 하나도 없으면 재생성해도 결과가
+                    // 똑같으므로(활동 자체가 없음) 캐시를 그대로 반환해 Gemini 호출을 낭비하지
+                    // 않는다. 일일 시도 상한(AiDailyAttemptLimiter)이 있어 무한 재시도 비용도
+                    // 어차피 상한선이 있다.
+                    boolean invalidatedByFilter = !hasUsableCachedActivities(deserialized, today)
+                            && hasRecommendableCandidates(today, grade);
                     boolean hasUsableActivities = !invalidatedByFilter;
 
                     if (!isSpecChanged && hasUsableActivities) {
@@ -130,14 +130,12 @@ public class RoadmapService {
         // 캐시가 없거나 비었거나 깨진 경로도 같은 상한을 지난다 — 예전엔 이 세 경로가 게이트를 우회해 곧장 Gemini로 갔다.
         if (!attemptAcquired && !aiDailyAttemptLimiter.tryAcquire(user.getId(), AiDailyAttemptLimiter.KIND_ROADMAP)) {
             List<Activity> openForFallback = activityRepository.findRecommendableActivities(today, PageRequest.of(0, MAX_RECOMMENDABLE_ACTIVITIES));
-            Integer gradeForFallback = (userSpec != null) ? userSpec.getGrade() : null;
-            openForFallback = GraduateOnlyActivityFilter.filterForGrade(openForFallback, gradeForFallback);
-            return buildFallbackRoadmap(gradeForFallback, openForFallback, today).toBuilder().dailyLimitReached(true).build();
+            openForFallback = GraduateOnlyActivityFilter.filterForGrade(openForFallback, grade);
+            return buildFallbackRoadmap(grade, openForFallback, today).toBuilder().dailyLimitReached(true).build();
         }
 
         String userSpecJson = promptDataBuilder.serializeSpecForRoadmap(userSpec);
         String targetJobStr = promptDataBuilder.buildTargetJobString(targetJob);
-        Integer grade       = (userSpec != null) ? userSpec.getGrade() : null;
 
         // 1. 합격자 비교 데이터(직무 요구 프로필 내 위치·갭) 계산 — F-03과 같은 진입점
         // (SpecPositionService)을 써서 추천과 로드맵이 같은 갭을 보고 말하게 한다.
@@ -178,6 +176,24 @@ public class RoadmapService {
             log.warn("F-03 추천 캐시 조회 중 오류 (기본값 [] 사용): {}", e.getMessage());
         }
 
+        // 2-1. [우선 반영할 AI 추천 활동] 검증용 DB 재조회.
+        // ⚠️ topRecommendedIds는 [전체 DB 등록 활동 목록](availableActivitiesJson)에서 제외된다
+        // (바로 위 169행 주석). 그런데 검증 맵(activityMap, parseGeminiResponse)이 findRecommendableActivities()가
+        // 준 최대 MAX_RECOMMENDABLE_ACTIVITIES(20)건짜리 activeActivities만 담으면, 추천 활동이
+        // 그 20건 창 밖에 있는 경우(추천은 마감일 상관없이 F-03에서 이미 뽑아둔 활동이라 최신
+        // 신청 마감순 20건과 겹치지 않을 수 있다) 프롬프트 규칙 3대로 Gemini가 그 ID를 그대로
+        // 반환해도 "DB에 없는 활동 ID"로 전부 폐기됐다. 추천 활동을 ID로 직접 재조회해 검증
+        // 맵에 별도로 포함시킨다 — 단, 그새 마감·비활성화된 활동, 그리고 재학생에게 지원 자격이
+        // 없는 대졸 공채(GraduateOnlyActivityFilter)는 기존 후보 경로와 동일하게 제외한다.
+        List<Activity> recommendedCacheActivities = List.of();
+        if (!topRecommendedIds.isEmpty()) {
+            List<Activity> fetched = activityRepository.findAllById(topRecommendedIds).stream()
+                    .filter(a -> Boolean.TRUE.equals(a.getIsActive()))
+                    .filter(a -> a.getDeadline() == null || !a.getDeadline().isBefore(today))
+                    .toList();
+            recommendedCacheActivities = GraduateOnlyActivityFilter.filterForGrade(fetched, grade);
+        }
+
         // 3. 현재 신청 가능한 DB 활동 조회 (RAG 패턴)
         // today를 위(82행)에서 이미 계산한 값과 동일하게 재사용한다 — 따로 다시
         // LocalDate.now()를 부르면 자정 경계를 걸쳐 실행될 때 바로 위 topRecommendedJson
@@ -193,7 +209,8 @@ public class RoadmapService {
 
         // 4. Gemini API 호출 (최대 2회 시도)
         RoadmapResponse response = callGeminiWithRetry(userSpecJson, targetJobStr, grade,
-                positionContextStr, topRecommendedJson, availableActivitiesJson, activeActivities, today);
+                positionContextStr, topRecommendedJson, availableActivitiesJson, activeActivities,
+                recommendedCacheActivities, today);
 
         if (response.isAiRoadmap()) {
             roadmapCacheService.save(user, response);
@@ -205,6 +222,7 @@ public class RoadmapService {
     private RoadmapResponse callGeminiWithRetry(String userSpecJson, String targetJobStr, Integer grade,
                                                  String positionContextStr, String topRecommendedJson,
                                                  String availableActivitiesJson, List<Activity> activeActivities,
+                                                 List<Activity> recommendedCacheActivities,
                                                  LocalDate today) {
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
@@ -214,7 +232,7 @@ public class RoadmapService {
                 if (rawJson == null || rawJson.isBlank()) {
                     log.warn("Gemini 로드맵 응답 비어있음 (시도 {}회)", attempt);
                 } else {
-                    RoadmapResponse parsed = parseGeminiResponse(rawJson, activeActivities);
+                    RoadmapResponse parsed = parseGeminiResponse(rawJson, activeActivities, recommendedCacheActivities);
                     if (parsed != null) return parsed;
                 }
             } catch (Exception e) {
@@ -237,11 +255,21 @@ public class RoadmapService {
      * 타입 안전한 GeminiRoadmapResult DTO로 파싱하고, DB와 대조하여 실재하는 활동만 포함한다.
      */
     private RoadmapResponse parseGeminiResponse(String rawJson,
-                                                 List<Activity> activeActivities) throws Exception {
+                                                 List<Activity> activeActivities,
+                                                 List<Activity> recommendedCacheActivities) throws Exception {
         // DB 활동을 UUID → Activity Map으로 변환 (빠른 검증용)
         Map<UUID, Activity> activityMap = new HashMap<>();
         for (Activity a : activeActivities) {
             activityMap.put(a.getId(), a);
+        }
+        // ⚠️ [우선 반영할 AI 추천 활동]은 activeActivities(findRecommendableActivities 상위
+        // MAX_RECOMMENDABLE_ACTIVITIES건) 창 밖일 수 있다 — 프롬프트 규칙 3대로 Gemini가 그
+        // ID를 그대로 반환해도 이 맵에 없으면 "DB에 없는 활동 ID"로 폐기된다(RoadmapService
+        // 클래스 주석의 1b 참고). 추천 캐시 활동도 함께 담아 그 창 밖에 있어도 검증을 통과하게 한다.
+        if (recommendedCacheActivities != null) {
+            for (Activity a : recommendedCacheActivities) {
+                activityMap.putIfAbsent(a.getId(), a);
+            }
         }
 
         // 타입 안전한 DTO로 파싱 (개선 #5)
@@ -532,17 +560,16 @@ public class RoadmapService {
     }
 
     /**
-     * 스텝 어딘가에 matchedActivities가 하나라도 있는지만 본다(마감일 등 신선도는 보지 않음).
-     * "필터링 전 원래 매칭이 있었는가"를 판단하는 용도 — hasUsableCachedActivities와 달리 빈
-     * 목록/전부 빈 스텝이면 그냥 false를 반환하면 되므로 vacuous truth 문제가 없다.
+     * 필터 후 매칭 활동이 0건인 캐시를 재생성할 가치가 있는지 판단한다 — 현재 DB에 추천
+     * 가능한(GraduateOnlyActivityFilter까지 적용한) 후보 활동이 하나라도 있어야 재생성 결과가
+     * 달라질 수 있다. 후보가 0건이면 재생성해도 매칭 0건이 똑같이 나오므로, 무의미한 Gemini
+     * 재호출을 막기 위해 false를 반환해 기존 캐시를 그대로 쓰게 한다.
      */
-    private boolean hasAnyMatchedActivities(RoadmapResponse response) {
-        if (response == null || response.getTimeline() == null) {
-            return false;
-        }
-        return response.getTimeline().stream()
-                .filter(step -> step != null && step.getMatchedActivities() != null)
-                .anyMatch(step -> !step.getMatchedActivities().isEmpty());
+    private boolean hasRecommendableCandidates(LocalDate today, Integer grade) {
+        List<Activity> candidates = activityRepository.findRecommendableActivities(
+                today, PageRequest.of(0, MAX_RECOMMENDABLE_ACTIVITIES));
+        candidates = GraduateOnlyActivityFilter.filterForGrade(candidates, grade);
+        return !candidates.isEmpty();
     }
 
     private boolean hasUsableCachedActivities(RoadmapResponse response, LocalDate today) {
