@@ -54,13 +54,18 @@ public class AiDailyAttemptLimiter {
     private int enrichDailyLimit;
 
     /**
-     * 오늘 시도 1회를 기록하고, 상한 이내면 true. 상한을 넘긴 시도도 기록은 된다(다음 호출도 거절되게).
+     * 함수 이름: tryAcquire()
+     * 기능: 오늘 시도 1회를 기록하고, 상한 이내면 true. 상한을 넘긴 시도도 기록은 된다(다음 호출도 거절되게).
      *
      * ⚠️ doTryAcquire(내부 헬퍼)는 @Transactional을 달지 않는다 — 여기(진입점)에서만 달아야
      * REQUIRES_NEW가 실제로 걸린다. Spring @Transactional은 프록시 기반 AOP라, 같은 빈 안에서
      * this.메서드()로 호출하면(self-invocation) 프록시를 거치지 않아 애노테이션이 조용히
      * 무시된다(UserSpecService.saveOrUpdateMySpec 주석의 문제와 같은 함정). tryAcquireEnrich도
      * 같은 이유로 진입점 자신에 @Transactional을 달고 있다 — 서로를 호출하지 않는다.
+     *
+     * 파라미터: UUID userId -> 시도를 기록할 사용자 ID
+     *           String kind -> 호출 종류(KIND_RECOMMENDATION, KIND_ROADMAP 등)
+     * 반환값: boolean -> 상한 이내면 true(호출 허용), 초과면 false
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean tryAcquire(UUID userId, String kind) {
@@ -68,18 +73,30 @@ public class AiDailyAttemptLimiter {
     }
 
     /**
-     * KIND_ENRICH 전용 진입점 — enrichDailyLimit을 쓴다. tryAcquire(userId, kind)를 호출하지
+     * 함수 이름: tryAcquireEnrich()
+     * 기능: KIND_ENRICH 전용 진입점 — enrichDailyLimit을 쓴다. tryAcquire(userId, kind)를 호출하지
      * 않는 이유는 위 주석 참고(self-invocation이면 이 메서드의 @Transactional만 적용되고
      * tryAcquire 쪽 애노테이션은 무시되어 결과적으로는 문제없이 동작하지만, 어느 한쪽이라도
      * 나중에 REQUIRES_NEW가 아닌 값으로 바뀌면 조용히 깨지는 암묵적 의존을 피하기 위해
      * 아예 각자 독립적으로 doTryAcquire를 부른다).
+     * 파라미터: UUID userId -> 시도를 기록할 사용자 ID
+     * 반환값: boolean -> 상한 이내면 true, 초과면 false
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean tryAcquireEnrich(UUID userId) {
         return doTryAcquire(userId, KIND_ENRICH, enrichDailyLimit);
     }
 
-    /** 트랜잭션 경계 없는 순수 로직 — 항상 위 두 진입점 중 하나가 연 트랜잭션 안에서만 실행된다. */
+    /**
+     * 함수 이름: doTryAcquire()
+     * 기능: 트랜잭션 경계 없는 순수 로직 — 항상 위 두 진입점 중 하나가 연 트랜잭션 안에서만 실행된다.
+     *       원자적 UPSERT로 오늘 (사용자, 종류)의 시도 횟수를 1 올리고, 상한 이내인지 판정한다.
+     *       limit이 0 이하이면 상한 없음으로 보고 기록 없이 허용한다.
+     * 파라미터: UUID userId -> 사용자 ID
+     *           String kind -> 호출 종류
+     *           int limit -> 적용할 일일 상한
+     * 반환값: boolean -> 상한 이내면 true, 초과면 false
+     */
     private boolean doTryAcquire(UUID userId, String kind, int limit) {
         if (limit <= 0) {
             return true;
@@ -99,7 +116,13 @@ public class AiDailyAttemptLimiter {
         return allowed;
     }
 
-    /** 오늘 이 사용자의 시도 수(게이트 판정 없이 조회). */
+    /**
+     * 함수 이름: attemptsToday()
+     * 기능: 오늘 이 사용자의 시도 수를 게이트 판정 없이 조회한다.
+     * 파라미터: UUID userId -> 사용자 ID
+     *           String kind -> 호출 종류
+     * 반환값: int -> 오늘 시도 횟수(기록이 없으면 0)
+     */
     @Transactional(readOnly = true)
     public int attemptsToday(UUID userId, String kind) {
         Integer count = jdbcTemplate.queryForObject("""
@@ -109,7 +132,13 @@ public class AiDailyAttemptLimiter {
         return count == null ? 0 : count;
     }
 
-    /** 지난 기록은 쓸모가 없으므로 매일 정리한다(테이블이 사용자×일수만큼 자라지 않게). */
+    /**
+     * 함수 이름: purgeOld()
+     * 기능: 지난 기록은 쓸모가 없으므로 매일 00:30(KST)에 이틀 전보다 오래된 시도 기록을 삭제한다
+     *       (테이블이 사용자×일수만큼 자라지 않게).
+     * 파라미터: 없음
+     * 반환값: 없음
+     */
     @Scheduled(cron = "0 30 0 * * *", zone = ServiceTime.ZONE)
     @Transactional
     public void purgeOld() {

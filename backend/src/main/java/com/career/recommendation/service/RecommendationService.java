@@ -73,12 +73,15 @@ public class RecommendationService {
     private static final ZoneId SERVICE_ZONE_ID = ServiceTime.ZONE_ID;
 
     /**
-     * 현재 로그인한 유저의 맞춤 추천 활동 목록을 반환한다.
-     * 유효한 캐시가 있으면 DB에서 즉시 반환한다.
+     * 함수 이름: getRecommendations()
+     * 기능: 현재 로그인한 유저의 맞춤 추천 활동 목록을 반환한다.
+     *       유효한 캐시가 있으면 DB에서 즉시 반환한다.
      *
-     * 트랜잭션 없이 전체 흐름을 오케스트레이션한다.
-     * DB 조회는 각 리포지토리 메서드의 기본 트랜잭션에 의존하고,
-     * Gemini API 호출은 트랜잭션 바깥에서 수행하여 DB 커넥션을 점유하지 않는다.
+     *       트랜잭션 없이 전체 흐름을 오케스트레이션한다.
+     *       DB 조회는 각 리포지토리 메서드의 기본 트랜잭션에 의존하고,
+     *       Gemini API 호출은 트랜잭션 바깥에서 수행하여 DB 커넥션을 점유하지 않는다.
+     * 파라미터: Authentication authentication -> 현재 로그인 사용자 인증 정보
+     * 반환값: RecommendationResponse -> 추천 활동 목록과 위치·갭 정보(캐시, Gemini 결과 또는 폴백)
      */
     public RecommendationResponse getRecommendations(Authentication authentication) {
         User user = currentUserService.getCurrentUser(authentication);
@@ -180,17 +183,22 @@ public class RecommendationService {
     }
 
     /**
-     * 홈 추천 응답을 반환하기 직전, 같은 유저의 로드맵 캐시에 있는 매칭 활동 중 추천 목록에
-     * 아직 없는 것을 뒤에 덧붙인다. 실사용 피드백(2026-09-17): "추천이랑 로드맵이 띄워주는 게
-     * 달라. 둘 다 괜찮은 제안인데, 적어도 홈 화면엔 로드맵에 떠 있는 건 모두 떴으면 좋겠다."
+     * 함수 이름: mergeRoadmapActivities()
+     * 기능: 홈 추천 응답을 반환하기 직전, 같은 유저의 로드맵 캐시에 있는 매칭 활동 중 추천 목록에
+     *       아직 없는 것을 뒤에 덧붙인다. 실사용 피드백(2026-09-17): "추천이랑 로드맵이 띄워주는 게
+     *       달라. 둘 다 괜찮은 제안인데, 적어도 홈 화면엔 로드맵에 떠 있는 건 모두 떴으면 좋겠다."
      *
-     * 로드맵 생성 시엔 이미 추천된 활동을 프롬프트에서 제외(excludeIds)하기 때문에 두 목록이
-     * 의도적으로 갈라진다 — 이 dedup 자체는 그대로 둔다. 대신 "홈에 보여줄 목록"을 만드는
-     * 이 시점에만 로드맵 표시 활동을 합쳐 보여준다.
+     *       로드맵 생성 시엔 이미 추천된 활동을 프롬프트에서 제외(excludeIds)하기 때문에 두 목록이
+     *       의도적으로 갈라진다 — 이 dedup 자체는 그대로 둔다. 대신 "홈에 보여줄 목록"을 만드는
+     *       이 시점에만 로드맵 표시 활동을 합쳐 보여준다.
      *
-     * 읽기 시점 표시용이다: 로드맵을 새로 생성하지 않고(Gemini 호출 유발 금지) 이미 있는
-     * 로드맵 캐시만 참고하며, 병합 결과는 추천 캐시에 다시 저장하지 않는다 — 로드맵이 바뀌면
-     * 다음 조회에서 자동으로 반영되게 하기 위함이다.
+     *       읽기 시점 표시용이다: 로드맵을 새로 생성하지 않고(Gemini 호출 유발 금지) 이미 있는
+     *       로드맵 캐시만 참고하며, 병합 결과는 추천 캐시에 다시 저장하지 않는다 — 로드맵이 바뀌면
+     *       다음 조회에서 자동으로 반영되게 하기 위함이다.
+     * 파라미터: RecommendationResponse response -> 병합 대상 추천 응답
+     *           UUID userId -> 로드맵 캐시를 조회할 사용자 ID
+     *           LocalDate today -> 마감 여부 판단 기준 날짜
+     * 반환값: RecommendationResponse -> 로드맵 활동이 덧붙은 응답(병합할 것이 없으면 원본 그대로)
      */
     private RecommendationResponse mergeRoadmapActivities(
             RecommendationResponse response, UUID userId, LocalDate today) {
@@ -276,6 +284,12 @@ public class RecommendationService {
         return response.toBuilder().activities(merged).build();
     }
 
+    /**
+     * 함수 이름: deserializeRoadmap()
+     * 기능: 로드맵 캐시 JSON을 RoadmapResponse로 역직렬화한다. 실패하면 경고 로그를 남기고 null을 돌려준다(홈 추천 병합 생략).
+     * 파라미터: String json -> 로드맵 캐시 결과 JSON
+     * 반환값: RoadmapResponse -> 역직렬화된 로드맵, 실패 시 null
+     */
     private RoadmapResponse deserializeRoadmap(String json) {
         try {
             return objectMapper.readValue(json, RoadmapResponse.class);
@@ -286,11 +300,17 @@ public class RecommendationService {
     }
 
     /**
-     * 캐시된 활동 목록은 유지하되, 위치·갭 등 로컬에서 결정적으로 계산되는 부분만 현재 스펙
-     * 기준으로 다시 계산해 돌려준다. 하루 갱신 한도에 막혀 Gemini 재호출은 못 하는 상황에서,
-     * 최소한 사용자가 방금 바꾼 스펙이 비교 탭에는 즉시 반영되게 하기 위한 경로다.
-     * toBuilder 결과는 반환 전용이며 캐시에 저장하지 않는다(저장하면 dailyLimitReached가
-     * 캐시에 박제됨 — DTO 주석 참고).
+     * 함수 이름: rebuildPositionFromCurrentSpec()
+     * 기능: 캐시된 활동 목록은 유지하되, 위치·갭 등 로컬에서 결정적으로 계산되는 부분만 현재 스펙
+     *       기준으로 다시 계산해 돌려준다. 하루 갱신 한도에 막혀 Gemini 재호출은 못 하는 상황에서,
+     *       최소한 사용자가 방금 바꾼 스펙이 비교 탭에는 즉시 반영되게 하기 위한 경로다.
+     *       갭이 바뀌었으므로 각 카드의 targetGap도 새 갭 기준으로 다시 맞추고, dailyLimitReached를 true로 표시한다.
+     *       toBuilder 결과는 반환 전용이며 캐시에 저장하지 않는다(저장하면 dailyLimitReached가
+     *       캐시에 박제됨 — DTO 주석 참고).
+     * 파라미터: RecommendationResponse cachedResponse -> 캐시에서 읽은 추천 응답
+     *           UserSpec userSpec -> 현재 사용자 스펙
+     *           TargetJob targetJob -> 현재 목표 직무
+     * 반환값: RecommendationResponse -> 위치·갭·targetGap이 재계산된 응답(캐시에 저장하지 않음)
      */
     private RecommendationResponse rebuildPositionFromCurrentSpec(
             RecommendationResponse cachedResponse, UserSpec userSpec, TargetJob targetJob) {
@@ -317,10 +337,14 @@ public class RecommendationService {
     }
 
     /**
-     * 캐시 속 활동 목록을 DB와 대조해 비활성화(is_active=false)·삭제·마감(deadline < today)된
-     * 항목을 제거한다. 마감일이 null(상시 모집)인 항목은 그대로 유지한다.
-     * 활동은 최대 {@value #MAX_RECOMMENDABLE_ACTIVITIES}개뿐이라 findAllById 1회면 충분하다.
-     * 캐시 JSON 자체는 다시 쓰지 않고(원본은 그대로 둔다), 읽을 때마다 필터링만 한다.
+     * 함수 이름: filterStaleActivities()
+     * 기능: 캐시 속 활동 목록을 DB와 대조해 비활성화(is_active=false)·삭제·마감(deadline < today)된
+     *       항목을 제거한다. 마감일이 null(상시 모집)인 항목은 그대로 유지한다.
+     *       활동은 최대 {@value #MAX_RECOMMENDABLE_ACTIVITIES}개뿐이라 findAllById 1회면 충분하다.
+     *       캐시 JSON 자체는 다시 쓰지 않고(원본은 그대로 둔다), 읽을 때마다 필터링만 한다.
+     * 파라미터: RecommendationResponse response -> 캐시에서 읽은 추천 응답
+     *           LocalDate today -> 마감 여부 판단 기준 날짜
+     * 반환값: RecommendationResponse -> 만료 활동이 제거된 응답(제거할 것이 없으면 원본 그대로)
      */
     private RecommendationResponse filterStaleActivities(RecommendationResponse response, LocalDate today) {
         if (response == null || response.getActivities() == null || response.getActivities().isEmpty()) {
@@ -347,9 +371,13 @@ public class RecommendationService {
     }
 
     /**
-     * DB 활동이 지금 추천/로드맵에 노출해도 되는 상태인지 판단한다: 삭제되지 않았고
-     * (db != null), 비활성화되지 않았고, 마감일이 없거나 아직 지나지 않았어야 한다.
-     * filterStaleActivities와 mergeRoadmapActivities가 같은 기준을 쓴다.
+     * 함수 이름: isActivityUsable()
+     * 기능: DB 활동이 지금 추천/로드맵에 노출해도 되는 상태인지 판단한다: 삭제되지 않았고
+     *       (db != null), 비활성화되지 않았고, 마감일이 없거나 아직 지나지 않았어야 한다.
+     *       filterStaleActivities와 mergeRoadmapActivities가 같은 기준을 쓴다.
+     * 파라미터: Activity db -> DB에서 조회한 활동(삭제됐으면 null)
+     *           LocalDate today -> 마감 여부 판단 기준 날짜
+     * 반환값: boolean -> 노출 가능하면 true
      */
     private static boolean isActivityUsable(Activity db, LocalDate today) {
         if (db == null) return false; // DB에 없음(삭제됨)
@@ -357,6 +385,13 @@ public class RecommendationService {
         return db.getDeadline() == null || !db.getDeadline().isBefore(today); // 마감 지남
     }
 
+    /**
+     * 함수 이름: hasUsableCachedActivities()
+     * 기능: 캐시된 추천에 활동이 하나 이상 있고, 마감일이 오늘보다 이전인 활동이 하나도 없는지 확인한다.
+     * 파라미터: RecommendationResponse response -> 캐시에서 읽은 추천 응답(null 가능)
+     *           LocalDate today -> 마감 여부 판단 기준 날짜
+     * 반환값: boolean -> 모두 유효하면 true, 비었거나 마감된 활동이 있으면 false
+     */
     private boolean hasUsableCachedActivities(RecommendationResponse response, LocalDate today) {
         return response != null
                 && response.getActivities() != null
@@ -366,6 +401,14 @@ public class RecommendationService {
                         && activity.getDeadline().isBefore(today));
     }
 
+    /**
+     * 함수 이름: isSpecModifiedSince()
+     * 기능: 사용자 스펙 또는 목표 직무가 캐시 생성 시각 이후에 수정됐는지 판단한다. 캐시 생성 시각이 없으면 수정된 것으로 본다.
+     * 파라미터: UserSpec userSpec -> 현재 사용자 스펙(null 가능)
+     *           TargetJob targetJob -> 현재 목표 직무(null 가능)
+     *           LocalDateTime cacheCreatedAt -> 캐시 생성 시각
+     * 반환값: boolean -> 수정됐으면 true
+     */
     private boolean isSpecModifiedSince(UserSpec userSpec, TargetJob targetJob, java.time.LocalDateTime cacheCreatedAt) {
         if (cacheCreatedAt == null) return true;
         if (userSpec != null && userSpec.getUpdatedAt() != null && userSpec.getUpdatedAt().isAfter(cacheCreatedAt)) {
@@ -378,7 +421,17 @@ public class RecommendationService {
     }
 
     /**
-     * Gemini API를 호출하고 JSON 파싱을 시도한다. 실패 시 1회 재시도 후 Fallback 반환.
+     * 함수 이름: callGeminiWithRetry()
+     * 기능: Gemini API를 호출하고 JSON 파싱을 시도한다. 실패 시 1회 재시도(2초 백오프) 후 Fallback 반환.
+     * 파라미터: String userSpecJson -> 사용자 스펙 JSON
+     *           String targetJobStr -> 목표 직무 문자열
+     *           String positionContext -> 합격자 비교 데이터 텍스트
+     *           String availableActivitiesJson -> 추천 가능한 활동 목록 JSON
+     *           SpecPositionResult position -> 위치·갭 계산 결과
+     *           List<Activity> activeActivities -> 추천 후보 활동 목록
+     *           String targetJobName -> 응답에 표시할 목표 직무명
+     *           LocalDate today -> 오늘 날짜
+     * 반환값: RecommendationResponse -> Gemini 기반 응답, 2회 모두 실패하면 폴백 응답
      */
     private RecommendationResponse callGeminiWithRetry(
             String userSpecJson, String targetJobStr, String positionContext, String availableActivitiesJson,
@@ -408,14 +461,20 @@ public class RecommendationService {
     }
 
     /**
-     * Gemini 미사용/실패 시 DB 등록 활동 기반 기본 추천 반환 (방어 로직).
+     * 함수 이름: buildFallbackResponse()
+     * 기능: Gemini 미사용/실패 시 DB 등록 활동 기반 기본 추천 반환 (방어 로직).
+     *       갭 키워드·목표 직무 태그로 순위를 매긴 상위 3개를 고르고, 갭이 맞는 활동엔 그 갭을 이유에 적는다.
      *
-     * ⚠️ 이 메서드는 절대 null을 반환하지 않는다. 호출부(getRecommendations)가 반환값에
-     * 곧바로 isAiRecommendation()을 호출하므로, null을 주면 추천 API 전체가 NPE로 500이 된다.
-     * 추천 가능한 활동이 0건인 상황(전 활동 마감·비활성화, 크롤링 중단 등)은 장애가 아니라
-     * 정상적으로 발생할 수 있는 상태이므로, 활동 목록만 비운 응답을 만든다.
-     * 위치·갭(specPosition)은 활동 유무와 무관하게 계산되므로 그대로 내려보낸다
-     * (화면은 활동 0건을 "아직 추천할 활동이 없어요"로 이미 처리한다).
+     *       ⚠️ 이 메서드는 절대 null을 반환하지 않는다. 호출부(getRecommendations)가 반환값에
+     *       곧바로 isAiRecommendation()을 호출하므로, null을 주면 추천 API 전체가 NPE로 500이 된다.
+     *       추천 가능한 활동이 0건인 상황(전 활동 마감·비활성화, 크롤링 중단 등)은 장애가 아니라
+     *       정상적으로 발생할 수 있는 상태이므로, 활동 목록만 비운 응답을 만든다.
+     *       위치·갭(specPosition)은 활동 유무와 무관하게 계산되므로 그대로 내려보낸다
+     *       (화면은 활동 0건을 "아직 추천할 활동이 없어요"로 이미 처리한다).
+     * 파라미터: List<Activity> activeActivities -> 추천 후보 활동 목록(null이면 빈 목록 취급)
+     *           SpecPositionResult position -> 위치·갭 계산 결과
+     *           String targetJobName -> 응답에 표시할 목표 직무명
+     * 반환값: RecommendationResponse -> aiRecommendation=false인 폴백 응답(절대 null 아님)
      */
     private RecommendationResponse buildFallbackResponse(List<Activity> activeActivities,
                                                          SpecPositionResult position, String targetJobName) {
@@ -455,9 +514,16 @@ public class RecommendationService {
     }
 
     /**
-     * Gemini 응답 JSON을 RecommendationResponse DTO로 변환한다.
-     * 타입 안전한 GeminiRecommendationResult DTO로 파싱하고,
-     * DB에 실재하는 활동만 포함하며, specPosition을 주입한다.
+     * 함수 이름: parseGeminiResponse()
+     * 기능: Gemini 응답 JSON을 RecommendationResponse DTO로 변환한다.
+     *       타입 안전한 GeminiRecommendationResult DTO로 파싱하고,
+     *       DB에 실재하는 활동만 포함하며, specPosition을 주입한다.
+     * 파라미터: String rawJson -> Gemini 응답 JSON
+     *           SpecPositionResult position -> 위치·갭 계산 결과
+     *           List<Activity> activeActivities -> 검증 기준이 되는 DB 활동 목록
+     *           String targetJobName -> 응답에 표시할 목표 직무명
+     * 반환값: RecommendationResponse -> 변환된 응답. 활동이 비었거나 유효한 활동이 하나도 없으면 null
+     * 예외: Exception -> JSON 파싱 실패 시(호출부가 재시도 처리)
      */
     private RecommendationResponse parseGeminiResponse(
             String rawJson, SpecPositionResult position,
@@ -518,6 +584,12 @@ public class RecommendationService {
                 .build();
     }
 
+    /**
+     * 함수 이름: deserialize()
+     * 기능: 추천 캐시 JSON을 RecommendationResponse로 역직렬화한다. 실패하면 경고 로그를 남기고 null을 돌려준다(재생성 대상).
+     * 파라미터: String json -> 추천 캐시 결과 JSON
+     * 반환값: RecommendationResponse -> 역직렬화된 응답, 실패 시 null
+     */
     private RecommendationResponse deserialize(String json) {
         try {
             return objectMapper.readValue(json, RecommendationResponse.class);

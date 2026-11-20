@@ -80,6 +80,13 @@ public class PasserReportRequest {
     /** GitHub 공개 레포 분석에 대한 동의. githubUsername이 비어 있으면 값과 무관하게 분석하지 않는다. */
     private Boolean githubConsent;
 
+    /**
+     * 함수 이름: isGpaWithinMaximum()
+     * 기능: 학점이 학점 기준값(만점) 이하인지 검증한다. gpa 또는 gpaMax가 null이면 true,
+     *       gpa가 gpaMax보다 크면 false이다.
+     * 파라미터: 없음
+     * 반환값: boolean -> 검증 통과 여부(true: 통과, false: 학점이 기준값 초과)
+     */
     @AssertTrue(message = "학점은 학점 기준값보다 클 수 없습니다.")
     @JsonIgnore
     public boolean isGpaWithinMaximum() {
@@ -89,6 +96,14 @@ public class PasserReportRequest {
         return gpa.compareTo(gpaMax) <= 0;
     }
 
+    /**
+     * 함수 이름: isLanguageTypeUnique()
+     * 기능: 어학점수 목록에 같은 종류의 시험이 중복되지 않았는지 검증한다. 빈 값이 아닌 type을 대소문자·앞뒤 공백
+     *       무시로 비교해, 전체 개수와 중복 제거 후 개수가 같으면 true, 중복이 있으면 false이다.
+     *       languageScores가 null이면 true이다.
+     * 파라미터: 없음
+     * 반환값: boolean -> 검증 통과 여부(true: 중복 없음, false: 같은 종류 시험이 중복)
+     */
     @AssertTrue(message = "같은 종류의 어학시험을 중복으로 제보할 수 없습니다.")
     @JsonIgnore
     public boolean isLanguageTypeUnique() {
@@ -115,6 +130,13 @@ public class PasserReportRequest {
         return validTypeCount == distinctTypeCount;
     }
 
+    /**
+     * 함수 이름: isGithubUsernameFormatValid()
+     * 기능: GitHub 아이디가 올바른 형식인지 검증한다. 아이디가 비어 있으면 true, 입력했다면 앞뒤 공백을 제거한 값이
+     *       GithubUsernameParser.isValidUsername 규칙을 통과할 때만 true이다.
+     * 파라미터: 없음
+     * 반환값: boolean -> 검증 통과 여부(true: 미입력 또는 올바른 형식, false: 잘못된 형식)
+     */
     @AssertTrue(message = "올바른 GitHub 아이디 형식이 아닙니다.")
     @JsonIgnore
     public boolean isGithubUsernameFormatValid() {
@@ -124,6 +146,13 @@ public class PasserReportRequest {
         return GithubUsernameParser.isValidUsername(githubUsername.trim());
     }
 
+    /**
+     * 함수 이름: isGithubConsentGivenWhenUsernamePresent()
+     * 기능: GitHub 아이디를 입력했을 때 분석 동의가 있는지 검증한다. 아이디가 비어 있으면 true,
+     *       입력했다면 githubConsent가 true일 때만 true이다.
+     * 파라미터: 없음
+     * 반환값: boolean -> 검증 통과 여부(true: 미입력 또는 동의함, false: 아이디는 있는데 동의 없음)
+     */
     @AssertTrue(message = "GitHub 아이디를 입력했다면 GitHub 분석 동의가 필요합니다.")
     @JsonIgnore
     public boolean isGithubConsentGivenWhenUsernamePresent() {

@@ -23,6 +23,12 @@ public class ExperienceEnrichResponse {
     /** 100자 이내로 컷된 한 줄 요약. 빈 값이면 null. */
     private String roleSummary;
 
+    /**
+     * 함수 이름: empty()
+     * 기능: Gemini 실패·일일 상한 초과 시 돌려줄 빈 응답을 만든다(areas는 빈 리스트, depth·roleSummary는 null).
+     * 파라미터: 없음
+     * 반환값: ExperienceEnrichResponse -> 비어 있는 보강 결과
+     */
     public static ExperienceEnrichResponse empty() {
         return ExperienceEnrichResponse.builder().areas(List.of()).depth(null).roleSummary(null).build();
     }

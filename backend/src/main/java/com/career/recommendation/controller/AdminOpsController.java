@@ -20,6 +20,13 @@ public class AdminOpsController {
 
     private final OpsSummaryService opsSummaryService;
 
+    /**
+     * 함수 이름: summary()
+     * 기능: 운영 요약(검수 대기 수, 직무별 비교 가능 합격자 수, Gemini 호출 통계)을 조회한다.
+     *       GET /api/v1/admin/ops/summary, 관리자 전용(ROLE_ADMIN, /api/v1/admin/** 인가는 SecurityConfig).
+     * 파라미터: 없음
+     * 반환값: OpsSummaryResponse -> 운영 요약 응답
+     */
     @Operation(summary = "운영 요약", description = "검수 대기 수, 직무별 비교 가능 합격자 수, Gemini 호출 통계(오늘 사용량·누적 성공/실패·지연).")
     @GetMapping("/summary")
     public OpsSummaryResponse summary() {

@@ -44,6 +44,23 @@ public class ActivityController {
     /** 미인증으로 호출 가능한 엔드포인트라 비정상적으로 큰 size로 DB 전체를 끌어오는 걸 막는다. */
     private static final int MAX_PAGE_SIZE = 100;
 
+    /**
+     * 함수 이름: getActivities()
+     * 기능: 현재 신청 가능한 활동을 페이지네이션으로 조회한다. type·jobType·deadlineAfter·keyword로
+     *       필터링(모두 선택, AND 결합)하며 page·size·sortBy(화이트리스트)·direction(대소문자 무관)을 검증한다.
+     *       GET /api/v1/activities, 로그인 불필요(PUBLIC_URLS).
+     * 파라미터: String type -> 활동 유형(INTERNSHIP | EXTERNAL | COMPETITION | EDUCATION, 생략 시 전체)
+     *           String jobType -> 목표 직무 코드(BACKEND 등), 태그가 해당 직무에 맞는 활동만
+     *           LocalDate deadlineAfter -> 이 날짜(YYYY-MM-DD) 이후 마감인 활동만(상시 모집은 항상 포함)
+     *           String keyword -> 이름·주최·설명 부분 일치 검색(2~50자, 대소문자 무시)
+     *           int page -> 페이지 번호(0부터 시작, 기본 0)
+     *           int size -> 페이지 크기(1~100, 기본 10)
+     *           String sortBy -> 정렬 기준 필드(기본 createdAt)
+     *           String direction -> 정렬 방향(ASC/DESC, 기본 DESC)
+     * 반환값: Page<ActivityResponse> -> 활동 목록 페이지
+     * 예외: ResponseStatusException(400) -> page·size·sortBy·jobType·keyword가 유효하지 않을 때
+     *       IllegalArgumentException -> direction이 ASC/DESC가 아닐 때(전용 핸들러에서 400 처리)
+     */
     @Operation(summary = "활동 목록 조회", description = "현재 신청 가능한 활동을 페이지네이션으로 조회한다. type·jobType·deadlineAfter·keyword로 필터링 가능(모두 선택, AND 결합).")
     @GetMapping
     public Page<ActivityResponse> getActivities(
@@ -102,6 +119,12 @@ public class ActivityController {
         return activityService.getActivities(filter, pageRequest);
     }
 
+    /**
+     * 함수 이름: getActivity()
+     * 기능: 활동 ID로 활동 상세 정보를 조회한다. GET /api/v1/activities/{id}, 로그인 불필요.
+     * 파라미터: UUID id -> 조회할 활동 ID
+     * 반환값: ActivityResponse -> 활동 상세 응답
+     */
     @Operation(
             summary = "활동 상세 조회",
             description = "활동 ID를 사용하여 활동 상세 정보를 조회합니다."

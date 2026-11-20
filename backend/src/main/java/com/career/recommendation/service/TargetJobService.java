@@ -27,6 +27,9 @@ public class TargetJobService {
     private final PlatformTransactionManager transactionManager;
 
     /**
+     * 함수 이름: saveOrUpdateMyTarget()
+     * 기능: 현재 사용자의 목표 직무를 저장하거나 수정한다. 직무 코드는 정규 코드(enum name)로 바꿔 저장한다.
+     *
      * ⚠️ UserSpecService.saveOrUpdateMySpec과 같은 이유로 NOT_SUPPORTED가 필요하다. 클래스
      * 레벨 @Transactional(readOnly = true)를 그대로 두면, upsert()의 insertAttempt
      * (REQUIRES_NEW)가 실패한 뒤 재개되는 이 메서드의 readOnly 트랜잭션에 retry가 합류해
@@ -35,6 +38,10 @@ public class TargetJobService {
      * pg_backend_pid()로 직접 재현). NOT_SUPPORTED로 이 메서드를 트랜잭션 밖에 두면 매 호출이
      * 커넥션 풀에서 2개를 동시에 점유하던 문제(동시 요청 10개 이상에서 HikariCP 풀 고갈
      * 실측)도 같이 해소된다 — insertAttempt와 retry가 순차적으로만 열린다.
+     *
+     * 파라미터: Authentication authentication -> 현재 로그인한 사용자 인증 정보
+     *           TargetJobRequest request -> 목표 직무 요청(직무·기업 규모·산업)
+     * 반환값: TargetJobResponse -> 저장된 목표 직무 응답
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public TargetJobResponse saveOrUpdateMyTarget(
@@ -50,11 +57,17 @@ public class TargetJobService {
     }
 
     /**
+     * 함수 이름: upsert()
+     * 기능: 사용자의 목표 직무를 삽입하거나 갱신한다(동시 최초 저장 경합 대응).
      * UserSpecService.upsert()와 같은 이유·같은 구조. target_jobs.user_id도 UNIQUE라 최초
      * 저장 시 같은 경합이 있었다(실제 동시 스레드 테스트로 100% 재현 확인). REQUIRES_NEW로
      * 격리된 삽입 시도가 실패하면(동시 요청이 먼저 INSERT함) 완전히 새 트랜잭션에서
      * 재조회 후 업데이트로 재시도한다 — PostgreSQL은 실패한 문장이 있던 트랜잭션 전체를
      * aborted 상태로 만들어 같은 트랜잭션 안에서 재시도하면 또 실패하기 때문이다.
+     *
+     * 파라미터: User user -> 대상 사용자
+     *           TargetJobRequest request -> 목표 직무 요청
+     * 반환값: TargetJob -> 저장(또는 변경 없어 그대로인) 목표 직무 엔티티
      */
     private TargetJob upsert(User user, TargetJobRequest request) {
         TransactionTemplate insertAttempt = new TransactionTemplate(transactionManager);
@@ -95,8 +108,12 @@ public class TargetJobService {
     }
 
     /**
-     * 요청 값이 기존 엔티티와 동일한지 비교한다.
+     * 함수 이름: hasChanges()
+     * 기능: 요청 값이 기존 엔티티와 동일한지 비교한다.
      * 동일하면 saveAndFlush()를 건너뛰어 @UpdateTimestamp가 updatedAt을 갱신하지 않게 한다.
+     * 파라미터: TargetJob existing -> 기존 목표 직무 엔티티
+     *           TargetJobRequest request -> 새 요청 값
+     * 반환값: boolean -> 직무·기업 규모·산업 중 하나라도 다르면 true
      */
     private boolean hasChanges(TargetJob existing, TargetJobRequest request) {
         if (!Objects.equals(existing.getJobType(), request.getJobType())) return true;

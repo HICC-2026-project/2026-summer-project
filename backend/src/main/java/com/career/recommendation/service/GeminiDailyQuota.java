@@ -34,7 +34,14 @@ public class GeminiDailyQuota {
         this.dailyLimit = dailyLimit;
     }
 
-    /** 호출 허용 여부. 허용되면 오늘 사용량을 1 올린다. 0 이하 설정은 "상한 없음". */
+    /**
+     * 함수 이름: tryAcquire()
+     * 기능: 호출 허용 여부를 판단하고, 허용되면 오늘 사용량을 1 올린다. 0 이하 설정은 "상한 없음".
+     *       증가 후 되돌리는 방식은 경합 시 카운터가 잠깐 상한을 넘고 경고가 여러 번 찍히므로,
+     *       CAS 한 번으로 "상한 미만일 때만 +1" 한다. 상한 도달 경고 로그는 하루 한 번만 남긴다.
+     * 파라미터: 없음
+     * 반환값: boolean -> 호출 허용이면 true, 상한 도달이면 false
+     */
     public boolean tryAcquire() {
         if (dailyLimit <= 0) {
             return true;
@@ -51,15 +58,33 @@ public class GeminiDailyQuota {
         return false;
     }
 
+    /**
+     * 함수 이름: dailyLimit()
+     * 기능: 설정된 서비스 전역 일일 호출 상한을 돌려준다.
+     * 파라미터: 없음
+     * 반환값: int -> 일일 상한(0 이하면 상한 없음)
+     */
     public int dailyLimit() {
         return dailyLimit;
     }
 
+    /**
+     * 함수 이름: usedToday()
+     * 기능: 오늘(KST) 사용한 Gemini 호출 시도 수를 돌려준다. 날짜가 바뀌었으면 먼저 카운터를 초기화한다.
+     * 파라미터: 없음
+     * 반환값: int -> 오늘 사용량
+     */
     public int usedToday() {
         rollDayIfNeeded(LocalDate.now(ServiceTime.ZONE_ID));
         return used.get();
     }
 
+    /**
+     * 함수 이름: rollDayIfNeeded()
+     * 기능: 기록된 날짜가 오늘과 다르면 날짜를 갱신하고 사용량 카운터와 상한 경고 플래그를 초기화한다.
+     * 파라미터: LocalDate today -> 오늘 날짜(서비스 시간대 기준)
+     * 반환값: 없음
+     */
     private void rollDayIfNeeded(LocalDate today) {
         LocalDate current = day.get();
         if (!today.equals(current) && day.compareAndSet(current, today)) {

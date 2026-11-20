@@ -34,6 +34,13 @@ public class AdminPasserEntryService {
     private final PasserDataRepository passerDataRepository;
     private final JobSpecProfileService jobSpecProfileService;
 
+    /**
+     * 함수 이름: create()
+     * 기능: 관리자가 입력한 합격자 스펙을 검수 없이 isVerified=true로 저장하고, 직무 프로필 캐시를 무효화한다.
+     * 파라미터: Authentication authentication -> 현재 로그인한 관리자 인증 정보
+     *           AdminPasserEntryRequest request -> 수기 등록 요청(직무·연도·학점·어학·자격증·경험 수·출처 메모)
+     * 반환값: AdminPasserEntryResponse -> 등록된 합격자 데이터 응답
+     */
     @Transactional
     public AdminPasserEntryResponse create(Authentication authentication, AdminPasserEntryRequest request) {
         User admin = currentUserService.getCurrentUser(authentication);
@@ -69,6 +76,12 @@ public class AdminPasserEntryService {
         return AdminPasserEntryResponse.created(saved);
     }
 
+    /**
+     * 함수 이름: convertLanguageScores()
+     * 기능: 어학 점수 요청 목록에서 null을 제외하고 저장용 Map 목록으로 변환한다. 입력이 null이면 빈 목록을 돌려준다.
+     * 파라미터: List<LanguageScoreRequest> languageScores -> 어학 점수 요청 목록(null 가능)
+     * 반환값: List<Map<String, Object>> -> 저장용 어학 점수 Map 목록
+     */
     private List<Map<String, Object>> convertLanguageScores(List<LanguageScoreRequest> languageScores) {
         if (languageScores == null) {
             return Collections.emptyList();
@@ -80,6 +93,12 @@ public class AdminPasserEntryService {
                 .toList();
     }
 
+    /**
+     * 함수 이름: convertCertifications()
+     * 기능: 자격증 목록에서 null·공백 항목을 제거하고 앞뒤 공백을 다듬어 중복 없는 배열로 변환한다. 입력이 null이면 빈 배열을 돌려준다.
+     * 파라미터: List<String> certifications -> 자격증 이름 목록(null 가능)
+     * 반환값: String[] -> 정제된 자격증 배열
+     */
     private String[] convertCertifications(List<String> certifications) {
         if (certifications == null) {
             return new String[0];

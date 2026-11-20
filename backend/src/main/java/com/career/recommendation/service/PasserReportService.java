@@ -36,6 +36,16 @@ public class PasserReportService {
     private final LocalProofStorageService localProofStorageService;
     private final PasserGithubContributionRunner passerGithubContributionRunner;
 
+    /**
+     * 함수 이름: submit()
+     * 기능: 합격자 제보를 접수한다. 중복·일일 상한을 먼저 검사하고 증빙 파일을 저장한 뒤 검수 대기(isVerified=false) 상태로 DB에 저장한다.
+     *       DB 저장이 실패하면 저장해 둔 증빙 파일을 지우고, GitHub 아이디 입력·동의 시 저장 후 비동기 분석을 시작한다.
+     * 파라미터: Authentication authentication -> 현재 로그인한 제보자 인증 정보
+     *           PasserReportRequest request -> 제보 요청(직무·연도·학점·어학·자격증·경험 수·GitHub 정보)
+     *           MultipartFile proof -> 증빙 이미지 파일
+     * 반환값: PasserReportResponse -> 검수 대기 상태의 제보 응답
+     * 예외: DuplicatePasserReportException -> 검수 대기 중복 제보이거나 24시간 상한 초과일 때
+     */
     @Transactional
     public PasserReportResponse submit(
             Authentication authentication,
@@ -96,7 +106,12 @@ public class PasserReportService {
         return PasserReportResponse.pending(savedReport);
     }
 
-    /** 본인이 제보한 목록(최신순). 검수 여부만 확인하는 용도. */
+    /**
+     * 함수 이름: findMyReports()
+     * 기능: 본인이 제보한 목록(최신순)을 조회한다. 검수 여부만 확인하는 용도.
+     * 파라미터: Authentication authentication -> 현재 로그인한 사용자 인증 정보
+     * 반환값: List<MyPasserReportResponse> -> 내 제보 목록(최신순)
+     */
     public List<MyPasserReportResponse> findMyReports(Authentication authentication) {
         User me = currentUserService.getCurrentUser(authentication);
         return passerDataRepository.findAllByReporter_IdOrderByCreatedAtDesc(me.getId()).stream()
@@ -105,10 +120,18 @@ public class PasserReportService {
     }
 
     /**
+     * 함수 이름: rejectIfDuplicate()
+     * 기능: 중복 제보 규칙을 검사해 위반이면 예외를 던진다.
      * 중복 제보 규칙.
      * 1) 같은 직무·연도로 검수 대기 중인 제보가 있으면 거절 — 같은 합격 사실을 두 번 세지 않는다.
      *    반려된 뒤 고쳐서 다시 내는 것은 허용(reviewedAt != null이면 존재 검사에서 빠짐).
      * 2) 24시간 내 MAX_REPORTS_PER_DAY건 초과 거절 — 검수 큐를 한 계정이 채우는 것을 막는다.
+     *
+     * 파라미터: User reporter -> 제보자
+     *           String jobType -> 직무 코드(정규화된 enum name)
+     *           Integer year -> 합격 연도
+     * 반환값: 없음
+     * 예외: DuplicatePasserReportException -> 검수 대기 중복 제보이거나 24시간 상한 초과일 때
      */
     private void rejectIfDuplicate(User reporter, String jobType, Integer year) {
         if (passerDataRepository.existsByReporter_IdAndJobTypeAndYearAndReviewedAtIsNull(reporter.getId(), jobType, year)) {
@@ -123,6 +146,12 @@ public class PasserReportService {
         }
     }
 
+    /**
+     * 함수 이름: convertLanguageScores()
+     * 기능: 어학 점수 요청 목록에서 null을 제외하고 저장용 Map 목록으로 변환한다. 입력이 null이면 빈 목록을 돌려준다.
+     * 파라미터: List<LanguageScoreRequest> languageScores -> 어학 점수 요청 목록(null 가능)
+     * 반환값: List<Map<String, Object>> -> 저장용 어학 점수 Map 목록
+     */
     private List<Map<String, Object>> convertLanguageScores(
             List<LanguageScoreRequest> languageScores
     ) {
@@ -136,6 +165,12 @@ public class PasserReportService {
                 .toList();
     }
 
+    /**
+     * 함수 이름: convertCertifications()
+     * 기능: 자격증 목록에서 null·공백 항목을 제거하고 앞뒤 공백을 다듬어 중복 없는 배열로 변환한다. 입력이 null이면 빈 배열을 돌려준다.
+     * 파라미터: List<String> certifications -> 자격증 이름 목록(null 가능)
+     * 반환값: String[] -> 정제된 자격증 배열
+     */
     private String[] convertCertifications(List<String> certifications) {
         if (certifications == null) {
             return new String[0];

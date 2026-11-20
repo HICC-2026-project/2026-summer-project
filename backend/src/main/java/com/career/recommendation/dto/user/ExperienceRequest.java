@@ -70,8 +70,12 @@ public class ExperienceRequest {
     private String depth;
 
     /**
-     * areas 배열의 각 원소가 (공백 제거 후) ExperienceArea 코드와 대소문자 무시하고 일치하는지
-     * 검증한다. null·빈 문자열 원소는 toMap()에서 조용히 제거되므로 여기서는 통과시킨다.
+     * 함수 이름: isAreasValid()
+     * 기능: areas 배열의 각 원소가 (공백 제거 후) ExperienceArea 코드와 대소문자 무시하고 일치하는지
+     *       검증한다. null·빈 문자열 원소는 toMap()에서 조용히 제거되므로 여기서는 통과시킨다.
+     *       areas가 null이거나 모든 원소가 유효하면 true, 알 수 없는 코드가 하나라도 있으면 false이다.
+     * 파라미터: 없음
+     * 반환값: boolean -> 검증 통과 여부(true: 통과, false: 올바르지 않은 기여 영역 코드 포함)
      */
     @AssertTrue(message = "올바른 기여 영역 코드가 아닙니다.")
     @JsonIgnore
@@ -90,6 +94,13 @@ public class ExperienceRequest {
         return true;
     }
 
+    /**
+     * 함수 이름: toMap()
+     * 기능: 경험 요청을 JSONB 저장용 Map으로 변환한다. type은 비면 "ETC", source는 비면 "MANUAL"로 채우고
+     *       대문자로 정규화한다. 문자열은 trim하며, description·months·role·stack·areas·depth는 값이 있을 때만 넣는다.
+     * 파라미터: 없음
+     * 반환값: Map<String, Object> -> 정리된 경험 항목(삽입 순서 유지)
+     */
     public Map<String, Object> toMap() {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("type", (type == null || type.isBlank())
@@ -130,7 +141,13 @@ public class ExperienceRequest {
         return result;
     }
 
-    /** 앞뒤 공백 제거 후 빈 문자열 원소는 버리고, 상한(maxSize)까지만 남긴다. */
+    /**
+     * 함수 이름: cleanStrings()
+     * 기능: 앞뒤 공백 제거 후 빈 문자열 원소는 버리고, 상한(maxSize)까지만 남긴다.
+     * 파라미터: List<String> raw -> 정리할 문자열 목록(null 가능)
+     *           int maxSize -> 남길 최대 원소 수
+     * 반환값: List<String> -> 정리된 문자열 목록, 입력이 null이면 빈 리스트
+     */
     private static List<String> cleanStrings(List<String> raw, int maxSize) {
         if (raw == null) {
             return List.of();
@@ -152,7 +169,12 @@ public class ExperienceRequest {
         return result;
     }
 
-    /** ExperienceArea 코드로 정규화(대소문자 무시)하고 중복을 제거한다. 알 수 없는 값은 버린다. */
+    /**
+     * 함수 이름: normalizeAreas()
+     * 기능: ExperienceArea 코드로 정규화(대소문자 무시)하고 중복을 제거한다. 알 수 없는 값은 버린다.
+     * 파라미터: List<String> raw -> 정규화할 기여 영역 문자열 목록(null 가능)
+     * 반환값: List<String> -> 중복 없는 ExperienceArea 코드 목록(입력 순서 유지), 입력이 null이면 빈 리스트
+     */
     private static List<String> normalizeAreas(List<String> raw) {
         if (raw == null) {
             return List.of();

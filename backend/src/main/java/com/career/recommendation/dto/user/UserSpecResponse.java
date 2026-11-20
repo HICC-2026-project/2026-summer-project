@@ -32,6 +32,12 @@ public class UserSpecResponse {
 
     private LocalDateTime updatedAt;
 
+    /**
+     * 함수 이름: from()
+     * 기능: UserSpec 엔티티를 응답 DTO로 변환한다(사용자 ID, 학점, 어학점수, 자격증, 경험, 학년, 수정 시각).
+     * 파라미터: UserSpec userSpec -> 변환할 사용자 스펙 엔티티
+     * 반환값: UserSpecResponse -> 스펙 응답 DTO
+     */
     public static UserSpecResponse from(UserSpec userSpec) {
         return UserSpecResponse.builder()
                 .id(userSpec.getId())

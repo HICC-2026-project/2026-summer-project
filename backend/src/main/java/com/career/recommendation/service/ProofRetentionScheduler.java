@@ -32,6 +32,12 @@ public class ProofRetentionScheduler {
     @Value("${app.storage.proof-retention-days:30}")
     private int retentionDays;
 
+    /**
+     * 함수 이름: purgeExpiredProofs()
+     * 기능: 매일 00:20(서비스 시간대)에 보관 기한(retentionDays)이 지난 검수 완료 제보의 증빙을 삭제하고, 1건 이상이면 건수를 로그로 남긴다.
+     * 파라미터: 없음
+     * 반환값: 없음
+     */
     @Scheduled(cron = "0 20 0 * * *", zone = ServiceTime.ZONE)
     @Transactional
     public void purgeExpiredProofs() {
@@ -41,7 +47,13 @@ public class ProofRetentionScheduler {
         }
     }
 
-    /** 테스트·수동 실행용. 기준 시각 이전에 검수된 제보의 증빙을 지우고 건수를 돌려준다. */
+    /**
+     * 함수 이름: purgeReviewedBefore()
+     * 기능: 테스트·수동 실행용. 기준 시각 이전에 검수된 제보의 증빙 파일을 지우고, 삭제에 성공한 건만 DB의 증빙 메타를 비운다.
+     *       파일 삭제에 실패한 건은 경고 로그 후 건너뛰어 다음 실행에서 재시도한다.
+     * 파라미터: LocalDateTime before -> 이 시각 이전에 검수된 제보가 대상
+     * 반환값: int -> 증빙을 삭제(메타 정리)한 건수
+     */
     @Transactional
     public int purgeReviewedBefore(LocalDateTime before) {
         List<PasserData> expired = passerDataRepository.findReviewedWithProofBefore(before);

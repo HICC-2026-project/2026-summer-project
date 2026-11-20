@@ -59,12 +59,14 @@ public class GeminiService {
     private static final Pattern JSON_PATTERN = Pattern.compile("\\{[\\s\\S]*}", Pattern.DOTALL);
 
     /**
-     * 활동 추천 생성 (DB 활동 기반 RAG 패턴)
-     * @param userSpecJson          사용자 스펙 (JSON 문자열)
-     * @param targetJob             목표 직무
-     * @param positionContext       합격자 비교 데이터(직무 요구 프로필 내 위치·갭 요약 — PromptDataBuilder.buildPositionContextText)
-     * @param availableActivitiesJson DB에 등록된 활성 활동 목록 (JSON 배열 문자열)
-     * @return Gemini API 응답 JSON 텍스트 (파싱 실패 시 빈 문자열)
+     * 함수 이름: generateRecommendation()
+     * 기능: 활동 추천 생성 (DB 활동 기반 RAG 패턴). 프롬프트를 만들어 Gemini를 호출하고 응답에서 JSON 블록만 추출한다.
+     * 파라미터: String userSpecJson -> 사용자 스펙 (JSON 문자열)
+     *           String targetJob -> 목표 직무
+     *           String positionContext -> 합격자 비교 데이터(직무 요구 프로필 내 위치·갭 요약 — PromptDataBuilder.buildPositionContextText)
+     *           String availableActivitiesJson -> DB에 등록된 활성 활동 목록 (JSON 배열 문자열)
+     *           LocalDate today -> 프롬프트에 명시할 오늘 날짜
+     * 반환값: String -> Gemini API 응답 JSON 텍스트 (파싱 실패 시 빈 문자열)
      */
     public String generateRecommendation(String userSpecJson, String targetJob,
                                          String positionContext, String availableActivitiesJson,
@@ -76,13 +78,21 @@ public class GeminiService {
     }
 
     /**
-     * 커리어 로드맵 생성 (DB 활동 기반 RAG 패턴 + F-03 연계 및 합격자 비교 맥락 반영)
-     * @param userSpecJson               사용자 스펙 JSON
-     * @param targetJob                  목표 직무
-     * @param grade                      현재 학년 (null이면 학기 구분 없이 월별 단위)
-     * @param positionContext            합격자 비교 데이터(직무 요구 프로필 내 위치·갭 요약)
-     * @param topRecommendedActivities  F-03에서 우선 추천된 활동 목록 요약 (JSON 문자열)
-     * @param availableActivitiesJson     DB에 등록된 활성 활동 목록 (JSON 배열 문자열)
+     * 함수 이름: generateRoadmap()
+     * 기능: 커리어 로드맵 생성 (DB 활동 기반 RAG 패턴 + F-03 연계 및 합격자 비교 맥락 반영).
+     *       로드맵은 12개월(최대 6구간)로 응답이 길어질 수 있어 별도 출력 토큰 상한(roadmapMaxOutputTokens)으로 호출한다.
+     *
+     *       ⚠️ 본문의 systemInstruction은 buildRoadmapPrompt의 규칙 4·5와 반드시 같은 매칭 정책
+     *       ("시기 무관, 적합한 활동이 있으면 매칭, 없는 시기만 가이드")을 말해야 한다. 어긋나면 Gemini가
+     *       열려 있는 DB 활동을 건너뛰고 가이드만 낼 수 있다(상세 경위는 본문 주석 참고).
+     * 파라미터: String userSpecJson -> 사용자 스펙 JSON
+     *           String targetJob -> 목표 직무
+     *           Integer grade -> 현재 학년 (null이면 학기 구분 없이 월별 단위)
+     *           String positionContext -> 합격자 비교 데이터(직무 요구 프로필 내 위치·갭 요약)
+     *           String topRecommendedActivities -> F-03에서 우선 추천된 활동 목록 요약 (JSON 문자열)
+     *           String availableActivitiesJson -> DB에 등록된 활성 활동 목록 (JSON 배열 문자열)
+     *           LocalDate today -> 프롬프트에 명시할 오늘 날짜
+     * 반환값: String -> Gemini 응답 JSON 텍스트 (실패 시 빈 문자열)
      */
     public String generateRoadmap(String userSpecJson, String targetJob, Integer grade,
                                   String positionContext, String topRecommendedActivities,
@@ -103,6 +113,19 @@ public class GeminiService {
         return extractJsonBlock(raw);
     }
 
+    /**
+     * 함수 이름: buildRecommendationPrompt()
+     * 기능: 추천용 프롬프트 본문을 만든다(오늘 날짜·사용자 스펙·목표 직무·합격자 비교 데이터·활동 목록·규칙).
+     *
+     *       ⚠️ 오늘 날짜를 명시하지 않으면 Gemini는 학습 시점의 날짜 감각으로 마감일의 임박도를 추측해
+     *       "마감이 임박한/여유 있는 활동" 판단이 실제 오늘과 어긋날 수 있다.
+     * 파라미터: String spec -> 사용자 스펙 JSON
+     *           String job -> 목표 직무
+     *           String cases -> 합격자 비교 데이터 텍스트
+     *           String availableActivities -> 추천 가능한 활동 목록 JSON
+     *           LocalDate today -> 오늘 날짜
+     * 반환값: String -> 완성된 프롬프트 문자열
+     */
     private String buildRecommendationPrompt(String spec, String job, String cases, String availableActivities,
                                              java.time.LocalDate today) {
         // ⚠️ 오늘 날짜를 명시하지 않으면 Gemini는 학습 시점의 날짜 감각으로 마감일의 임박도를
@@ -141,6 +164,23 @@ public class GeminiService {
                 """, today, spec, job, cases, availableActivities);
     }
 
+    /**
+     * 함수 이름: buildRoadmapPrompt()
+     * 기능: 로드맵용 프롬프트 본문을 만든다. 학년이 있으면 학기/방학 단위, 없으면 월 단위의 기간 가이드(periodGuide)를
+     *       오늘 날짜와 함께 넣고, 이어서 스펙·직무·합격자 비교 데이터·우선 추천 활동·전체 활동 목록·규칙을 붙인다.
+     *
+     *       ⚠️ periodGuide에 오늘 날짜를 반드시 명시한다. 날짜가 없으면 Gemini가 타임라인 시작 시기를
+     *       추측해 엉뚱한 학기에서 시작하거나 12개월 창을 벗어난다. 12개월 창은 학기 2번 + 방학 2번을
+     *       한 바퀴 돌면 시작 시점과 무관하게 정확히 12개월이 되므로 이를 스텝 수 가이드로 쓴다(본문 주석 참고).
+     * 파라미터: String spec -> 사용자 스펙 JSON
+     *           String job -> 목표 직무
+     *           Integer grade -> 현재 학년 (null이면 월 단위)
+     *           String cases -> 합격자 비교 데이터 텍스트
+     *           String topRecommended -> 우선 반영할 AI 추천 활동 요약
+     *           String availableActivities -> 전체 DB 활동 목록 JSON
+     *           LocalDate today -> 오늘 날짜
+     * 반환값: String -> 완성된 프롬프트 문자열
+     */
     private String buildRoadmapPrompt(String spec, String job, Integer grade,
                                       String cases, String topRecommended, String availableActivities,
                                       java.time.LocalDate today) {
@@ -197,9 +237,10 @@ public class GeminiService {
     }
 
     /**
-     * E11-6 — 경험 입력 내용을 바탕으로 기술적 깊이를 판별할 후속 질문 2~3개를 생성한다.
-     * @param experienceContext 경험 항목(유형·제목·설명·역할·기술스택·현재 태그된 영역)을 요약한 텍스트
-     * @return Gemini 응답 JSON 텍스트 {"questions": [...]}. 실패 시 빈 문자열(호출부가 폴백 처리).
+     * 함수 이름: generateExperienceQuestions()
+     * 기능: E11-6 — 경험 입력 내용을 바탕으로 기술적 깊이를 판별할 후속 질문 2~3개를 생성한다.
+     * 파라미터: String experienceContext -> 경험 항목(유형·제목·설명·역할·기술스택·현재 태그된 영역)을 요약한 텍스트
+     * 반환값: String -> Gemini 응답 JSON 텍스트 {"questions": [...]}. 실패 시 빈 문자열(호출부가 폴백 처리).
      */
     public String generateExperienceQuestions(String experienceContext) {
         String prompt = buildExperienceQuestionsPrompt(experienceContext);
@@ -209,6 +250,12 @@ public class GeminiService {
         return extractJsonBlock(raw);
     }
 
+    /**
+     * 함수 이름: buildExperienceQuestionsPrompt()
+     * 기능: 경험 후속 질문 생성용 프롬프트를 만든다(경험 정보와 질문 작성 규칙).
+     * 파라미터: String experienceContext -> 경험 항목 요약 텍스트
+     * 반환값: String -> 완성된 프롬프트 문자열
+     */
     private String buildExperienceQuestionsPrompt(String experienceContext) {
         return String.format("""
                 [경험 정보]
@@ -224,11 +271,12 @@ public class GeminiService {
     }
 
     /**
-     * E11-6 — 경험과 후속 질문 답변을 바탕으로 기여 영역·구현 깊이·역할 요약을 판정한다.
-     * 답변 원문은 이 호출 이후 어디에도 저장하지 않는다(호출부 책임).
-     * @param experienceContext 경험 항목 요약 텍스트
-     * @param qaContext         후속 질문과 답변 목록을 요약한 텍스트
-     * @return Gemini 응답 JSON 텍스트 {"areas": [...], "depth": "...", "roleSummary": "..."}.
+     * 함수 이름: generateExperienceEnrichment()
+     * 기능: E11-6 — 경험과 후속 질문 답변을 바탕으로 기여 영역·구현 깊이·역할 요약을 판정한다.
+     *       답변 원문은 이 호출 이후 어디에도 저장하지 않는다(호출부 책임).
+     * 파라미터: String experienceContext -> 경험 항목 요약 텍스트
+     *           String qaContext -> 후속 질문과 답변 목록을 요약한 텍스트
+     * 반환값: String -> Gemini 응답 JSON 텍스트 {"areas": [...], "depth": "...", "roleSummary": "..."}.
      *         실패 시 빈 문자열(호출부가 폴백 처리).
      */
     public String generateExperienceEnrichment(String experienceContext, String qaContext) {
@@ -239,6 +287,13 @@ public class GeminiService {
         return extractJsonBlock(raw);
     }
 
+    /**
+     * 함수 이름: buildExperienceEnrichPrompt()
+     * 기능: 경험 보강(areas·depth·roleSummary 판정)용 프롬프트를 만든다(경험 정보, 질문·답변, 판정 규칙).
+     * 파라미터: String experienceContext -> 경험 항목 요약 텍스트
+     *           String qaContext -> 후속 질문과 답변 요약 텍스트
+     * 반환값: String -> 완성된 프롬프트 문자열
+     */
     private String buildExperienceEnrichPrompt(String experienceContext, String qaContext) {
         return String.format("""
                 [경험 정보]
@@ -259,7 +314,10 @@ public class GeminiService {
     }
 
     /**
-     * Gemini API 원문 응답에서 순수 JSON 블록만 추출한다.
+     * 함수 이름: extractJsonBlock()
+     * 기능: Gemini API 원문 응답에서 순수 JSON 블록만 추출한다(응답 앞뒤 잡담 제거).
+     * 파라미터: String raw -> Gemini 원문 응답 텍스트
+     * 반환값: String -> 첫 '{'부터 마지막 '}'까지의 JSON 문자열, 없거나 입력이 비었으면 빈 문자열
      */
     public String extractJsonBlock(String raw) {
         if (raw == null || raw.isBlank()) return "";
@@ -267,12 +325,29 @@ public class GeminiService {
         return matcher.find() ? matcher.group() : "";
     }
 
-    // 로드맵을 제외한 나머지 호출(추천·후속 질문·경험 enrich)은 전부 이 오버로드를 쓴다 —
-    // 공통 상한(gemini.api.max-output-tokens)을 그대로 적용한다.
+    /**
+     * 함수 이름: callGeminiApi()
+     * 기능: 로드맵을 제외한 나머지 호출(추천·후속 질문·경험 enrich)이 쓰는 오버로드 —
+     *       공통 상한(gemini.api.max-output-tokens)을 그대로 적용해 실제 호출 메서드에 위임한다.
+     * 파라미터: String systemInstruction -> 시스템 지시문
+     *           String userMessage -> 사용자 프롬프트
+     * 반환값: String -> Gemini 응답 텍스트 (실패·키 미설정·전역 상한 도달 시 빈 문자열)
+     */
     private String callGeminiApi(String systemInstruction, String userMessage) {
         return callGeminiApi(systemInstruction, userMessage, maxOutputTokens);
     }
 
+    /**
+     * 함수 이름: callGeminiApi()
+     * 기능: Gemini generateContent API를 실제로 호출한다. API 키가 없거나 전역 일일 상한(GeminiDailyQuota)에
+     *       도달하면 호출하지 않고 빈 문자열을 돌려주며(호출부가 폴백 처리), 호출 성공·실패는 GeminiCallStats에 집계한다.
+     *       API 키는 기본적으로 x-goog-api-key 헤더로 보낸다(쿼리스트링 방식은 키가 로그에 찍힐 수 있어
+     *       GEMINI_API_KEY_IN_HEADER=false로만 되돌릴 수 있다). thinkingBudget 0으로 thinking 토큰 과금을 막는다.
+     * 파라미터: String systemInstruction -> 시스템 지시문
+     *           String userMessage -> 사용자 프롬프트
+     *           int maxTokensForThisCall -> 이번 호출의 최대 출력 토큰 수(추천 등은 공통 상한, 로드맵은 별도 상한)
+     * 반환값: String -> 첫 후보의 응답 텍스트 (실패·빈 응답·키 미설정·상한 도달 시 빈 문자열)
+     */
     private String callGeminiApi(String systemInstruction, String userMessage, int maxTokensForThisCall) {
         WebClient client = webClientBuilder
                 .baseUrl(baseUrl)

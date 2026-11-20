@@ -45,6 +45,13 @@ public class AdminPasserReportResponse {
         private Long fileSize;
     }
 
+    /**
+     * 함수 이름: from()
+     * 기능: PasserData 엔티티를 관리자용 합격자 리포트 응답으로 변환한다. 직무 한글 라벨을 채우고, null인 어학점수·자격증은
+     *       빈 리스트로 바꾸며, 증빙 파일이 저장돼 있을 때만 proof(원본 파일명·형식·크기)를 채운다.
+     * 파라미터: PasserData p -> 변환할 합격자 엔티티
+     * 반환값: AdminPasserReportResponse -> 관리자 화면용 리포트 응답 DTO
+     */
     public static AdminPasserReportResponse from(PasserData p) {
         return AdminPasserReportResponse.builder()
                 .reportId(p.getId())

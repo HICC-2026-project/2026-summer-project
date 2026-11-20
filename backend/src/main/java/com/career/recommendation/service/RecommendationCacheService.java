@@ -34,6 +34,19 @@ public class RecommendationCacheService {
     private final RecommendationRepository recommendationRepository;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 함수 이름: save()
+     * 기능: 추천 응답을 JSON으로 직렬화해 사용자별 캐시 행에 저장(없으면 생성)하고 오늘 갱신 횟수를 올린다.
+     *       응답이 비었거나 활동 목록이 없으면 저장하지 않으며, 저장 중 예외는 로그만 남기고 삼킨다(서비스 영향 없음).
+     *       REQUIRES_NEW로 독립 트랜잭션에서 실행된다.
+     *
+     *       ⚠️ 알려진 경합: 같은 유저의 요청 두 개가 거의 동시에 조회해 둘 다 "없음"을 보면 카운트 증가분
+     *       하나가 유실될 수 있다(read-then-write, 락 없음). 하루 게이트는 AiDailyAttemptLimiter로 옮겨갔으므로
+     *       이 카운트는 통계용일 뿐이다. saveAndFlush()를 쓰는 이유는 본문 주석 참고.
+     * 파라미터: User user -> 캐시 소유 사용자
+     *           RecommendationResponse response -> 저장할 추천 응답
+     * 반환값: 없음
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void save(User user, RecommendationResponse response) {
         if (response == null || response.getActivities() == null || response.getActivities().isEmpty()) {

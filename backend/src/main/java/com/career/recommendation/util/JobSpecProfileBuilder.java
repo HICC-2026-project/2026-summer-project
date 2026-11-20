@@ -25,6 +25,15 @@ import java.util.stream.Collectors;
 @Component
 public class JobSpecProfileBuilder {
 
+    /**
+     * 함수 이름: build()
+     * 기능: 합격자 목록을 JobSpecProfile(학점비율·토익환산·자격증 개수/보유율·경험 개수·영역 보유율 분포)로 집계한다.
+     *       null 합격자는 제외하고, 각 분포 배열은 정렬해 담는다. 자격증은 정규화 기준으로 중복을 1개·1명으로 세고,
+     *       보유율 내림차순(동률이면 이름순)으로 정렬한다. 영역 보유율은 github_derived가 있는 합격자만 표본으로 삼는다.
+     * 파라미터: String jobType -> 직무 코드
+     *           List<PasserData> passers -> 집계 대상 합격자 목록(null 가능)
+     * 반환값: JobSpecProfile -> 집계 결과 프로필
+     */
     public JobSpecProfile build(String jobType, List<PasserData> passers) {
         List<PasserData> valid = passers == null
                 ? List.of()
@@ -129,7 +138,13 @@ public class JobSpecProfileBuilder {
                 .build();
     }
 
-    /** 합격자들이 가장 많이 쓴 원본 표기를 화면 표시용으로 고른다. 동률이면 먼저 등장한 표기. */
+    /**
+     * 함수 이름: mostCommonRawForm()
+     * 기능: 합격자들이 가장 많이 쓴 원본 표기를 화면 표시용으로 고른다. 동률이면 먼저 등장한 표기.
+     * 파라미터: Map<String, Integer> rawForms -> 원본 표기별 등장 횟수(null/빈 가능)
+     *           String fallback -> 표기가 없을 때 쓸 기본값(canonical 이름)
+     * 반환값: String -> 최빈 원본 표기(없으면 fallback)
+     */
     private String mostCommonRawForm(Map<String, Integer> rawForms, String fallback) {
         if (rawForms == null || rawForms.isEmpty()) return fallback;
         String best = fallback;

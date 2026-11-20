@@ -16,6 +16,13 @@ import java.time.Duration;
 @Configuration
 public class CacheConfig {
 
+    /**
+     * 함수 이름: cacheManager()
+     * 기능: Caffeine 기반 CacheManager 빈을 만든다. "jobSpecProfile", "overallSpecProfile" 두 캐시를
+     *       쓰며, 쓰기 후 1시간이 지나면 만료되고 항목은 최대 20개로 제한한다.
+     * 파라미터: 없음
+     * 반환값: 설정이 끝난 CaffeineCacheManager(CacheManager)
+     */
     @Bean
     public CacheManager cacheManager() {
         // jobSpecProfile: 직무별 요구 프로필(분포·보유율 집계 — 위치·갭 계산 체계).

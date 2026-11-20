@@ -26,12 +26,16 @@ public class JobSpecProfileService {
     private final JobSpecProfileBuilder profileBuilder;
 
     /**
-     * 목표 직무의 요구 프로필을 반환한다.
+     * 함수 이름: getJobProfile()
+     * 기능: 목표 직무의 요구 프로필을 반환한다. 직무가 비어 있으면 빈 프로필을, 아니면 비교 가능 합격자 데이터를 집계해 돌려준다(결과는 캐시).
      *
      * ⚠️ condition을 unless로 쓰면 안 된다 — 캐시 키(#jobType)는 메서드 실행 전에 계산되고,
      * jobType이 null이면 그 시점에 Spring이 IllegalArgumentException을 던진다(목표 직무
      * 미설정 유저 전원이 500을 맞는 경로 — GlobalCertPoolService의 동일 주석 참고).
      * condition은 캐시 접근 자체를 막으므로 안전하다.
+     *
+     * 파라미터: String jobType -> 목표 직무 코드(null·공백 가능)
+     * 반환값: JobSpecProfile -> 직무별 요구 프로필(직무 미설정이면 빈 프로필)
      */
     @Cacheable(value = "jobSpecProfile", key = "#jobType", condition = "#jobType != null && !#jobType.isBlank()")
     @Transactional(readOnly = true)
@@ -45,7 +49,12 @@ public class JobSpecProfileService {
         return profileBuilder.build(jobType, passerDataRepository.findAllComparableByJobType(jobType));
     }
 
-    /** 직무 구분 없는 전체 합격자 프로필. 직무 표본이 부족할 때의 폴백. */
+    /**
+     * 함수 이름: getOverallProfile()
+     * 기능: 직무 구분 없는 전체 합격자 프로필을 집계해 반환한다(캐시). 직무 표본이 부족할 때의 폴백.
+     * 파라미터: 없음
+     * 반환값: JobSpecProfile -> 전체 합격자 프로필
+     */
     @Cacheable("overallSpecProfile")
     @Transactional(readOnly = true)
     public JobSpecProfile getOverallProfile() {
@@ -53,7 +62,12 @@ public class JobSpecProfileService {
         return profileBuilder.build(null, passerDataRepository.findAllComparable());
     }
 
-    /** 합격자 데이터 변경(제보 승인 등) 시 프로필 캐시를 즉시 무효화한다. */
+    /**
+     * 함수 이름: evictAll()
+     * 기능: 합격자 데이터 변경(제보 승인 등) 시 직무 프로필·전체 프로필 캐시를 즉시 무효화한다.
+     * 파라미터: 없음
+     * 반환값: 없음
+     */
     @Caching(evict = {
             @CacheEvict(value = "jobSpecProfile", allEntries = true),
             @CacheEvict("overallSpecProfile")

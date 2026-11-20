@@ -22,6 +22,14 @@ public class AuthController {
 
     private final TokenService tokenService;
 
+    /**
+     * 함수 이름: refresh()
+     * 기능: 리프레시 토큰으로 새 액세스·리프레시 토큰 쌍을 발급한다. 기존 리프레시 토큰은 폐기된다(로테이션).
+     *       POST /api/v1/auth/refresh, 로그인(액세스 토큰) 없이 호출.
+     * 파라미터: RefreshTokenRequest request -> 리프레시 토큰을 담은 요청(@Valid 검증)
+     * 반환값: ResponseEntity<TokenResponse> -> 새 토큰 쌍(200 OK)
+     * 예외: 리프레시 토큰이 만료됐거나 유효하지 않으면 401
+     */
     @Operation(summary = "액세스 토큰 재발급",
             description = "리프레시 토큰으로 새 액세스·리프레시 토큰 쌍을 발급한다. 기존 리프레시 토큰은 폐기됨(로테이션).")
     @ApiResponse(responseCode = "200", description = "재발급 성공")
@@ -32,6 +40,13 @@ public class AuthController {
         return ResponseEntity.ok(TokenResponse.from(pair));
     }
 
+    /**
+     * 함수 이름: logout()
+     * 기능: 리프레시 토큰을 폐기한다. 이후 해당 토큰으로는 재발급할 수 없다.
+     *       POST /api/v1/auth/logout
+     * 파라미터: RefreshTokenRequest request -> 폐기할 리프레시 토큰을 담은 요청(@Valid 검증)
+     * 반환값: ResponseEntity<Void> -> 본문 없는 204 No Content
+     */
     @Operation(summary = "로그아웃", description = "리프레시 토큰을 폐기한다. 이후 해당 토큰으로는 재발급 불가.")
     @ApiResponse(responseCode = "204", description = "로그아웃 성공")
     @PostMapping("/logout")

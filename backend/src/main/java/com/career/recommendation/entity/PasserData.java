@@ -130,7 +130,13 @@ public class PasserData {
     @Column(name = "source_note", columnDefinition = "text")
     private String sourceNote;
 
-    /** 검수 상태 — isVerified와 reviewedAt 두 컬럼에서 파생한다. 세 값의 단일 정의는 domain.ReviewStatus. */
+    /**
+     * 함수 이름: reviewStatus()
+     * 기능: 검수 상태 — isVerified와 reviewedAt 두 컬럼에서 파생한다. 세 값의 단일 정의는 domain.ReviewStatus.
+     *       isVerified가 true면 VERIFIED, 아니면서 reviewedAt이 있으면 REJECTED, 둘 다 아니면 PENDING.
+     * 파라미터: 없음
+     * 반환값: ReviewStatus -> 현재 검수 상태(VERIFIED / REJECTED / PENDING)
+     */
     public ReviewStatus reviewStatus() {
         if (Boolean.TRUE.equals(isVerified)) return ReviewStatus.VERIFIED;
         if (reviewedAt != null) return ReviewStatus.REJECTED;

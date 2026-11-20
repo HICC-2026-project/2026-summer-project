@@ -51,6 +51,15 @@ public class ExperienceInsightService {
     private final AiDailyAttemptLimiter aiDailyAttemptLimiter;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 함수 이름: generateQuestions()
+     * 기능: 경험 입력 내용을 바탕으로 Gemini에게 후속 질문(최대 3개)을 만들게 한다. 사용자별 일일 상한을 먼저 차감하며,
+     *       Gemini 호출 실패 시 빈 질문 목록으로 응답한다(200 폴백).
+     * 파라미터: Authentication authentication -> 현재 로그인 사용자 인증 정보
+     *           ExperienceQuestionsRequest request -> 질문 생성 대상 경험 정보
+     * 반환값: ExperienceQuestionsResponse -> 후속 질문 목록
+     * 예외: AiDailyLimitExceededException -> 사용자별 하루 상한(ENRICH) 초과 시(429)
+     */
     public ExperienceQuestionsResponse generateQuestions(
             Authentication authentication, ExperienceQuestionsRequest request) {
         User user = currentUserService.getCurrentUser(authentication);
@@ -69,6 +78,16 @@ public class ExperienceInsightService {
                 .build();
     }
 
+    /**
+     * 함수 이름: enrich()
+     * 기능: 경험 정보와 사용자의 질문 답변을 Gemini에 보내 areas·depth·roleSummary를 판정한다.
+     *       사용자별 일일 상한을 먼저 차감하며, Gemini 호출 실패 시 빈 응답을 돌려준다(200 폴백).
+     *       DB에는 아무것도 쓰지 않는다.
+     * 파라미터: Authentication authentication -> 현재 로그인 사용자 인증 정보
+     *           ExperienceEnrichRequest request -> 경험 정보와 질문·답변 목록
+     * 반환값: ExperienceEnrichResponse -> 보강된 영역·깊이·역할 요약
+     * 예외: AiDailyLimitExceededException -> 사용자별 하루 상한(ENRICH) 초과 시(429)
+     */
     public ExperienceEnrichResponse enrich(Authentication authentication, ExperienceEnrichRequest request) {
         User user = currentUserService.getCurrentUser(authentication);
         acquireOrThrow(user);
@@ -85,6 +104,13 @@ public class ExperienceInsightService {
         return parseEnrichment(rawJson);
     }
 
+    /**
+     * 함수 이름: acquireOrThrow()
+     * 기능: 사용자의 ENRICH 일일 시도 1회를 차감하고, 상한을 넘었으면 예외를 던진다.
+     * 파라미터: User user -> 현재 사용자
+     * 반환값: 없음
+     * 예외: AiDailyLimitExceededException -> 하루 10회 상한 초과 시
+     */
     private void acquireOrThrow(User user) {
         if (!aiDailyAttemptLimiter.tryAcquireEnrich(user.getId())) {
             throw new AiDailyLimitExceededException(
@@ -92,7 +118,12 @@ public class ExperienceInsightService {
         }
     }
 
-    /** ExperienceRequest를 Gemini 프롬프트에 넣을 텍스트로 변환한다. 선택 필드는 값이 있을 때만 넣는다. */
+    /**
+     * 함수 이름: buildExperienceContext()
+     * 기능: ExperienceRequest를 Gemini 프롬프트에 넣을 텍스트로 변환한다. 선택 필드는 값이 있을 때만 넣는다.
+     * 파라미터: ExperienceRequest experience -> 경험 입력 정보
+     * 반환값: String -> 프롬프트용 경험 설명 텍스트
+     */
     private String buildExperienceContext(ExperienceRequest experience) {
         StringBuilder sb = new StringBuilder();
         sb.append("유형: ").append(blankToDefault(experience.getType(), "미지정")).append('\n');
@@ -111,6 +142,12 @@ public class ExperienceInsightService {
         return sb.toString();
     }
 
+    /**
+     * 함수 이름: buildQaContext()
+     * 기능: 질문·답변 목록을 번호가 붙은 "Q/A" 텍스트로 이어 붙인다. null 항목은 건너뛴다.
+     * 파라미터: List<ExperienceAnswerRequest> answers -> 질문과 답변 목록
+     * 반환값: String -> 프롬프트용 질문·답변 텍스트
+     */
     private String buildQaContext(List<ExperienceAnswerRequest> answers) {
         StringBuilder sb = new StringBuilder();
         int index = 1;
@@ -122,16 +159,38 @@ public class ExperienceInsightService {
         return sb.toString();
     }
 
+    /**
+     * 함수 이름: appendIfPresent()
+     * 기능: 값이 null이 아니고 공백이 아닐 때만 "라벨: 값" 한 줄을 StringBuilder에 덧붙인다.
+     * 파라미터: StringBuilder sb -> 덧붙일 대상 버퍼
+     *           String label -> 항목 이름
+     *           String value -> 항목 값
+     * 반환값: 없음
+     */
     private void appendIfPresent(StringBuilder sb, String label, String value) {
         if (value != null && !value.isBlank()) {
             sb.append(label).append(": ").append(value).append('\n');
         }
     }
 
+    /**
+     * 함수 이름: blankToDefault()
+     * 기능: 값이 null이거나 공백이면 기본값을, 아니면 원래 값을 돌려준다.
+     * 파라미터: String value -> 검사할 값
+     *           String fallback -> 비었을 때 쓸 기본값
+     * 반환값: String -> value 또는 fallback
+     */
     private String blankToDefault(String value, String fallback) {
         return (value == null || value.isBlank()) ? fallback : value;
     }
 
+    /**
+     * 함수 이름: parseQuestions()
+     * 기능: Gemini가 돌려준 JSON에서 질문 목록을 꺼내 공백 제거 후 최대 3개까지만 남긴다.
+     *       응답이 비었거나 파싱에 실패하면 빈 목록을 돌려준다.
+     * 파라미터: String rawJson -> Gemini 응답 JSON 문자열
+     * 반환값: List<String> -> 정제된 질문 목록
+     */
     private List<String> parseQuestions(String rawJson) {
         if (rawJson == null || rawJson.isBlank()) {
             return List.of();
@@ -156,6 +215,13 @@ public class ExperienceInsightService {
         }
     }
 
+    /**
+     * 함수 이름: parseEnrichment()
+     * 기능: Gemini 보강 응답 JSON을 파싱해 areas·depth·roleSummary를 각각 검증·정제한 응답으로 만든다.
+     *       응답이 비었거나 파싱에 실패하면 빈 응답을 돌려준다.
+     * 파라미터: String rawJson -> Gemini 응답 JSON 문자열
+     * 반환값: ExperienceEnrichResponse -> 정제된 보강 결과
+     */
     private ExperienceEnrichResponse parseEnrichment(String rawJson) {
         if (rawJson == null || rawJson.isBlank()) {
             return ExperienceEnrichResponse.empty();
@@ -174,7 +240,12 @@ public class ExperienceInsightService {
         }
     }
 
-    /** ExperienceArea 13종 코드만 남긴다(대소문자 무시, 중복 제거). 미지 코드는 조용히 버린다. */
+    /**
+     * 함수 이름: filterAreas()
+     * 기능: ExperienceArea 13종 코드만 남긴다(대소문자 무시, 중복 제거). 미지 코드는 조용히 버린다.
+     * 파라미터: List<String> raw -> Gemini가 준 영역 문자열 목록
+     * 반환값: List<String> -> 유효한 영역 코드(enum 이름) 목록
+     */
     private List<String> filterAreas(List<String> raw) {
         if (raw == null) {
             return List.of();
@@ -187,7 +258,12 @@ public class ExperienceInsightService {
         return new ArrayList<>(result);
     }
 
-    /** IMPLEMENTED|CONFIGURED|BOILERPLATE만 허용(대소문자 무시). 그 외는 null로 폐기. */
+    /**
+     * 함수 이름: filterDepth()
+     * 기능: IMPLEMENTED|CONFIGURED|BOILERPLATE만 허용(대소문자 무시). 그 외는 null로 폐기.
+     * 파라미터: String raw -> Gemini가 준 깊이 문자열
+     * 반환값: String -> 대문자로 정규화된 깊이 값, 유효하지 않으면 null
+     */
     private String filterDepth(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
@@ -199,7 +275,12 @@ public class ExperienceInsightService {
         };
     }
 
-    /** 100자 컷. 빈 값이면 null. */
+    /**
+     * 함수 이름: filterRoleSummary()
+     * 기능: 역할 요약을 공백 제거 후 100자로 자른다. 빈 값이면 null.
+     * 파라미터: String raw -> Gemini가 준 역할 요약
+     * 반환값: String -> 정제된 요약(최대 100자), 비어 있으면 null
+     */
     private String filterRoleSummary(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;

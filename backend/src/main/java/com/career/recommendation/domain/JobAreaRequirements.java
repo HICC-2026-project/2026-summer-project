@@ -42,7 +42,13 @@ public final class JobAreaRequirements {
     private JobAreaRequirements() {
     }
 
-    /** 이 직무가 요구하는 영역 목록(선언 순서 유지). 정의가 없는 직무(현재는 없음)는 빈 리스트. */
+    /**
+     * 함수 이름: requiredAreasFor()
+     * 기능: 이 직무가 요구하는 영역 목록을 선언 순서대로 돌려준다. 정의가 없는 직무(현재는 없음)나
+     *       null이면 빈 리스트.
+     * 파라미터: JobType jobType -> 요구 영역을 조회할 직무(null 가능)
+     * 반환값: List<ExperienceArea> -> 직무별 요구 영역 목록(선언 순서 유지)
+     */
     public static List<ExperienceArea> requiredAreasFor(JobType jobType) {
         if (jobType == null) {
             return List.of();

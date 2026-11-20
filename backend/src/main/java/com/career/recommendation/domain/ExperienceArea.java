@@ -33,14 +33,22 @@ public enum ExperienceArea {
         this.label = label;
     }
 
-    /** 화면 표시용 한글 이름. */
+    /**
+     * 함수 이름: getLabel()
+     * 기능: 화면 표시용 한글 이름을 돌려준다.
+     * 파라미터: 없음
+     * 반환값: String -> 기여 영역의 한글 라벨
+     */
     public String getLabel() {
         return label;
     }
 
     /**
-     * 입력 문자열을 기여 영역 코드로 해석한다. 앞뒤 공백과 대소문자는 관대하게 받지만
-     * 그 외(알 수 없는 코드, 한글 라벨)는 거부한다.
+     * 함수 이름: from()
+     * 기능: 입력 문자열을 기여 영역 코드로 해석한다. 앞뒤 공백과 대소문자는 관대하게 받지만
+     *       그 외(알 수 없는 코드, 한글 라벨)는 거부한다. null이나 빈 문자열이면 빈 Optional을 돌려준다.
+     * 파라미터: String raw -> 해석할 원본 문자열(null 가능)
+     * 반환값: Optional<ExperienceArea> -> 일치하는 영역, 없으면 Optional.empty()
      */
     public static Optional<ExperienceArea> from(String raw) {
         if (raw == null) {
@@ -55,13 +63,22 @@ public enum ExperienceArea {
                 .findFirst();
     }
 
+    /**
+     * 함수 이름: isValid()
+     * 기능: 입력 문자열이 유효한 기여 영역 코드인지 {@link #from} 기준으로 검사한다.
+     * 파라미터: String raw -> 검사할 원본 문자열(null 가능)
+     * 반환값: boolean -> 유효한 영역 코드면 true, 아니면 false
+     */
     public static boolean isValid(String raw) {
         return from(raw).isPresent();
     }
 
     /**
-     * DB에 저장된 문자열을 화면 라벨로 바꾼다. 알 수 없는 값이면 원문을 그대로 돌려줘서
-     * 이상한 데이터가 들어와도 문구가 깨지지 않게 한다.
+     * 함수 이름: labelOf()
+     * 기능: DB에 저장된 문자열을 화면 라벨로 바꾼다. 알 수 없는 값이면 원문을 그대로 돌려줘서
+     *       이상한 데이터가 들어와도 문구가 깨지지 않게 한다.
+     * 파라미터: String code -> DB에 저장된 영역 코드 문자열
+     * 반환값: String -> 한글 라벨, 알 수 없는 코드면 입력 원문
      */
     public static String labelOf(String code) {
         return from(code).map(ExperienceArea::getLabel).orElse(code);

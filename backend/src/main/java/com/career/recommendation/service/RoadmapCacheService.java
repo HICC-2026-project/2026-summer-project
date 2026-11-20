@@ -32,6 +32,19 @@ public class RoadmapCacheService {
     private final RoadmapCacheRepository roadmapCacheRepository;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 함수 이름: save()
+     * 기능: 로드맵 응답을 JSON으로 직렬화해 사용자별 캐시 행에 저장(없으면 생성)하고 오늘 갱신 횟수를 올린다.
+     *       응답이 비었거나 타임라인이 없으면 저장하지 않으며, 저장 중 예외는 로그만 남기고 삼킨다(서비스 영향 없음).
+     *       REQUIRES_NEW로 독립 트랜잭션에서 실행된다.
+     *
+     *       ⚠️ 알려진 경합: RecommendationCacheService.save()와 동일 — 같은 유저의 동시 요청이
+     *       카운트 증가분 하나를 잃을 수 있다(read-then-write, 락 없음). 하루 게이트는 AiDailyAttemptLimiter가
+     *       맡으므로 이 카운트는 통계용일 뿐이다. saveAndFlush()를 쓰는 이유는 본문 주석 참고.
+     * 파라미터: User user -> 캐시 소유 사용자
+     *           RoadmapResponse response -> 저장할 로드맵 응답
+     * 반환값: 없음
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void save(User user, RoadmapResponse response) {
         if (response == null || response.getTimeline() == null || response.getTimeline().isEmpty()) {

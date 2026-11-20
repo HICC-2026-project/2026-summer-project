@@ -24,6 +24,12 @@ public class MyPasserReportResponse {
     private String status;
     private LocalDateTime createdAt;
 
+    /**
+     * 함수 이름: from()
+     * 기능: PasserData 엔티티를 내 제보 목록용 응답으로 변환한다(직무 한글 라벨, 연도, 검수 상태, 생성 시각).
+     * 파라미터: PasserData data -> 변환할 합격자 제보 엔티티
+     * 반환값: MyPasserReportResponse -> 내 제보 응답 DTO
+     */
     public static MyPasserReportResponse from(PasserData data) {
         return MyPasserReportResponse.builder()
                 .reportId(data.getId())

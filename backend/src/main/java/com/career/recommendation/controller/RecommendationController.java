@@ -29,8 +29,12 @@ public class RecommendationController {
     private final RoadmapService roadmapService;
 
     /**
-     * F-03: AI 기반 맞춤 활동 추천 (스펙 변경 시에만 재생성, 하루 3회 제한).
-     * isAiRecommendation 필드가 false이면 프론트에서 "일반 추천" 배지를 표시한다.
+     * 함수 이름: getRecommendations()
+     * 기능: F-03 AI 기반 맞춤 활동 추천을 반환한다(스펙 변경 시에만 재생성, 하루 3회 제한).
+     *       isAiRecommendation 필드가 false이면 프론트에서 "일반 추천" 배지를 표시한다.
+     *       GET /api/v1/recommendations, 로그인(JWT) 필요(스펙·목표 직무 등록 후 사용 가능).
+     * 파라미터: Authentication authentication -> 현재 로그인 사용자 인증 정보
+     * 반환값: RecommendationResponse -> 추천 활동 목록(AI 추천 또는 기본 추천 fallback)
      */
     @Operation(summary = "맞춤 활동 추천 (F-03)",
             description = "스펙·목표 직무 기반 AI 활동 추천. 스펙을 바꾸지 않으면 저장된 결과를 그대로 반환하고, 바꾸면 하루 3회까지 새로 생성한다. isAiRecommendation이 false면 기본 추천(fallback)이다.")
@@ -40,7 +44,11 @@ public class RecommendationController {
     }
 
     /**
-     * F-05: 학기/방학 단위로 구분된 12개월 커리어 로드맵 생성.
+     * 함수 이름: getRoadmap()
+     * 기능: F-05 학기/방학 단위로 구분된 12개월 커리어 로드맵을 생성한다.
+     *       GET /api/v1/roadmaps, 로그인(JWT) 필요.
+     * 파라미터: Authentication authentication -> 현재 로그인 사용자 인증 정보
+     * 반환값: RoadmapResponse -> 12개월 커리어 로드맵
      */
     @Operation(summary = "커리어 로드맵 생성 (F-05)",
             description = "학기·방학 단위로 구분된 12개월 커리어 로드맵을 생성한다.")

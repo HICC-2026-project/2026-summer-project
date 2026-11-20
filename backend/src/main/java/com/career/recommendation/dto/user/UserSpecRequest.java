@@ -58,6 +58,13 @@ public class UserSpecRequest {
     @Max(value = 4, message = "학년은 4 이하여야 합니다.")
     private Integer grade;
 
+    /**
+     * 함수 이름: isGpaWithinMaximum()
+     * 기능: 학점이 학점 기준값(만점) 이하인지 검증한다. gpa 또는 gpaMax가 null이면 true,
+     *       gpa가 gpaMax보다 크면 false이다.
+     * 파라미터: 없음
+     * 반환값: boolean -> 검증 통과 여부(true: 통과, false: 학점이 기준값 초과)
+     */
     @AssertTrue(message = "학점은 학점 기준값보다 클 수 없습니다.")
     @JsonIgnore
     public boolean isGpaWithinMaximum() {
@@ -68,6 +75,14 @@ public class UserSpecRequest {
         return gpa.compareTo(gpaMax) <= 0;
     }
 
+    /**
+     * 함수 이름: isLanguageTypeUnique()
+     * 기능: 어학점수 목록에 같은 종류의 시험이 중복되지 않았는지 검증한다. 빈 값이 아닌 type을 대소문자·앞뒤 공백
+     *       무시로 비교해, 전체 개수와 중복 제거 후 개수가 같으면 true, 중복이 있으면 false이다.
+     *       languageScores가 null이면 true이다.
+     * 파라미터: 없음
+     * 반환값: boolean -> 검증 통과 여부(true: 중복 없음, false: 같은 종류 시험이 중복)
+     */
     @AssertTrue(message = "같은 종류의 어학시험을 중복으로 저장할 수 없습니다.")
     @JsonIgnore
     public boolean isLanguageTypeUnique() {

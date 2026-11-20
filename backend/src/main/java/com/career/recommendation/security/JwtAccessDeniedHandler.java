@@ -17,6 +17,16 @@ public class JwtAccessDeniedHandler implements AccessDeniedHandler {
 
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
+    /**
+     * 함수 이름: handle()
+     * 기능: 인증은 됐지만 권한이 부족한 요청(예: 일반 사용자의 관리자 API 호출)에 대해 403 상태와
+     *       {code: ACCESS_DENIED, message, timestamp} JSON 본문을 UTF-8로 응답한다.
+     * 파라미터: HttpServletRequest request -> 거부된 요청
+     *           HttpServletResponse response -> 403 JSON을 쓸 응답
+     *           AccessDeniedException accessDeniedException -> 접근 거부 사유 예외(본문에는 노출하지 않음)
+     * 반환값: 없음
+     * 예외: IOException -> 응답 본문 쓰기에 실패했을 때
+     */
     @Override
     public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException)
             throws IOException {

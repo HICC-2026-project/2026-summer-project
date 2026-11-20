@@ -25,6 +25,12 @@ public class ActivityDeadlineScheduler {
 
     private final ActivityRepository activityRepository;
 
+    /**
+     * 함수 이름: deactivateExpiredActivities()
+     * 기능: 매일 00:05(서비스 시간대)에 마감일이 지난 활동을 일괄 비활성화하고, 1건 이상이면 건수를 로그로 남긴다.
+     * 파라미터: 없음
+     * 반환값: 없음
+     */
     @Scheduled(cron = "0 5 0 * * *", zone = ServiceTime.ZONE)
     @Transactional
     public void deactivateExpiredActivities() {
