@@ -31,6 +31,17 @@ public class ExperienceInsightController {
 
     private final ExperienceInsightService experienceInsightService;
 
+    /**
+     * 함수 이름: generateQuestions()
+     * 기능: 경험 입력 내용을 바탕으로 기술적 깊이를 판별할 후속 질문 2~3개를 Gemini로 생성한다.
+     *       Gemini 실패·전역 일일 상한 소진 시 questions: []을 반환하고(FE가 질문 단계를 건너뜀),
+     *       사용자별 하루 상한(질문+보강 합산 10회) 초과 시 429. 서버는 아무것도 저장하지 않는다(stateless).
+     *       POST /api/v1/users/me/experiences/questions, 로그인 필요.
+     * 파라미터: Authentication authentication -> 현재 로그인 사용자 인증 정보
+     *           ExperienceQuestionsRequest request -> 경험 입력 내용(@Valid 검증)
+     * 반환값: ExperienceQuestionsResponse -> 생성된 후속 질문 목록
+     * 예외: 사용자별 하루 상한 초과 시 429
+     */
     @Operation(summary = "경험 심층 질문 생성",
             description = "경험 입력 내용을 바탕으로 기술적 깊이를 판별할 후속 질문 2~3개를 생성한다. " +
                     "Gemini 실패·전역 일일 상한 소진 시 questions: []을 반환한다(FE가 질문 단계를 건너뛴다). " +
@@ -43,6 +54,17 @@ public class ExperienceInsightController {
         return experienceInsightService.generateQuestions(authentication, request);
     }
 
+    /**
+     * 함수 이름: enrich()
+     * 기능: 후속 질문 답변(1~3개, 각 1000자 이하)을 바탕으로 areas·depth·roleSummary를 판정한다.
+     *       답변 원문은 응답을 만드는 데만 쓰이고 저장하지 않는다. Gemini 실패·전역 일일 상한 소진 시
+     *       빈 값을 반환하며, 사용자별 하루 상한(질문+보강 합산 10회) 초과 시 429.
+     *       POST /api/v1/users/me/experiences/enrich, 로그인 필요.
+     * 파라미터: Authentication authentication -> 현재 로그인 사용자 인증 정보
+     *           ExperienceEnrichRequest request -> 경험 내용과 후속 질문 답변(@Valid 검증)
+     * 반환값: ExperienceEnrichResponse -> 판정된 영역·깊이·역할 요약
+     * 예외: 사용자별 하루 상한 초과 시 429
+     */
     @Operation(summary = "경험 보강(영역·깊이·역할 요약)",
             description = "후속 질문 답변(1~3개, 각 1000자 이하)을 바탕으로 areas·depth·roleSummary를 판정한다. " +
                     "답변 원문은 저장하지 않는다. Gemini 실패·전역 일일 상한 소진 시 빈 값을 반환한다. " +

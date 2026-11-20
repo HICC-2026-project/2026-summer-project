@@ -82,7 +82,13 @@ public class JobSpecProfile {
         private final double holderRate;
     }
 
-    /** canonical 표기의 자격증을 이 프로필 합격자 중 1명 이상이 보유하는가. */
+    /**
+     * 함수 이름: containsCert()
+     * 기능: canonical 표기의 자격증을 이 프로필 합격자 중 1명 이상이 보유하는가를 확인한다.
+     *       certStats가 null이면 false, 아니면 canonicalName이 같은 통계가 하나라도 있을 때 true이다.
+     * 파라미터: String canonicalName -> 확인할 자격증의 canonical 표기
+     * 반환값: boolean -> 보유한 합격자가 1명 이상이면 true, 아니면 false
+     */
     public boolean containsCert(String canonicalName) {
         return certStats != null && certStats.stream()
                 .anyMatch(stat -> stat.getCanonicalName().equals(canonicalName));

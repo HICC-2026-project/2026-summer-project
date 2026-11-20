@@ -64,9 +64,18 @@ public class GithubAnalysisService {
     private static final Duration STALE_PENDING_TIMEOUT = Duration.ofMinutes(15);
 
     /**
+     * 함수 이름: connect()
+     * 기능: 요청 URL에서 GitHub 아이디를 파싱해 프로필을 PENDING으로 접수하고 비동기 분석을 시작한다.
+     * 실행기 큐가 가득 차 등록이 거부되면 프로필을 FAILED로 되돌리고 응답에도 FAILED를 반영한다(HTTP 202는 유지).
+     *
      * ⚠️ UserSpecService.saveOrUpdateMySpec과 같은 이유로 NOT_SUPPORTED가 필요하다 — 클래스
      * 레벨 readOnly 트랜잭션이 살아있으면 upsert()의 REQUIRES_NEW 재시도가 그 트랜잭션에
      * 합류해 조용히 아무 SQL도 안 보낼 수 있다.
+     * 파라미터: Authentication authentication -> 현재 로그인 사용자 인증 정보
+     *           GithubConnectRequest request -> GitHub 프로필 URL을 담은 요청
+     * 반환값: GithubConnectResponse -> 접수된 GitHub 아이디와 현재 상태
+     * 예외: GithubAnalysisInProgressException -> 이미 분석이 진행 중일 때
+     *       GithubAnalysisCooldownException -> 마지막 분석 후 24시간이 지나지 않았을 때
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public GithubConnectResponse connect(Authentication authentication, GithubConnectRequest request) {
@@ -92,10 +101,13 @@ public class GithubAnalysisService {
     }
 
     /**
-     * connect()에서 @Async 작업 등록 자체가 거부됐을 때 프로필을 FAILED로 되돌린다. 방금 이
+     * 함수 이름: markAnalysisStartFailed()
+     * 기능: connect()에서 @Async 작업 등록 자체가 거부됐을 때 프로필을 FAILED로 되돌린다. 방금 이
      * 요청 안에서 만들어지거나 갱신된 profile을 그대로 다시 저장한다 — 동시에 이 행을 건드릴
      * 다른 쓰기가 있을 수 없는 시점이라(비동기 작업이 아직 시작조차 못 했다) findById로 다시
      * 조회할 필요 없이 saveAndFlush(merge)로 충분하다.
+     * 파라미터: GithubProfile profile -> FAILED로 되돌릴 프로필
+     * 반환값: 없음
      */
     private void markAnalysisStartFailed(GithubProfile profile) {
         profile.setStatus(GithubProfileStatus.FAILED.name());
@@ -105,6 +117,12 @@ public class GithubAnalysisService {
         tx.executeWithoutResult(status -> githubProfileRepository.saveAndFlush(profile));
     }
 
+    /**
+     * 함수 이름: getMyProfile()
+     * 기능: 현재 사용자의 GitHub 프로필 분석 결과를 목표 직무 코드와 함께 조회한다. 연동 기록이 없으면 '미연동' 응답을 돌려준다.
+     * 파라미터: Authentication authentication -> 현재 로그인 사용자 인증 정보
+     * 반환값: GithubProfileResponse -> 프로필 분석 결과(미연동이면 notConnected 응답)
+     */
     public GithubProfileResponse getMyProfile(Authentication authentication) {
         User user = currentUserService.getCurrentUser(authentication);
         return githubProfileRepository.findByUser_Id(user.getId())
@@ -117,7 +135,12 @@ public class GithubAnalysisService {
                 .orElseGet(GithubProfileResponse::notConnected);
     }
 
-    /** github_profiles 행 삭제 + source=GITHUB 파생 경험 제거(수동 항목 보존). */
+    /**
+     * 함수 이름: disconnect()
+     * 기능: github_profiles 행 삭제 + source=GITHUB 파생 경험 제거(수동 항목 보존).
+     * 파라미터: Authentication authentication -> 현재 로그인 사용자 인증 정보
+     * 반환값: 없음
+     */
     @Transactional
     public void disconnect(Authentication authentication) {
         User user = currentUserService.getCurrentUser(authentication);
@@ -140,15 +163,27 @@ public class GithubAnalysisService {
         });
     }
 
+    /**
+     * 함수 이름: isGithubSourced()
+     * 기능: 경험 항목의 source 값이 "GITHUB"(대소문자 무시)인지 확인한다.
+     * 파라미터: Map<String, Object> experience -> 경험 항목 맵
+     * 반환값: boolean -> GitHub 분석에서 파생된 항목이면 true
+     */
     static boolean isGithubSourced(Map<String, Object> experience) {
         Object source = experience.get("source");
         return source != null && "GITHUB".equalsIgnoreCase(String.valueOf(source));
     }
 
     /**
-     * UserSpecService.upsert()와 같은 구조 — user_id UNIQUE라 최초 요청 경합에 취약해
+     * 함수 이름: upsertForNewRequest()
+     * 기능: UserSpecService.upsert()와 같은 구조 — user_id UNIQUE라 최초 요청 경합에 취약해
      * REQUIRES_NEW 삽입 시도 실패 시 새 트랜잭션에서 재조회 후 갱신한다. 동시 진행 중(PENDING)
      * 이거나 쿨다운(24h) 이내 재요청이면 이 트랜잭션 안에서 예외를 던져 롤백시킨다.
+     * 파라미터: User user -> 요청한 사용자
+     *           String username -> 분석할 GitHub 아이디
+     * 반환값: GithubProfile -> 새로 만들어지거나 PENDING으로 갱신된 프로필
+     * 예외: GithubAnalysisInProgressException -> 이미 분석이 진행 중일 때
+     *       GithubAnalysisCooldownException -> 재분석 쿨다운(24시간) 이내일 때
      */
     private GithubProfile upsertForNewRequest(User user, String username) {
         TransactionTemplate insertAttempt = new TransactionTemplate(transactionManager);
@@ -163,6 +198,16 @@ public class GithubAnalysisService {
         }
     }
 
+    /**
+     * 함수 이름: doUpsert()
+     * 기능: 사용자의 GitHub 프로필 행을 만들거나 새 요청 접수 상태(PENDING)로 갱신한다. 진행 중(죽은 PENDING 제외)이거나
+     * 쿨다운 이내면 예외를 던진다. 기존 분석 결과는 건드리지 않고 분석 성공 시 GithubAnalysisRunner가 교체한다.
+     * 파라미터: User user -> 요청한 사용자
+     *           String username -> 분석할 GitHub 아이디
+     * 반환값: GithubProfile -> 저장된 프로필
+     * 예외: GithubAnalysisInProgressException -> 이미 분석이 진행 중일 때
+     *       GithubAnalysisCooldownException -> 재분석 쿨다운(24시간) 이내일 때
+     */
     private GithubProfile doUpsert(User user, String username) {
         LocalDateTime now = LocalDateTime.now(ServiceTime.ZONE_ID);
         GithubProfile profile = githubProfileRepository.findByUser_Id(user.getId()).orElse(null);

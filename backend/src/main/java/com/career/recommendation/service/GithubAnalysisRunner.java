@@ -49,6 +49,14 @@ public class GithubAnalysisRunner {
     private static final int MAX_DERIVED_EXPERIENCES = 5;
     private static final int MAX_TOTAL_EXPERIENCES = 20;
 
+    /**
+     * 함수 이름: analyze()
+     * 기능: 비동기로 프로필의 GitHub 계정을 분석해 직무 비율·레포 목록·커밋 수·활동 개월을 저장하고,
+     * 분석이 완료(DONE)된 경우에만 GITHUB 파생 경험을 사용자 스펙에 반영한다. 실패하면 FAILED로 기록한다.
+     * 파라미터: UUID profileId -> 분석할 GithubProfile ID
+     *           UUID userId -> 파생 경험을 반영할 사용자 ID
+     * 반환값: 없음
+     */
     @Async("githubTaskExecutor")
     public void analyze(UUID profileId, UUID userId) {
         try {
@@ -101,6 +109,12 @@ public class GithubAnalysisRunner {
         }
     }
 
+    /**
+     * 함수 이름: computeOverallActiveMonths()
+     * 기능: 전체 레포의 가장 이른 첫 커밋과 가장 늦은 마지막 커밋 날짜, 총 커밋 수로 전체 활동 개월 수를 계산한다.
+     * 파라미터: List<GithubClient.RepoRawData> repos -> 레포별 원시 수집 결과
+     * 반환값: int -> 전체 활동 개월 수
+     */
     private static int computeOverallActiveMonths(List<GithubClient.RepoRawData> repos) {
         LocalDate min = null;
         LocalDate max = null;
@@ -117,6 +131,13 @@ public class GithubAnalysisRunner {
         return GithubClient.computeActiveMonths(min, max, totalCommits);
     }
 
+    /**
+     * 함수 이름: buildRepoJson()
+     * 기능: 레포 분류 결과와 원시 수집 결과(같은 순서)를 합쳐 프로필에 저장할 레포 JSON 목록을 만들고 커밋 수 내림차순으로 정렬한다.
+     * 파라미터: List<JobSignalClassifier.RepoClassification> classifications -> 레포별 직무 분류 결과
+     *           List<GithubClient.RepoRawData> rawRepos -> 레포별 원시 수집 결과(classifications와 같은 순서)
+     * 반환값: List<Map<String, Object>> -> 레포별 JSON 맵 목록(커밋 수 내림차순)
+     */
     private static List<Map<String, Object>> buildRepoJson(
             List<JobSignalClassifier.RepoClassification> classifications,
             List<GithubClient.RepoRawData> rawRepos) {
@@ -139,6 +160,12 @@ public class GithubAnalysisRunner {
         return result;
     }
 
+    /**
+     * 함수 이름: buildRatioJson()
+     * 기능: 직무별 비율 맵을 비율 내림차순의 {jobType, ratio} 목록으로 바꾼다. 비율은 소수점 4자리로 반올림한다.
+     * 파라미터: Map<String, Double> ratios -> 직무 코드별 비율
+     * 반환값: List<Map<String, Object>> -> 비율 내림차순 JSON 맵 목록
+     */
     private static List<Map<String, Object>> buildRatioJson(Map<String, Double> ratios) {
         return ratios.entrySet().stream()
                 .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
@@ -151,6 +178,13 @@ public class GithubAnalysisRunner {
                 .toList();
     }
 
+    /**
+     * 함수 이름: saveFailed()
+     * 기능: 프로필 상태를 FAILED로 바꾸고 실패 사유를 기록한다(별도 REQUIRES_NEW 트랜잭션).
+     * 파라미터: UUID profileId -> 대상 GithubProfile ID
+     *           String reason -> 사용자에게 보여줄 실패 사유
+     * 반환값: 없음
+     */
     private void saveFailed(UUID profileId, String reason) {
         updateProfile(profileId, p -> {
             p.setStatus(GithubProfileStatus.FAILED.name());
@@ -158,6 +192,19 @@ public class GithubAnalysisRunner {
         });
     }
 
+    /**
+     * 함수 이름: saveSuccess()
+     * 기능: 분석 결과(상태·직무 비율·레포 목록·커밋 수·활동 개월·분석 시각)를 프로필에 저장한다(별도 REQUIRES_NEW 트랜잭션).
+     * note는 failureReason 필드에 기록되어 부분 분석 안내 등에 쓰인다.
+     * 파라미터: UUID profileId -> 대상 GithubProfile ID
+     *           String status -> 저장할 상태(DONE 또는 RATE_LIMITED)
+     *           List<Map<String, Object>> ratios -> 직무 비율 JSON
+     *           List<Map<String, Object>> repos -> 레포 목록 JSON
+     *           int commitTotal -> 전체 커밋 수
+     *           int activeMonths -> 전체 활동 개월 수
+     *           String note -> 안내 문구(없으면 null)
+     * 반환값: 없음
+     */
     private void saveSuccess(UUID profileId, String status, List<Map<String, Object>> ratios,
                               List<Map<String, Object>> repos, int commitTotal, int activeMonths, String note) {
         updateProfile(profileId, p -> {
@@ -171,6 +218,13 @@ public class GithubAnalysisRunner {
         });
     }
 
+    /**
+     * 함수 이름: updateProfile()
+     * 기능: 새 REQUIRES_NEW 트랜잭션에서 프로필을 조회해 mutator로 수정한 뒤 즉시 저장(flush)한다. 프로필이 없으면 아무것도 하지 않는다.
+     * 파라미터: UUID profileId -> 대상 GithubProfile ID
+     *           Consumer<GithubProfile> mutator -> 프로필 필드를 변경하는 함수
+     * 반환값: 없음
+     */
     private void updateProfile(UUID profileId, Consumer<GithubProfile> mutator) {
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -182,8 +236,13 @@ public class GithubAnalysisRunner {
     }
 
     /**
-     * source=GITHUB 항목을 전부 제거하고, 커밋 수 상위 레포 최대 5개를 다시 채운다.
+     * 함수 이름: mergeDerivedExperiences()
+     * 기능: source=GITHUB 항목을 전부 제거하고, 커밋 수 상위 레포 최대 5개를 다시 채운다.
      * 전체 20개 상한은 수동 항목을 우선하고 남는 슬롯만 GITHUB 항목에 배정한다.
+     * 스펙이 아직 없는 사용자는 조용히 건너뛴다.
+     * 파라미터: UUID userId -> 경험을 갱신할 사용자 ID
+     *           List<JobSignalClassifier.RepoClassification> repos -> 레포별 분류 결과
+     * 반환값: 없음
      */
     private void mergeDerivedExperiences(UUID userId, List<JobSignalClassifier.RepoClassification> repos) {
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
@@ -229,6 +288,13 @@ public class GithubAnalysisRunner {
         });
     }
 
+    /**
+     * 함수 이름: toDerivedExperience()
+     * 기능: 레포 분류 결과를 source=GITHUB인 PROJECT 경험 항목으로 변환한다. 제목·설명은 길이를 제한하고,
+     * months·stack·areas는 값이 있을 때만 채운다.
+     * 파라미터: JobSignalClassifier.RepoClassification repo -> 레포 분류 결과
+     * 반환값: Map<String, Object> -> 경험 항목 맵
+     */
     private static Map<String, Object> toDerivedExperience(JobSignalClassifier.RepoClassification repo) {
         String jobLabel = repo.primaryJob() != null ? JobType.labelOf(repo.primaryJob().name()) : "기타";
         Map<String, Object> exp = new LinkedHashMap<>();
@@ -254,6 +320,12 @@ public class GithubAnalysisRunner {
         return exp;
     }
 
+    /**
+     * 함수 이름: clampMonths()
+     * 기능: 활동 개월 수를 경험 요청 계약 범위(최대 120)로 제한한다. 0 이하면 값이 없는 것으로 본다.
+     * 파라미터: int activeMonths -> 활동 개월 수
+     * 반환값: Integer -> 1~120으로 제한된 개월 수(0 이하면 null)
+     */
     private static Integer clampMonths(int activeMonths) {
         if (activeMonths <= 0) {
             return null;
@@ -261,6 +333,13 @@ public class GithubAnalysisRunner {
         return Math.min(activeMonths, 120);
     }
 
+    /**
+     * 함수 이름: truncate()
+     * 기능: 문자열이 최대 길이를 넘으면 앞에서부터 잘라낸다.
+     * 파라미터: String value -> 원본 문자열(null 허용)
+     *           int maxLength -> 최대 길이
+     * 반환값: String -> 잘린 문자열(null이면 null)
+     */
     private static String truncate(String value, int maxLength) {
         if (value == null) return null;
         return value.length() <= maxLength ? value : value.substring(0, maxLength);

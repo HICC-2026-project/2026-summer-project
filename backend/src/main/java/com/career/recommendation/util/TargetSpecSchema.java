@@ -23,10 +23,11 @@ public final class TargetSpecSchema {
     }
 
     /**
-     * targetSpec의 각 키가 허용 목록에 있고 값 타입이 맞는지 검사한다.
-     * null·빈 맵은 위반이 아니다(자격 요건을 못 찾은 활동은 {}로 저장된다).
-     *
-     * @return 위반 사유 목록. 문제가 없으면 빈 리스트.
+     * 함수 이름: validate()
+     * 기능: targetSpec의 각 키가 허용 목록에 있고 값 타입이 맞는지 검사한다.
+     *       null·빈 맵은 위반이 아니다(자격 요건을 못 찾은 활동은 {}로 저장된다).
+     * 파라미터: Map<String, Object> targetSpec -> 검사할 활동의 targetSpec(JSONB 맵)
+     * 반환값: 위반 사유 목록. 문제가 없으면 빈 리스트.
      */
     public static List<String> validate(Map<String, Object> targetSpec) {
         List<String> violations = new ArrayList<>();
@@ -46,6 +47,12 @@ public final class TargetSpecSchema {
         return violations;
     }
 
+    /**
+     * 함수 이름: isStringList()
+     * 기능: 값이 List이고 그 모든 원소가 String인지 검사한다. List가 아니면 false, 빈 List는 true.
+     * 파라미터: Object value -> 검사할 targetSpec 값
+     * 반환값: 문자열 리스트이면 true, 아니면 false
+     */
     private static boolean isStringList(Object value) {
         if (!(value instanceof List<?> list)) {
             return false;

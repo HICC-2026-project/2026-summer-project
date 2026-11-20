@@ -28,6 +28,13 @@ public class SpecPositionService {
     private final JobSpecProfileService jobSpecProfileService;
     private final SpecPositionCalculator specPositionCalculator;
 
+    /**
+     * 함수 이름: calculate()
+     * 기능: 직무 프로필(캐시)을 조회하고, 표본이 부족하면 전체 프로필로 폴백하도록 Supplier를 넘겨 유저 스펙의 위치·갭을 계산한다.
+     * 파라미터: UserSpec userSpec -> 위치를 계산할 유저 스펙
+     *           String jobType -> 목표 직무 코드
+     * 반환값: SpecPositionResult -> 계산된 스펙 위치·갭 결과
+     */
     public SpecPositionResult calculate(UserSpec userSpec, String jobType) {
         return specPositionCalculator.calculate(
                 userSpec,

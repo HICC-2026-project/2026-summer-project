@@ -20,6 +20,13 @@ import java.util.List;
 @RequestMapping("/api/v1/jobs")
 public class JobTypeController {
 
+    /**
+     * 함수 이름: list()
+     * 기능: 목표 직무·합격자 제보에 쓸 수 있는 직무 코드와 한글 라벨을 JobType 선언(화면 표시) 순서대로 내려준다.
+     *       GET /api/v1/jobs, 인증 불필요(온보딩 전 화면에서도 사용).
+     * 파라미터: 없음
+     * 반환값: List<JobTypeResponse> -> 지원 직무 목록
+     */
     @Operation(summary = "지원 직무 목록", description = "목표 직무·합격자 제보에 쓸 수 있는 직무 코드와 한글 라벨. 순서는 화면 표시 순서.")
     @GetMapping
     public List<JobTypeResponse> list() {

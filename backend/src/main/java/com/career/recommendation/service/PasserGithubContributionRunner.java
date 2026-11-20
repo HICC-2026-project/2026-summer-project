@@ -44,9 +44,13 @@ public class PasserGithubContributionRunner {
     private static final int MAX_AGGREGATE_STACK = 10;
 
     /**
-     * @param passerDataId 분석 결과를 반영할 PasserData 행
-     * @param username     분석 대상 GitHub 아이디 — 로그·DB 어디에도 남기지 않는다
-     * @param acceptedYear 합격 연도. null이 아니면 그 해 12/31(포함)까지의 커밋만 집계한다
+     * 함수 이름: analyze()
+     * 기능: 비동기로 합격자 제보의 GitHub 공개 레포를 분석해 영역·스택 태그와 집계 값(레포 수·커밋·활동 개월·직무 비율)을
+     * PasserData에 저장한다. 분석 실패나 결과 없음이면 제보는 그대로 두고 조용히 끝낸다. 실패 로그에는 예외 클래스명만 남긴다.
+     * 파라미터: UUID passerDataId -> 분석 결과를 반영할 PasserData 행
+     *           String username -> 분석 대상 GitHub 아이디 — 로그·DB 어디에도 남기지 않는다
+     *           Integer acceptedYear -> 합격 연도. null이 아니면 그 해 12/31(포함)까지의 커밋만 집계한다
+     * 반환값: 없음
      */
     @Async("githubTaskExecutor")
     public void analyze(UUID passerDataId, String username, Integer acceptedYear) {
@@ -91,6 +95,12 @@ public class PasserGithubContributionRunner {
         save(passerDataId, areas, stack, githubDerived);
     }
 
+    /**
+     * 함수 이름: computeOverallActiveMonths()
+     * 기능: 전체 레포의 가장 이른 첫 커밋과 가장 늦은 마지막 커밋 날짜, 총 커밋 수로 전체 활동 개월 수를 계산한다.
+     * 파라미터: List<GithubClient.RepoRawData> repos -> 레포별 원시 수집 결과
+     * 반환값: int -> 전체 활동 개월 수
+     */
     private static int computeOverallActiveMonths(List<GithubClient.RepoRawData> repos) {
         LocalDate min = null;
         LocalDate max = null;
@@ -107,7 +117,13 @@ public class PasserGithubContributionRunner {
         return GithubClient.computeActiveMonths(min, max, totalCommits);
     }
 
-    /** 레포별 토큰(areas 또는 stack)을 등장 레포 수 내림차순으로 합쳐 최대 {@code max}개로 자른다. */
+    /**
+     * 함수 이름: aggregateTopTokens()
+     * 기능: 레포별 토큰(areas 또는 stack)을 등장 레포 수 내림차순으로 합쳐 최대 {@code max}개로 자른다.
+     * 파라미터: List<List<String>> perRepoTokens -> 레포별 토큰 목록(null 항목은 건너뜀)
+     *           int max -> 반환할 최대 토큰 수
+     * 반환값: List<String> -> 등장 레포 수 내림차순 상위 토큰 목록
+     */
     private static List<String> aggregateTopTokens(List<List<String>> perRepoTokens, int max) {
         Map<String, Integer> counts = new LinkedHashMap<>();
         for (List<String> tokens : perRepoTokens) {
@@ -123,6 +139,15 @@ public class PasserGithubContributionRunner {
                 .toList();
     }
 
+    /**
+     * 함수 이름: save()
+     * 기능: 새 REQUIRES_NEW 트랜잭션에서 PasserData를 조회해 areas·stack·githubDerived를 채우고 저장한다. 행이 없으면 아무것도 하지 않는다.
+     * 파라미터: UUID passerDataId -> 대상 PasserData ID
+     *           List<String> areas -> 집계된 영역 태그
+     *           List<String> stack -> 집계된 기술 스택 태그
+     *           Map<String, Object> githubDerived -> 레포 수·커밋·활동 개월·직무 비율 집계값
+     * 반환값: 없음
+     */
     private void save(UUID passerDataId, List<String> areas, List<String> stack, Map<String, Object> githubDerived) {
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);

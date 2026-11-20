@@ -17,6 +17,16 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
+    /**
+     * 함수 이름: commence()
+     * 기능: 인증되지 않은 요청이 보호된 API에 접근했을 때 401 상태와
+     *       {code: UNAUTHORIZED, message, timestamp} JSON 본문을 UTF-8로 응답한다.
+     * 파라미터: HttpServletRequest request -> 인증 실패한 요청
+     *           HttpServletResponse response -> 401 JSON을 쓸 응답
+     *           AuthenticationException authException -> 인증 실패 사유 예외(본문에는 노출하지 않음)
+     * 반환값: 없음
+     * 예외: IOException -> 응답 본문 쓰기에 실패했을 때
+     */
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException)
             throws IOException {

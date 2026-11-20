@@ -30,6 +30,15 @@ public class AdminPasserEntryController {
 
     private final AdminPasserEntryService adminPasserEntryService;
 
+    /**
+     * 함수 이름: create()
+     * 기능: 공개된 커뮤니티·블로그 합격 스펙 후기를 관리자가 직접 등록한다. 증빙·검수 절차 없이
+     *       저장 즉시 isVerified=true로 비교 데이터에 반영된다.
+     *       POST /api/v1/admin/passers (201 Created), 관리자 전용(ROLE_ADMIN).
+     * 파라미터: Authentication authentication -> 현재 로그인한 관리자 인증 정보
+     *           AdminPasserEntryRequest request -> 수기 등록할 합격자 데이터(@Valid 검증)
+     * 반환값: AdminPasserEntryResponse -> 등록 결과 응답
+     */
     @Operation(
             summary = "합격자 데이터 수기 등록",
             description = "공개된 커뮤니티·블로그 합격 스펙 후기를 관리자가 직접 등록한다. "

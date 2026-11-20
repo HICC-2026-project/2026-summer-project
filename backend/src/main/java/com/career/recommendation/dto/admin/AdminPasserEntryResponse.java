@@ -14,6 +14,12 @@ public class AdminPasserEntryResponse {
     private String status;
     private String message;
 
+    /**
+     * 함수 이름: created()
+     * 기능: 관리자가 수기 등록한 합격자 데이터로 등록 완료 응답을 만든다(ID, 검수 상태, 안내 메시지).
+     * 파라미터: PasserData passerData -> 등록된 합격자 엔티티
+     * 반환값: AdminPasserEntryResponse -> 합격자 ID·상태·안내 메시지를 담은 응답 DTO
+     */
     public static AdminPasserEntryResponse created(PasserData passerData) {
         return AdminPasserEntryResponse.builder()
                 .passerId(passerData.getId())

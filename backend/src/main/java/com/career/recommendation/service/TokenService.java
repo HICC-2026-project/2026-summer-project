@@ -24,6 +24,13 @@ public class TokenService {
 
     public record TokenPair(String accessToken, String refreshToken) {}
 
+    /**
+     * 함수 이름: issueTokens()
+     * 기능: 로그인 성공 시 액세스·리프레시 토큰을 새로 발급한다. 같은 사용자의 기존 리프레시 토큰은
+     *       모두 지우고 새 리프레시 토큰만 DB에 저장한다(사용자당 세션 1개 유지).
+     * 파라미터: User user -> 토큰을 발급받을 사용자
+     * 반환값: 새 액세스 토큰과 리프레시 토큰 묶음(TokenPair)
+     */
     @Transactional
     public TokenPair issueTokens(User user) {
         String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole());
@@ -35,10 +42,19 @@ public class TokenService {
         return new TokenPair(accessToken, refreshToken);
     }
 
-    // ⚠️ noRollbackFor가 없으면 InvalidTokenException(RuntimeException)에 트랜잭션이 롤백돼, 재사용 감지 시의
-    // 전체 세션 폐기와 만료 토큰 삭제가 DB에 남지 않는다 — 예외는 클라이언트에 401을 주기 위한 것이지
-    // 방어 동작을 취소하라는 뜻이 아니다. (클래스 레벨 @Transactional 테스트는 테스트 트랜잭션에 합류해
-    // 이 롤백을 보지 못하므로, TokenServiceReuseTest는 트랜잭션 없이 실제 커밋으로 검증한다.)
+    /**
+     * 함수 이름: reissue()
+     * 기능: 리프레시 토큰으로 새 토큰 쌍을 발급한다(리프레시 토큰 로테이션). 서명·만료·typ 클레임을 검증하고,
+     *       DB에 없는 토큰이 오면 재사용으로 보고 그 사용자의 모든 리프레시 토큰을 폐기한다.
+     *       만료된 토큰은 삭제 후 거부하고, 정상이면 기존 토큰을 지우고 새 토큰을 저장한다.
+     *       ⚠️ noRollbackFor가 없으면 InvalidTokenException(RuntimeException)에 트랜잭션이 롤백돼, 재사용 감지 시의
+     *       전체 세션 폐기와 만료 토큰 삭제가 DB에 남지 않는다 — 예외는 클라이언트에 401을 주기 위한 것이지
+     *       방어 동작을 취소하라는 뜻이 아니다. (클래스 레벨 @Transactional 테스트는 테스트 트랜잭션에 합류해
+     *       이 롤백을 보지 못하므로, TokenServiceReuseTest는 트랜잭션 없이 실제 커밋으로 검증한다.)
+     * 파라미터: String refreshToken -> 클라이언트가 보낸 리프레시 토큰
+     * 반환값: 새 액세스 토큰과 리프레시 토큰 묶음(TokenPair)
+     * 예외: InvalidTokenException -> 토큰이 유효하지 않거나, 재사용되었거나, 만료된 경우
+     */
     @Transactional(noRollbackFor = InvalidTokenException.class)
     public TokenPair reissue(String refreshToken) {
         if (!jwtTokenProvider.validateToken(refreshToken) || !jwtTokenProvider.isRefreshToken(refreshToken)) {
@@ -76,11 +92,25 @@ public class TokenService {
         return new TokenPair(newAccessToken, newRefreshToken);
     }
 
+    /**
+     * 함수 이름: revoke()
+     * 기능: 로그아웃 시 해당 리프레시 토큰을 DB에서 삭제한다. 이미 없는 토큰이면 아무 일도 하지 않는다.
+     * 파라미터: String refreshToken -> 폐기할 리프레시 토큰
+     * 반환값: 없음
+     */
     @Transactional
     public void revoke(String refreshToken) {
         refreshTokenRepository.findByToken(refreshToken).ifPresent(refreshTokenRepository::delete);
     }
 
+    /**
+     * 함수 이름: buildRefreshToken()
+     * 기능: 리프레시 토큰 문자열과 사용자로 저장용 RefreshToken 엔티티를 만든다.
+     *       만료 시각은 현재 시각에 설정된 리프레시 토큰 유효 기간을 더해 계산한다.
+     * 파라미터: User user -> 토큰 소유자
+     *           String token -> 리프레시 토큰 문자열
+     * 반환값: 아직 저장되지 않은 RefreshToken 엔티티
+     */
     private RefreshToken buildRefreshToken(User user, String token) {
         return RefreshToken.builder()
                 .user(user)

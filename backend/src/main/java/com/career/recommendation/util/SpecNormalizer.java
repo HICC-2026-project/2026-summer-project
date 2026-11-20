@@ -51,9 +51,13 @@ public final class SpecNormalizer {
     private SpecNormalizer() {}
 
     /**
-     * 자격증 표기를 정규화한다. "정보처리기사 필기" · "정보처리기사(필기)" 같은 변형을
-     * "정보처리기사"로, 별칭("SQL개발자")은 CERT_ALIASES를 통해 표준 표기("SQLD")로 모은다.
-     * 정규화 결과가 비면(부가어만 입력) 빈 문자열을 반환한다.
+     * 함수 이름: canonicalCert()
+     * 기능: 자격증 표기를 정규화한다. "정보처리기사 필기" · "정보처리기사(필기)" 같은 변형을
+     *       "정보처리기사"로, 별칭("SQL개발자")은 CERT_ALIASES를 통해 표준 표기("SQLD")로 모은다.
+     *       대문자화 -> 구분기호 제거 -> 부가어(필기·실기 등) 제거 -> 별칭 치환 순서로 적용한다.
+     *       정규화 결과가 비면(부가어만 입력) 빈 문자열을 반환한다.
+     * 파라미터: String raw -> 사용자/합격자가 입력한 자격증 원본 표기(null 가능)
+     * 반환값: String -> 정규화된 표준 표기(null이거나 결과가 비면 빈 문자열)
      */
     public static String canonicalCert(String raw) {
         if (raw == null) return "";
@@ -64,7 +68,12 @@ public final class SpecNormalizer {
         return CERT_ALIASES.getOrDefault(value, value);
     }
 
-    /** 정규화 후 중복 제거된 자격증 표기 집합. 입력 순서를 유지하고 빈 값은 버린다. */
+    /**
+     * 함수 이름: canonicalCerts()
+     * 기능: 정규화 후 중복 제거된 자격증 표기 집합. 입력 순서를 유지하고 빈 값은 버린다.
+     * 파라미터: String[] certs -> 자격증 원본 표기 배열(null 가능)
+     * 반환값: Set<String> -> 정규화된 자격증 표기 집합(입력 순서 유지, null이면 빈 Set)
+     */
     public static Set<String> canonicalCerts(String[] certs) {
         if (certs == null) return Set.of();
         Set<String> result = new LinkedHashSet<>();
@@ -78,9 +87,12 @@ public final class SpecNormalizer {
     }
 
     /**
-     * 어학 성적 목록에서 토익 환산 최고점을 반환한다. 성적이 없거나 환산 불가하면 0
-     * (0은 "어학 미보유"를 뜻한다 — 학점과 달리 어학은 실제 0이 존재하지 않는 값이라
-     * 결측 플래그를 따로 두지 않는다).
+     * 함수 이름: maxEquivalentToeic()
+     * 기능: 어학 성적 목록에서 토익 환산 최고점을 반환한다. 성적이 없거나 환산 불가하면 0
+     *       (0은 "어학 미보유"를 뜻한다 — 학점과 달리 어학은 실제 0이 존재하지 않는 값이라
+     *       결측 플래그를 따로 두지 않는다).
+     * 파라미터: List<Map<String, Object>> langScores -> 어학 성적 목록(type, score/grade 키를 가진 Map, null 가능)
+     * 반환값: double -> 토익 환산 최고점(없으면 0.0)
      */
     public static double maxEquivalentToeic(List<Map<String, Object>> langScores) {
         if (langScores == null || langScores.isEmpty()) return 0.0;
@@ -91,6 +103,13 @@ public final class SpecNormalizer {
                 .orElse(0.0);
     }
 
+    /**
+     * 함수 이름: equivalentToeic()
+     * 기능: 어학 성적 1건을 토익 점수로 환산한다. TOEIC은 점수 그대로, OPIc은 등급별 고정 환산표,
+     *       TOEFL은 구간별 선형 보간(62 미만은 600 기준 비례)으로 환산하고 그 외 종류는 0으로 본다.
+     * 파라미터: Map<String, Object> scoreData -> 어학 성적 1건(type, score 또는 grade 키)
+     * 반환값: double -> 토익 환산 점수(환산 불가하면 0.0)
+     */
     private static double equivalentToeic(Map<String, Object> scoreData) {
         String type = normalize(String.valueOf(scoreData.get("type")));
 
@@ -133,18 +152,46 @@ public final class SpecNormalizer {
         return 0.0;
     }
 
+    /**
+     * 함수 이름: interpolate()
+     * 기능: 구간 [x0, x1]에 대응하는 [y0, y1] 값으로 x를 선형 보간한다.
+     * 파라미터: double x -> 보간할 입력값
+     *           double x0 -> 입력 구간 시작
+     *           double x1 -> 입력 구간 끝
+     *           double y0 -> 출력 구간 시작
+     *           double y1 -> 출력 구간 끝
+     * 반환값: double -> 보간된 값
+     */
     private static double interpolate(double x, double x0, double x1, double y0, double y1) {
         return y0 + (x - x0) * (y1 - y0) / (x1 - x0);
     }
 
+    /**
+     * 함수 이름: normalize()
+     * 기능: 문자열의 앞뒤 공백을 제거하고 대문자로 바꾼다. null이면 빈 문자열.
+     * 파라미터: String value -> 정규화할 문자열(null 가능)
+     * 반환값: String -> trim·대문자 변환된 문자열(null이면 빈 문자열)
+     */
     private static String normalize(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 
+    /**
+     * 함수 이름: asString()
+     * 기능: 임의 객체를 문자열로 바꾼다. null이면 빈 문자열.
+     * 파라미터: Object value -> 변환할 값(null 가능)
+     * 반환값: String -> 문자열 표현(null이면 빈 문자열)
+     */
     private static String asString(Object value) {
         return value == null ? "" : String.valueOf(value);
     }
 
+    /**
+     * 함수 이름: asDouble()
+     * 기능: 임의 객체를 Double로 파싱한다. null이거나 숫자 형식이 아니면 null.
+     * 파라미터: Object value -> 변환할 값(null 가능)
+     * 반환값: Double -> 파싱된 값(실패 시 null)
+     */
     private static Double asDouble(Object value) {
         if (value == null) return null;
         try {

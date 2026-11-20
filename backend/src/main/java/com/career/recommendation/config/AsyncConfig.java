@@ -18,6 +18,14 @@ import java.util.concurrent.Executor;
 @EnableAsync
 public class AsyncConfig {
 
+    /**
+     * 함수 이름: githubTaskExecutor()
+     * 기능: GitHub 분석 @Async 작업 전용 스레드 풀 빈("githubTaskExecutor")을 만든다. 코어 1·최대 2
+     *       스레드, 큐 20, 스레드 이름 접두어 "github-"로 제한하고, 종료 시 진행 중 작업을 최대 10초
+     *       기다린다.
+     * 파라미터: 없음
+     * 반환값: 초기화된 ThreadPoolTaskExecutor(Executor)
+     */
     @Bean(name = "githubTaskExecutor")
     public Executor githubTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();

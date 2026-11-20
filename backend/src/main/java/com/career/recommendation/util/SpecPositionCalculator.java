@@ -98,13 +98,19 @@ public class SpecPositionCalculator {
     private static final double EPS = 1e-9;
 
     /**
-     * @param jobProfile             목표 직무 프로필 (직무 미설정이면 빈 프로필)
-     * @param overallProfileSupplier 전체 합격자 프로필(직무 표본 미달 시 폴백)의 Supplier.
+     * 함수 이름: calculate()
+     * 기능: 사용자 스펙을 직무 합격자 프로필과 비교해 축별 percentile 위치·갭·자격증 매칭 결과를 계산한다.
+     *       직무 프로필 표본이 MIN_SAMPLE 이상이면 JOB, 아니면 전체 프로필(OVERALL)로 폴백하고,
+     *       그래도 미달이면 NONE("데이터 부족")을 반환한다. 영역 커버리지는 basis와 무관하게 항상 계산해 싣는다.
+     * 파라미터: UserSpec userSpec -> 비교 대상 사용자 스펙(null 가능)
+     *           JobSpecProfile jobProfile -> 목표 직무 프로필 (직무 미설정이면 빈 프로필)
+     *           Supplier<JobSpecProfile> overallProfileSupplier -> 전체 합격자 프로필(직무 표본 미달 시 폴백)의 Supplier.
      *                               프로필 자체가 아니라 Supplier를 받는 이유: 직무 프로필이
      *                               표본을 충족하면 폴백을 아예 조회하지 않기 위함이다 —
      *                               전체 프로필은 캐시 미스 때 합격자 테이블 전체 스캔이라,
      *                               쓰지도 않을 폴백을 매 요청마다 계산하는 낭비를 막는다
      *                               (호출부는 jobSpecProfileService::getOverallProfile을 넘긴다).
+     * 반환값: SpecPositionResult -> basis(JOB/OVERALL/NONE), 축별 위치, 갭, 매칭/미매칭 자격증, 영역 커버리지를 담은 결과
      */
     public SpecPositionResult calculate(UserSpec userSpec,
                                         JobSpecProfile jobProfile,
@@ -162,6 +168,16 @@ public class SpecPositionCalculator {
                 .build();
     }
 
+    /**
+     * 함수 이름: basisMessage()
+     * 기능: 비교 기준(basis)에 맞는 안내 문구를 만든다. JOB이면 직무명과 표본 수를, 전체 폴백이면
+     *       원인(직무 미설정 vs 직무 데이터 부족)을 구분해 정직하게 알린다.
+     *       (예전 buildComparisonMessage가 폴백 사실을 숨기고 직무명을 단언하던 문제의 재발 방지.)
+     * 파라미터: String basis -> 비교 기준(BASIS_JOB 또는 BASIS_OVERALL)
+     *           JobSpecProfile jobProfile -> 목표 직무 프로필(null 가능)
+     *           JobSpecProfile used -> 실제 비교에 쓰인 프로필
+     * 반환값: String -> 화면에 보여줄 안내 문구
+     */
     private String basisMessage(String basis, JobSpecProfile jobProfile, JobSpecProfile used) {
         if (BASIS_JOB.equals(basis)) {
             return String.format("%s 합격자 %d명의 분포와 비교한 결과입니다.",
@@ -179,8 +195,14 @@ public class SpecPositionCalculator {
     }
 
     /**
-     * 축별 위치. 합격자 데이터가 없는 축은 행을 만들지 않고, 사용자 미입력은
-     * percentile null + "미입력"으로 만든다 — 이 둘을 섞으면 예전의 점수-화면 모순이 재발한다.
+     * 함수 이름: buildAxes()
+     * 기능: 학점·어학·자격증·경험 축별 위치(내 값, 합격자 중앙값, percentile)를 계산한다.
+     *       합격자 데이터가 없는 축은 행을 만들지 않고, 사용자 미입력은
+     *       percentile null + "미입력"으로 만든다 — 이 둘을 섞으면 예전의 점수-화면 모순이 재발한다.
+     * 파라미터: UserSpec userSpec -> 사용자 스펙(null 가능)
+     *           Set<String> userCerts -> 사용자의 정규화된 자격증 집합
+     *           JobSpecProfile profile -> 비교에 쓸 합격자 프로필
+     * 반환값: List<AxisPosition> -> 데이터가 있는 축들의 위치 정보 목록
      */
     private List<AxisPosition> buildAxes(UserSpec userSpec, Set<String> userCerts, JobSpecProfile profile) {
         List<AxisPosition> axes = new ArrayList<>(4);
@@ -257,12 +279,17 @@ public class SpecPositionCalculator {
     }
 
     /**
-     * E11-2 — 목표 직무의 요구 영역 커버리지. 목표 직무가 없거나(targetJobType null) 알 수 없는
-     * 코드면 items=null(FE와 확정된 계약대로 "목표 직무 미설정이면 null"을 그대로 지킨다).
+     * 함수 이름: buildAreaCoverage()
+     * 기능: E11-2 — 목표 직무의 요구 영역 커버리지. 목표 직무가 없거나(targetJobType null) 알 수 없는
+     *       코드면 items=null(FE와 확정된 계약대로 "목표 직무 미설정이면 null"을 그대로 지킨다).
      *
-     * 목표 직무 프로필의 githubSampleSize(github_derived가 있는 합격자 수)가 MIN_SAMPLE 이상이면
-     * 2차(합격자 areas 실측 분포), 미만이면 1차(고정 체크리스트)로 폴백한다 — 기존 표본 최소값
-     * 상수(MIN_SAMPLE)를 그대로 재사용한다(BACKLOG 요구사항).
+     *       목표 직무 프로필의 githubSampleSize(github_derived가 있는 합격자 수)가 MIN_SAMPLE 이상이면
+     *       2차(합격자 areas 실측 분포), 미만이면 1차(고정 체크리스트)로 폴백한다 — 기존 표본 최소값
+     *       상수(MIN_SAMPLE)를 그대로 재사용한다(BACKLOG 요구사항).
+     * 파라미터: String targetJobType -> 목표 직무 코드(null 가능)
+     *           UserSpec userSpec -> 사용자 스펙(보유 영역 판정에 사용, null 가능)
+     *           JobSpecProfile jobProfile -> 목표 직무 프로필(null 가능)
+     * 반환값: AreaCoverageSection -> 영역 리스트·출처·표본 수 묶음(직무 미설정/미지 코드면 NONE)
      */
     private AreaCoverageSection buildAreaCoverage(String targetJobType, UserSpec userSpec, JobSpecProfile jobProfile) {
         if (targetJobType == null) {
@@ -277,7 +304,13 @@ public class SpecPositionCalculator {
         }).orElse(AreaCoverageSection.NONE);
     }
 
-    /** 1차 — 팀 정의 체크리스트(JobAreaRequirements) 대비 보유 여부. 선언 순서 유지, passerRatio는 항상 null. */
+    /**
+     * 함수 이름: buildChecklistAreaCoverage()
+     * 기능: 1차 — 팀 정의 체크리스트(JobAreaRequirements) 대비 보유 여부. 선언 순서 유지, passerRatio는 항상 null.
+     * 파라미터: JobType jobType -> 목표 직무
+     *           Set<ExperienceArea> userAreas -> 사용자가 보유한 경험 영역 집합
+     * 반환값: AreaCoverageSection -> 체크리스트 기반 영역 커버리지(source=CHECKLIST, sampleSize=null)
+     */
     private AreaCoverageSection buildChecklistAreaCoverage(JobType jobType, Set<ExperienceArea> userAreas) {
         List<ExperienceArea> required = JobAreaRequirements.requiredAreasFor(jobType);
         if (required.isEmpty()) {
@@ -296,13 +329,18 @@ public class SpecPositionCalculator {
     }
 
     /**
-     * 2차 — 목표 직무 합격자의 areas 실측 분포에서 보유율 상위 N개(DISTRIBUTION_AREA_COUNT_MIN~MAX,
+     * 함수 이름: buildDistributionAreaCoverage()
+     * 기능: 2차 — 목표 직무 합격자의 areas 실측 분포에서 보유율 상위 N개(DISTRIBUTION_AREA_COUNT_MIN~MAX,
      * 1차 체크리스트 길이에 맞춰 clamp)를 보유율 내림차순으로 담는다. jobProfile.getAreaRatios()가
      * 이미 보유율 내림차순(동률이면 키순)으로 정렬돼 있으므로(JobSpecProfileBuilder) 그대로 앞에서부터
      * 자르기만 하면 된다 — 이 순서가 곧 갭 정렬(미보유를 보유율 높은 순으로)과
      * PromptDataBuilder의 보유/미보유 주입 순서도 함께 결정한다(리스트 순서 하나로 통일).
      * 체크리스트에 없던 영역도 실측 데이터에 있으면 등장할 수 있다(요구사항) — ExperienceArea 13종
      * 라벨을 그대로 재사용한다.
+     * 파라미터: JobType jobType -> 목표 직무(체크리스트 길이로 표시 개수 범위를 정하는 데 사용)
+     *           JobSpecProfile jobProfile -> 영역 보유율(areaRatios)·표본 수를 가진 목표 직무 프로필
+     *           Set<ExperienceArea> userAreas -> 사용자가 보유한 경험 영역 집합
+     * 반환값: AreaCoverageSection -> 분포 기반 영역 커버리지(source=PASSER_DISTRIBUTION, sampleSize=githubSampleSize)
      */
     private AreaCoverageSection buildDistributionAreaCoverage(
             JobType jobType, JobSpecProfile jobProfile, Set<ExperienceArea> userAreas) {
@@ -326,7 +364,12 @@ public class SpecPositionCalculator {
         return new AreaCoverageSection(coverage, COVERAGE_SOURCE_PASSER_DISTRIBUTION, jobProfile.getGithubSampleSize());
     }
 
-    /** 사용자 experiences 각 항목의 areas 배열을 합집합으로 모은다. 미지 코드는 걸러진다. */
+    /**
+     * 함수 이름: collectUserAreas()
+     * 기능: 사용자 experiences 각 항목의 areas 배열을 합집합으로 모은다. 미지 코드는 걸러진다.
+     * 파라미터: UserSpec userSpec -> 사용자 스펙(null 가능)
+     * 반환값: Set<ExperienceArea> -> 사용자가 보유한 경험 영역 집합(경험이 없으면 빈 Set)
+     */
     private Set<ExperienceArea> collectUserAreas(UserSpec userSpec) {
         if (userSpec == null || userSpec.getExperiences() == null) {
             return Set.of();
@@ -345,7 +388,13 @@ public class SpecPositionCalculator {
         return areas;
     }
 
-    /** 보유율 임계 이상인데 사용자가 없는 자격증, 보유율 내림차순 상위 MAX_GAPS개. */
+    /**
+     * 함수 이름: buildGaps()
+     * 기능: 보유율 임계(GAP_MIN_HOLDER_RATE) 이상인데 사용자가 없는 자격증, 보유율 내림차순 상위 MAX_GAPS개.
+     * 파라미터: Set<String> userCerts -> 사용자의 정규화된 자격증 집합
+     *           JobSpecProfile profile -> 보유율 내림차순 자격증 통계를 가진 합격자 프로필
+     * 반환값: List<SpecGap> -> 갭 목록(이름, 합격자 보유율 %)
+     */
     private List<SpecGap> buildGaps(Set<String> userCerts, JobSpecProfile profile) {
         List<SpecGap> gaps = new ArrayList<>(MAX_GAPS);
         for (CertStat stat : profile.getCertStats()) {   // 이미 보유율 내림차순
@@ -360,7 +409,13 @@ public class SpecPositionCalculator {
         return gaps;
     }
 
-    /** 사용자 보유 자격증 중 프로필에도 등장하는 것 — 합격자 최빈 표기로 통일해서 반환. */
+    /**
+     * 함수 이름: matchedCerts()
+     * 기능: 사용자 보유 자격증 중 프로필에도 등장하는 것 — 합격자 최빈 표기로 통일해서 반환.
+     * 파라미터: Set<String> userCerts -> 사용자의 정규화된 자격증 집합
+     *           JobSpecProfile profile -> 합격자 프로필
+     * 반환값: List<String> -> 프로필과 매칭된 자격증의 표시 이름(보유율 내림차순)
+     */
     private List<String> matchedCerts(Set<String> userCerts, JobSpecProfile profile) {
         List<String> matched = new ArrayList<>();
         for (CertStat stat : profile.getCertStats()) {   // 보유율 내림차순 유지
@@ -372,9 +427,13 @@ public class SpecPositionCalculator {
     }
 
     /**
-     * 사용자 자격증 중 프로필에 없는 것의 원본 표기 목록(정규화 기준 중복 제거, 첫 표기 유지).
+     * 함수 이름: userCertDisplayList()
+     * 기능: 사용자 자격증 중 프로필에 없는 것의 원본 표기 목록(정규화 기준 중복 제거, 첫 표기 유지).
      * profile이 null이면(비교 자체가 불가한 NONE) 전부 "비교 대상 없음"으로 나열한다 —
      * 비교를 못 하는 상황에서도 입력이 어떻게 처리됐는지는 알려준다(예전 원칙 계승).
+     * 파라미터: UserSpec userSpec -> 사용자 스펙(null 가능)
+     *           JobSpecProfile profile -> 비교 대상 프로필(비교 불가 시 null)
+     * 반환값: List<String> -> 프로필에 없는 자격증의 원본 표기 목록(없으면 빈 리스트)
      */
     private List<String> userCertDisplayList(UserSpec userSpec, JobSpecProfile profile) {
         if (userSpec == null || userSpec.getCertifications() == null) return List.of();
@@ -390,9 +449,14 @@ public class SpecPositionCalculator {
     }
 
     /**
-     * midrank percentile: (미만 개수 + 동률 개수의 절반) / 전체 × 100.
-     * 동률을 절반만 세는 이유: 전부 아래로 치면 동률 값이 0%, 전부 위로 치면 100%가 되어
-     * "합격자 전원과 같은 값"인 사용자가 극단으로 그려진다. midrank는 그 중간(50%)을 준다.
+     * 함수 이름: percentileOf() (double[] 버전)
+     * 기능: midrank percentile: (미만 개수 + 동률 개수의 절반) / 전체 × 100.
+     *       동률을 절반만 세는 이유: 전부 아래로 치면 동률 값이 0%, 전부 위로 치면 100%가 되어
+     *       "합격자 전원과 같은 값"인 사용자가 극단으로 그려진다. midrank는 그 중간(50%)을 준다.
+     *       부동소수 동률은 EPS 오차 이내로 판정한다.
+     * 파라미터: double[] sorted -> 합격자 분포 값(오름차순 정렬, 비어 있지 않아야 함)
+     *           double value -> 위치를 구할 사용자 값
+     * 반환값: int -> 0~100 범위의 percentile(반올림)
      */
     static int percentileOf(double[] sorted, double value) {
         int less = 0;
@@ -404,6 +468,14 @@ public class SpecPositionCalculator {
         return (int) Math.round((less + 0.5 * equal) / sorted.length * 100);
     }
 
+    /**
+     * 함수 이름: percentileOf() (int[] 버전)
+     * 기능: 정수 분포에 대한 midrank percentile((미만 개수 + 동률 개수의 절반) / 전체 × 100).
+     *       double[] 버전과 같은 규칙이며 동률은 정확히 같은 값으로 판정한다.
+     * 파라미터: int[] sorted -> 합격자 분포 값(오름차순 정렬, 비어 있지 않아야 함)
+     *           int value -> 위치를 구할 사용자 값
+     * 반환값: int -> 0~100 범위의 percentile(반올림)
+     */
     static int percentileOf(int[] sorted, int value) {
         int less = 0;
         int equal = 0;
@@ -414,11 +486,23 @@ public class SpecPositionCalculator {
         return (int) Math.round((less + 0.5 * equal) / (double) sorted.length * 100);
     }
 
+    /**
+     * 함수 이름: median() (double[] 버전)
+     * 기능: 오름차순 정렬된 배열의 중앙값을 구한다. 짝수 개면 가운데 두 값의 평균.
+     * 파라미터: double[] sorted -> 오름차순 정렬된 값 배열(비어 있지 않아야 함)
+     * 반환값: double -> 중앙값
+     */
     static double median(double[] sorted) {
         int n = sorted.length;
         return n % 2 == 1 ? sorted[n / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0;
     }
 
+    /**
+     * 함수 이름: median() (int[] 버전)
+     * 기능: 오름차순 정렬된 정수 배열의 중앙값을 구한다. 짝수 개면 가운데 두 값의 평균.
+     * 파라미터: int[] sorted -> 오름차순 정렬된 값 배열(비어 있지 않아야 함)
+     * 반환값: double -> 중앙값
+     */
     static double median(int[] sorted) {
         int n = sorted.length;
         return n % 2 == 1 ? sorted[n / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0;

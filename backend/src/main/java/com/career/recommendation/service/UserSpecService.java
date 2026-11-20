@@ -34,6 +34,9 @@ public class UserSpecService {
     private final PlatformTransactionManager transactionManager;
 
     /**
+     * 함수 이름: saveOrUpdateMySpec()
+     * 기능: 현재 사용자의 스펙(학점·학년·어학·자격증·경험)을 저장하거나 수정한다.
+     *
      * ⚠️ 클래스 레벨 @Transactional(readOnly = true)를 명시적으로 벗어난다(NOT_SUPPORTED).
      * 이 메서드에 트랜잭션이 하나라도 걸려 있으면, 아래 upsert()의 insertAttempt(REQUIRES_NEW)가
      * 실패한 뒤 재개되는 시점에 이 메서드의 트랜잭션이 여전히 살아있는 채로 남아있고, retry가
@@ -47,6 +50,10 @@ public class UserSpecService {
      * 호출들이 각자 독립적으로 트랜잭션을 열고 닫는다 — insertAttempt와 retry는 같은 시점에
      * 동시에 열리지 않고 순차적으로만 열리므로, 이 메서드 하나가 커넥션 풀에서 항상 2개를
      * 동시에 점유하던 문제(동시 요청 10개 이상에서 HikariCP 풀 고갈 실측)도 같이 해소된다.
+     *
+     * 파라미터: Authentication authentication -> 현재 로그인한 사용자 인증 정보
+     *           UserSpecRequest request -> 스펙 저장 요청
+     * 반환값: UserSpecResponse -> 저장된 스펙 응답
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public UserSpecResponse saveOrUpdateMySpec(
@@ -59,6 +66,9 @@ public class UserSpecService {
     }
 
     /**
+     * 함수 이름: upsert()
+     * 기능: 사용자 스펙을 삽입하거나 갱신한다. 값이 그대로면 저장을 건너뛰고, 동시 최초 저장 경합이 나면 새 트랜잭션에서 재조회 후 재시도한다.
+     *
      * find-then-save는 최초 저장 시 경합에 취약하다. user_specs.user_id는 UNIQUE라, 신규 유저의
      * 저장 요청 두 개가 거의 동시에 findByUser_Id에서 둘 다 "없음"을 보면 둘 다 INSERT를
      * 시도하고 늦은 쪽이 DataIntegrityViolationException으로 500이 났다(실제 동시 스레드
@@ -75,6 +85,10 @@ public class UserSpecService {
      *
      * saveAndFlush를 쓰는 이유는 별개다 — save()만 쓰면 응답 DTO를 만들 때 @UpdateTimestamp인
      * updatedAt이 아직 flush 전이라 최초 저장 시 null, 수정 시 한 리비전 뒤처진 값으로 나간다.
+     *
+     * 파라미터: User user -> 대상 사용자
+     *           UserSpecRequest request -> 스펙 저장 요청
+     * 반환값: UserSpec -> 저장(또는 변경 없어 그대로인) 스펙 엔티티
      */
     private UserSpec upsert(User user, UserSpecRequest request) {
         TransactionTemplate insertAttempt = new TransactionTemplate(transactionManager);
@@ -115,6 +129,13 @@ public class UserSpecService {
         }
     }
 
+    /**
+     * 함수 이름: updateUserSpecFields()
+     * 기능: 요청 값을 스펙 엔티티의 학점·학년·어학 점수·자격증·경험 필드에 덮어쓴다.
+     * 파라미터: UserSpec userSpec -> 값을 채울 스펙 엔티티
+     *           UserSpecRequest request -> 스펙 저장 요청
+     * 반환값: 없음
+     */
     private void updateUserSpecFields(
             UserSpec userSpec,
             UserSpecRequest request
@@ -128,10 +149,15 @@ public class UserSpecService {
     }
 
     /**
-     * 요청 값이 기존 엔티티와 동일한지 비교한다.
+     * 함수 이름: hasChanges()
+     * 기능: 요청 값이 기존 엔티티와 동일한지 비교한다.
      * 동일하면 saveAndFlush()를 건너뛰어 @UpdateTimestamp가 updatedAt을 갱신하지 않게 한다.
      * updatedAt이 무변경 저장에도 바뀌면 RecommendationService.isSpecModifiedSince()가
      * 스펙 변경으로 판정해 추천 갱신 횟수를 헛되이 차감하는 문제가 있었다.
+     *
+     * 파라미터: UserSpec existing -> 기존 스펙 엔티티
+     *           UserSpecRequest request -> 새 요청 값
+     * 반환값: boolean -> 하나라도 다르면 true, 모두 같으면 false
      */
     private boolean hasChanges(UserSpec existing, UserSpecRequest request) {
         // ⚠️ BigDecimal은 Objects.equals로 비교하면 안 된다 — equals가 scale까지 본다.
@@ -158,11 +184,24 @@ public class UserSpecService {
         return false;
     }
 
+    /**
+     * 함수 이름: bigDecimalValueEquals()
+     * 기능: 두 BigDecimal을 scale과 무관하게 값(compareTo) 기준으로 비교한다. 둘 다 null이면 같다고 본다.
+     * 파라미터: java.math.BigDecimal a -> 비교 대상 1
+     *           java.math.BigDecimal b -> 비교 대상 2
+     * 반환값: boolean -> 값이 같으면 true
+     */
     private boolean bigDecimalValueEquals(java.math.BigDecimal a, java.math.BigDecimal b) {
         if (a == null || b == null) return a == b;
         return a.compareTo(b) == 0;
     }
 
+    /**
+     * 함수 이름: convertLanguageScores()
+     * 기능: 요청의 어학 점수 목록에서 null을 제외하고 저장용 Map 목록으로 변환한다. 입력이 null이면 빈 목록을 돌려준다.
+     * 파라미터: UserSpecRequest request -> 스펙 저장 요청
+     * 반환값: List<Map<String, Object>> -> 저장용 어학 점수 Map 목록
+     */
     private List<Map<String, Object>> convertLanguageScores(
             UserSpecRequest request
     ) {
@@ -176,6 +215,12 @@ public class UserSpecService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 함수 이름: convertCertifications()
+     * 기능: 요청의 자격증 목록에서 null·공백 항목을 제거하고 앞뒤 공백을 다듬어 중복 없는 배열로 변환한다. 입력이 null이면 빈 배열을 돌려준다.
+     * 파라미터: UserSpecRequest request -> 스펙 저장 요청
+     * 반환값: String[] -> 정제된 자격증 배열
+     */
     private String[] convertCertifications(UserSpecRequest request) {
         if (request.getCertifications() == null) {
             return new String[0];
@@ -189,6 +234,13 @@ public class UserSpecService {
                 .toArray(String[]::new);
     }
 
+    /**
+     * 함수 이름: convertExperiences()
+     * 기능: 요청의 경험 목록에서 null과 제목이 빈 항목을 제외하고 저장용 Map 목록으로 변환한다.
+     *       입력이 null이면 null을 그대로 반환해 "미입력"과 "0개(빈 배열)"를 구분한다.
+     * 파라미터: UserSpecRequest request -> 스펙 저장 요청
+     * 반환값: List<Map<String, Object>> -> 저장용 경험 Map 목록(미입력이면 null)
+     */
     private List<Map<String, Object>> convertExperiences(UserSpecRequest request) {
         if (request.getExperiences() == null) {
             return null; // null을 유지해 "미입력"과 "0개"를 구분한다(빈 배열이면 0개).

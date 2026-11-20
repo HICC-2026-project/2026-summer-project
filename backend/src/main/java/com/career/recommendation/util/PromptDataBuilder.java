@@ -25,25 +25,42 @@ public class PromptDataBuilder {
     private final ObjectMapper objectMapper;
 
     /**
-     * DB 활성 활동 목록을 Gemini 프롬프트용 JSON 문자열로 변환한다.
-     * 각 활동의 id, type, name, organization, description, deadline, tags 정보를 포함한다.
+     * 함수 이름: buildAvailableActivitiesJson()
+     * 기능: DB 활성 활동 목록을 Gemini 프롬프트용 JSON 문자열로 변환한다.
+     *       각 활동의 id, type, name, organization, description, deadline, tags 정보를 포함한다
+     *       (추천 F-03용이라 targetSpec도 포함한다).
+     * 파라미터: List<Activity> activities -> 프롬프트에 실을 활동 목록
+     * 반환값: String -> 활동 목록 JSON 문자열(변환 실패·빈 목록이면 "[]")
      */
     public String buildAvailableActivitiesJson(List<Activity> activities) {
         return buildActivitiesJson(activities, Set.of(), true);
     }
 
     /**
-     * 로드맵(F-05) 프롬프트용 "전체 DB 등록 활동 목록"을 만든다. buildAvailableActivitiesJson과 달리:
+     * 함수 이름: buildAvailableActivitiesJsonForRoadmap()
+     * 기능: 로드맵(F-05) 프롬프트용 "전체 DB 등록 활동 목록"을 만든다. buildAvailableActivitiesJson과 달리:
      * - excludeIds에 있는 활동(이미 [우선 반영할 AI 추천 활동]에 포함된 활동)은 제외한다 — 같은 활동이
      *   두 목록에 중복으로 실려 프롬프트 토큰만 낭비하는 것을 막는다.
      * - targetSpec 필드를 포함하지 않는다 — 크롤 수집 활동은 required_qualifications가 수천 자에
      *   달할 수 있는데, 로드맵은 시기별 매칭(마감일·직무)만 할 뿐 targetSpec 충족 여부는 따지지
      *   않는다(그건 추천(F-03) 프롬프트의 역할). description 100자 컷은 그대로 유지한다.
+     * 파라미터: List<Activity> activities -> 프롬프트에 실을 활동 목록
+     *           Set<UUID> excludeIds -> 목록에서 제외할 활동 ID 집합(null이면 제외 없음)
+     * 반환값: String -> 활동 목록 JSON 문자열(변환 실패·빈 목록이면 "[]")
      */
     public String buildAvailableActivitiesJsonForRoadmap(List<Activity> activities, Set<UUID> excludeIds) {
         return buildActivitiesJson(activities, excludeIds != null ? excludeIds : Set.of(), false);
     }
 
+    /**
+     * 함수 이름: buildActivitiesJson()
+     * 기능: 활동 목록을 프롬프트용 JSON 문자열로 직렬화하는 공통 구현. excludeIds에 있는 활동은 건너뛰고,
+     *       description은 100자로 자르며, includeTargetSpec이 true일 때만 targetSpec을 포함한다.
+     * 파라미터: List<Activity> activities -> 직렬화할 활동 목록
+     *           Set<UUID> excludeIds -> 제외할 활동 ID 집합
+     *           boolean includeTargetSpec -> targetSpec 포함 여부
+     * 반환값: String -> 활동 목록 JSON 문자열(빈 목록·변환 실패 시 "[]")
+     */
     private String buildActivitiesJson(List<Activity> activities, Set<UUID> excludeIds, boolean includeTargetSpec) {
         if (activities.isEmpty()) return "[]";
         try {
@@ -85,8 +102,11 @@ public class PromptDataBuilder {
     private static final int EXPERIENCE_STACK_PROMPT_LIMIT = 5;
 
     /**
-     * 유저 스펙을 Gemini 프롬프트용 JSON 문자열로 직렬화한다.
-     * 추천(F-03)용 — 학점, 학점 만점, 어학, 자격증, 경험, 학년 모두 포함.
+     * 함수 이름: serializeSpecForRecommendation()
+     * 기능: 유저 스펙을 Gemini 프롬프트용 JSON 문자열로 직렬화한다.
+     *       추천(F-03)용 — 학점, 학점 만점, 어학, 자격증, 경험, 학년 모두 포함.
+     * 파라미터: UserSpec userSpec -> 직렬화할 유저 스펙(null 가능)
+     * 반환값: String -> 스펙 JSON 문자열(null이거나 변환 실패 시 "{}")
      */
     public String serializeSpecForRecommendation(UserSpec userSpec) {
         if (userSpec == null) return "{}";
@@ -105,14 +125,17 @@ public class PromptDataBuilder {
     }
 
     /**
-     * 유저 스펙을 Gemini 프롬프트용 JSON 문자열로 직렬화한다.
-     * 로드맵(F-05)용 — 학점, 학년, 자격증, 어학 성적, 경험 포함.
+     * 함수 이름: serializeSpecForRoadmap()
+     * 기능: 유저 스펙을 Gemini 프롬프트용 JSON 문자열로 직렬화한다.
+     *       로드맵(F-05)용 — 학점, 학년, 자격증, 어학 성적, 경험 포함.
      *
      * ⚠️ 어학 성적(languageScores)을 반드시 포함한다. 예전엔 학점·학년·자격증만 보내서
      * Gemini가 사용자의 어학 보유 여부를 알 수 없었고, 이미 토익 900을 가진 사용자에게
      * "토익 900 목표로 학습" 같은 스텝을 추천하거나 반대로 진짜 어학 공백을 놓치는
      * "이상한 결론"이 로드맵에 나올 수 있었다(추천 프롬프트 쪽 직렬화에는 원래부터
      * 어학이 포함돼 있어 두 프롬프트가 서로 다른 스펙을 보고 있었다).
+     * 파라미터: UserSpec userSpec -> 직렬화할 유저 스펙(null 가능)
+     * 반환값: String -> 스펙 JSON 문자열(null이거나 변환 실패 시 "{}")
      */
     public String serializeSpecForRoadmap(UserSpec userSpec) {
         if (userSpec == null) return "{}";
@@ -130,7 +153,8 @@ public class PromptDataBuilder {
     }
 
     /**
-     * 경험 리스트를 프롬프트 주입용으로 축약한다. 저장 형식(UserSpec.experiences)과 API 응답은
+     * 함수 이름: truncateExperiencesForPrompt()
+     * 기능: 경험 리스트를 프롬프트 주입용으로 축약한다. 저장 형식(UserSpec.experiences)과 API 응답은
      * 그대로 두고, Gemini에 보낼 때만 크기를 줄인다 — 경험 최대 20개 × description 500자 +
      * stack 10개 등을 그대로 넣으면 사용자 1명의 경험만으로 프롬프트가 2만자를 넘을 수 있었다.
      * - description: 100자로 컷(+"...")
@@ -138,6 +162,8 @@ public class PromptDataBuilder {
      * - role/areas/months/type/title/depth 등 그 외 필드는 그대로 둔다(role은 이미 ≤100자,
      *   areas는 코드 나열이라 원래도 짧다).
      * 두 직렬화 메서드(추천·로드맵)가 중복 구현하지 않도록 이곳에 단일화한다.
+     * 파라미터: List<Map<String, Object>> experiences -> 유저 경험 리스트(null/빈 가능)
+     * 반환값: List<Map<String, Object>> -> 축약된 경험 복사본 리스트(원본은 변경하지 않음, 없으면 빈 리스트)
      */
     private List<Map<String, Object>> truncateExperiencesForPrompt(List<Map<String, Object>> experiences) {
         if (experiences == null || experiences.isEmpty()) return List.of();
@@ -159,12 +185,17 @@ public class PromptDataBuilder {
     }
 
     /**
-     * 위치·갭 계산 결과(SpecPositionResult)를 Gemini 프롬프트용 텍스트로 변환한다.
+     * 함수 이름: buildPositionContextText()
+     * 기능: 위치·갭 계산 결과(SpecPositionResult)를 Gemini 프롬프트용 텍스트로 변환한다.
+     *       축별 내 값/중앙값/percentile, 목표 직무 요구 영역의 보유/미보유, 갭 항목,
+     *       targetGap에 쓸 수 있는 갭 이름(우선순위 순)을 차례로 이어 붙인다.
      *
      * 예전 buildSimilarCasesText(유사 합격자 5명의 원본 스펙 나열)를 대체한다 — 개별 케이스
      * 나열보다 "분포 내 위치 + 부족한 것(갭)"이 추천 이유 생성에 더 직접적인 신호이고,
      * 화면(specPosition)과 프롬프트가 같은 데이터를 보므로 추천 이유와 비교 탭이 서로
      * 모순될 수 없다.
+     * 파라미터: SpecPositionResult position -> 위치·갭 계산 결과(null 가능)
+     * 반환값: String -> 프롬프트용 텍스트(null이거나 basis가 NONE이면 "합격자 비교 데이터 없음")
      */
     public String buildPositionContextText(SpecPositionResult position) {
         if (position == null || SpecPositionCalculator.BASIS_NONE.equals(position.getBasis())) {
@@ -213,7 +244,11 @@ public class PromptDataBuilder {
     }
 
     /**
-     * 목표 직무 정보를 프롬프트용 문자열로 변환한다.
+     * 함수 이름: buildTargetJobString()
+     * 기능: 목표 직무 정보를 "직무 / 기업규모 / 산업" 형태의 프롬프트용 문자열로 변환한다.
+     *       선택 입력인 기업규모·산업이 null이면 "미설정"으로 대체한다.
+     * 파라미터: TargetJob targetJob -> 목표 직무(null 가능)
+     * 반환값: String -> 프롬프트용 문자열(null이면 "미설정")
      */
     public String buildTargetJobString(TargetJob targetJob) {
         if (targetJob == null) return "미설정";

@@ -29,8 +29,12 @@ public final class GraduateOnlyActivityFilter {
     }
 
     /**
-     * grade가 1~3인 재학생에게 지원 불가한(대졸 공채류) 활동을 목록에서 제외한다.
-     * grade가 null이거나 4 이상이면 원본 목록을 그대로 돌려준다.
+     * 함수 이름: filterForGrade()
+     * 기능: grade가 1~3인 재학생에게 지원 불가한(대졸 공채류) 활동을 목록에서 제외한다.
+     *       grade가 null이거나 4 이상이면 원본 목록을 그대로 돌려준다(목록이 null/빈 경우도 그대로 반환).
+     * 파라미터: List<Activity> activities -> 필터링할 후보 활동 목록
+     *           Integer grade -> 사용자 학년(null 가능)
+     * 반환값: List<Activity> -> 대졸 전용 활동이 제외된 목록(필터 비대상이면 원본 목록)
      */
     public static List<Activity> filterForGrade(List<Activity> activities, Integer grade) {
         if (activities == null || activities.isEmpty()) {
@@ -44,6 +48,12 @@ public final class GraduateOnlyActivityFilter {
                 .toList();
     }
 
+    /**
+     * 함수 이름: isGraduateOnly()
+     * 기능: 활동의 targetSpec에 대졸 전용 키워드가 있는지 판정한다. targetSpec이 null/빈 경우 false.
+     * 파라미터: Activity activity -> 판정할 활동
+     * 반환값: boolean -> 대졸 전용 활동이면 true
+     */
     private static boolean isGraduateOnly(Activity activity) {
         Map<String, Object> targetSpec = activity.getTargetSpec();
         if (targetSpec == null || targetSpec.isEmpty()) {
@@ -52,7 +62,13 @@ public final class GraduateOnlyActivityFilter {
         return containsGraduateOnlyKeyword(targetSpec);
     }
 
-    /** targetSpec 값(문자열·Map·List가 섞여 있을 수 있음)을 재귀적으로 훑어 키워드를 찾는다. */
+    /**
+     * 함수 이름: containsGraduateOnlyKeyword()
+     * 기능: targetSpec 값(문자열·Map·List가 섞여 있을 수 있음)을 재귀적으로 훑어 키워드를 찾는다.
+     *       String은 키워드 부분 문자열 포함 여부, Map은 values, Collection은 원소를 재귀 검사한다.
+     * 파라미터: Object value -> 검사할 값(String/Map/Collection/null 등)
+     * 반환값: boolean -> 키워드가 하나라도 발견되면 true
+     */
     private static boolean containsGraduateOnlyKeyword(Object value) {
         if (value == null) {
             return false;

@@ -73,8 +73,14 @@ public class RoadmapService {
     private static final Set<String> VALID_PRIORITIES = Set.of("HIGH", "MEDIUM", "LOW");
 
     /**
-     * 현재 로그인한 유저의 12개월 커리어 로드맵을 반환한다.
-     * F-03 맞춤 추천 활동 및 유사 합격자 데이터를 공유받아 일관성 있는 로드맵을 생성한다.
+     * 함수 이름: getRoadmap()
+     * 기능: 현재 로그인한 유저의 12개월 커리어 로드맵을 반환한다.
+     *       F-03 맞춤 추천 활동 및 유사 합격자 데이터를 공유받아 일관성 있는 로드맵을 생성한다.
+     *       유효한 캐시가 있고 스펙 변경이 없으면 캐시를 그대로 반환하며, 재생성이 필요해도 하루 시도 상한
+     *       (AiDailyAttemptLimiter)을 넘으면 옛 캐시(없으면 폴백)에 dailyLimitReached를 붙여 돌려준다.
+     *       Gemini 호출은 트랜잭션 밖에서 하고, 성공한 결과만 RoadmapCacheService로 저장한다.
+     * 파라미터: Authentication authentication -> 현재 로그인 사용자 인증 정보
+     * 반환값: RoadmapResponse -> 시기별 로드맵 타임라인(캐시, Gemini 결과 또는 폴백)
      */
     public RoadmapResponse getRoadmap(Authentication authentication) {
         User user = currentUserService.getCurrentUser(authentication);
@@ -219,6 +225,23 @@ public class RoadmapService {
         return response;
     }
 
+    /**
+     * 함수 이름: callGeminiWithRetry()
+     * 기능: Gemini로 로드맵을 생성하고 파싱한다. 실패하면 2초 백오프 후 1회 재시도하고, 2회 모두 실패하면 폴백 로드맵을 반환한다.
+     *
+     *       ⚠️ 모든 실패 경로(빈 응답 포함)가 백오프(2초 sleep)를 반드시 거치게 한다. 예전엔 빈 응답일 때
+     *       continue로 곧장 재호출해, Gemini가 과부하·레이트리밋으로 빈 응답을 주는 상황을 악화시켰다.
+     * 파라미터: String userSpecJson -> 사용자 스펙 JSON
+     *           String targetJobStr -> 목표 직무 문자열
+     *           Integer grade -> 현재 학년(null 가능)
+     *           String positionContextStr -> 합격자 비교 데이터 텍스트
+     *           String topRecommendedJson -> 우선 반영할 AI 추천 활동 JSON
+     *           String availableActivitiesJson -> 전체 DB 활동 목록 JSON
+     *           List<Activity> activeActivities -> 검증 기준이 되는 후보 활동 목록
+     *           List<Activity> recommendedCacheActivities -> 추천 캐시에서 다시 조회한 활동(후보 창 밖일 수 있음)
+     *           LocalDate today -> 오늘 날짜
+     * 반환값: RoadmapResponse -> Gemini 기반 로드맵, 2회 실패 시 폴백 로드맵
+     */
     private RoadmapResponse callGeminiWithRetry(String userSpecJson, String targetJobStr, Integer grade,
                                                  String positionContextStr, String topRecommendedJson,
                                                  String availableActivitiesJson, List<Activity> activeActivities,
@@ -251,8 +274,16 @@ public class RoadmapService {
     }
 
     /**
-     * Gemini 응답 JSON을 RoadmapResponse DTO로 변환한다.
-     * 타입 안전한 GeminiRoadmapResult DTO로 파싱하고, DB와 대조하여 실재하는 활동만 포함한다.
+     * 함수 이름: parseGeminiResponse()
+     * 기능: Gemini 응답 JSON을 RoadmapResponse DTO로 변환한다.
+     *       타입 안전한 GeminiRoadmapResult DTO로 파싱하고, DB와 대조하여 실재하는 활동만 포함한다.
+     *       추천 캐시 활동도 검증 맵에 함께 담아 후보 창 밖에 있어도 통과시키고, null 원소와
+     *       알맹이(활동 텍스트도 매칭 활동도 없는) 없는 스텝은 버린다(상세 이유는 본문 주석 참고).
+     * 파라미터: String rawJson -> Gemini 응답 JSON
+     *           List<Activity> activeActivities -> 검증 기준이 되는 후보 활동 목록
+     *           List<Activity> recommendedCacheActivities -> 추천 캐시에서 다시 조회한 활동(null 가능)
+     * 반환값: RoadmapResponse -> 변환된 로드맵. 타임라인이 비었거나 유효한 스텝이 없으면 null
+     * 예외: Exception -> JSON 파싱 실패 시(호출부가 재시도 처리)
      */
     private RoadmapResponse parseGeminiResponse(String rawJson,
                                                  List<Activity> activeActivities,
@@ -335,6 +366,9 @@ public class RoadmapService {
     }
 
     /**
+     * 함수 이름: normalizePriority()
+     * 기능: Gemini가 준 priority를 대소문자·공백을 정규화해 HIGH/MEDIUM/LOW 중 하나로 맞춘다. null이거나 허용 값이 아니면 MEDIUM.
+     *
      * ⚠️ Set.of(...).contains(null)은 false가 아니라 NullPointerException을 던진다
      * (Objects.requireNonNull 기반 구현). VALID_PRIORITIES.contains(t.getPriority())로
      * 직접 검사했을 때, Gemini가 priority 필드 하나만 빠뜨려도(스키마 자체는 정상,
@@ -345,6 +379,8 @@ public class RoadmapService {
      * 화이트리스트 도입이 만든 회귀다. null을 먼저 걸러내고, 대소문자도 함께 정규화한다
      * (ActivityController의 direction 파라미터와 같은 이유 — Gemini가 "high"처럼 소문자를
      * 줘도 대문자 값만 허용하던 화이트리스트가 조용히 전부 MEDIUM으로 뭉갰다).
+     * 파라미터: String raw -> Gemini가 준 priority 문자열(null 가능)
+     * 반환값: String -> "HIGH", "MEDIUM", "LOW" 중 하나
      */
     private String normalizePriority(String raw) {
         if (raw == null) return "MEDIUM";
@@ -352,6 +388,12 @@ public class RoadmapService {
         return VALID_PRIORITIES.contains(normalized) ? normalized : "MEDIUM";
     }
 
+    /**
+     * 함수 이름: toMatchedActivity()
+     * 기능: Activity 엔티티를 로드맵 응답용 MatchedActivity(ID·이름·유형·기관·마감일·URL)로 변환한다.
+     * 파라미터: Activity activity -> 변환할 활동 엔티티
+     * 반환값: MatchedActivity -> 로드맵 응답용 활동 DTO
+     */
     private MatchedActivity toMatchedActivity(Activity activity) {
         return MatchedActivity.builder()
                 .activityId(activity.getId())
@@ -388,11 +430,18 @@ public class RoadmapService {
     };
 
     /**
-     * Gemini 미사용/실패 시 DB 등록 활동 기반 기본 로드맵 반환.
+     * 함수 이름: buildFallbackRoadmap()
+     * 기능: Gemini 미사용/실패 시 DB 등록 활동 기반 기본 로드맵 반환.
+     *       첫 번째(HIGH) 시기에만 실제 DB 활동(최대 3개)을 붙이고 나머지 시기는 텍스트 가이드만 담는다
+     *       (카드의 마감일과 시기 라벨이 모순되는 것을 막기 위함 — 본문 주석 참고).
      *
-     * ⚠️ 예전엔 이 시기 라벨이 "N학년 2학기 (9~11월)"부터 시작하도록 하드코딩돼 있었다 —
-     * 요청 시점이 실제로 몇 월인지는 전혀 보지 않았다. today를 기준으로 현재 속한 학기/방학
-     * 구간부터 순서대로 계산한다(computeFallbackPeriods).
+     *       ⚠️ 예전엔 이 시기 라벨이 "N학년 2학기 (9~11월)"부터 시작하도록 하드코딩돼 있었다 —
+     *       요청 시점이 실제로 몇 월인지는 전혀 보지 않았다. today를 기준으로 현재 속한 학기/방학
+     *       구간부터 순서대로 계산한다(computeFallbackPeriods).
+     * 파라미터: Integer grade -> 현재 학년(null이면 월 단위 라벨)
+     *           List<Activity> activeActivities -> 후보 활동 목록(null 가능)
+     *           LocalDate today -> 오늘 날짜
+     * 반환값: RoadmapResponse -> aiRoadmap=false인 폴백 로드맵
      */
     private RoadmapResponse buildFallbackRoadmap(Integer grade, List<Activity> activeActivities, LocalDate today) {
         String[] periods = computeFallbackPeriods(grade, today);
@@ -433,7 +482,9 @@ public class RoadmapService {
     }
 
     /**
-     * grade가 있을 때, today가 속한 학기/방학 구간부터 순서대로 4개의 시기 라벨을 만든다.
+     * 함수 이름: computeFallbackPeriods()
+     * 기능: 폴백 로드맵의 시기 라벨 배열을 만든다.
+     *       grade가 있을 때, today가 속한 학기/방학 구간부터 순서대로 4개의 시기 라벨을 만든다.
      * 한 해를 1학기(3~6월, 4개월)·여름방학(7~8월, 2개월)·2학기(9~11월, 3개월)·겨울방학
      * (12~2월, 3개월) 4구간으로 보는데, 이 4종류를 정확히 한 바퀴(4구간) 돌면 시작 시점과
      * 무관하게 항상 4+2+3+3=12개월이 된다 — "12개월 로드맵" 계약과 정확히 맞아떨어지는
@@ -441,6 +492,9 @@ public class RoadmapService {
      * 학년이 하나 올라간다. 4학년을 넘어가면 "졸업 후 취업 준비"로 고정한다.
      * grade가 null이면 학기 개념이 없으므로 상대적인 "N~N개월 차" 라벨을 2개월 단위로
      * 6구간(12개월) 채워 그대로 쓴다.
+     * 파라미터: Integer grade -> 현재 학년(null이면 "N~N개월 차" 라벨)
+     *           LocalDate today -> 시작 학기/방학을 정할 기준 날짜
+     * 반환값: String[] -> 시기 라벨 배열(학년 있음: 4개, 없음: 6개)
      */
     private String[] computeFallbackPeriods(Integer grade, LocalDate today) {
         if (grade == null) {
@@ -469,6 +523,13 @@ public class RoadmapService {
         return periods;
     }
 
+    /**
+     * 함수 이름: fallbackTermLabel()
+     * 기능: 학년과 학기 인덱스로 "N학년 1학기 (3~6월)" 같은 시기 라벨을 만든다. 4학년을 넘으면 "졸업 후 취업 준비".
+     * 파라미터: int grade -> 학년
+     *           int termIndex -> 학기 인덱스(0=1학기, 1=여름방학, 2=2학기, 3=겨울방학)
+     * 반환값: String -> 시기 라벨
+     */
     private String fallbackTermLabel(int grade, int termIndex) {
         if (grade > 4) {
             return "졸업 후 취업 준비";
@@ -482,28 +543,15 @@ public class RoadmapService {
     }
 
     /**
-     * 캐시된 로드맵에 붙어 있는 실제 DB 활동(matchedActivities)이 아직 유효한지 확인한다.
-     * 마감이 지난 활동이 하나라도 있으면 로드맵을 다시 생성해야 한다.
-     * (RecommendationService.hasUsableCachedActivities와 같은 목적)
-     *
-     * ⚠️ RecommendationService 쪽은 !activities.isEmpty()를 먼저 확인하는데, 이쪽엔 그
-     * 빈-목록 가드가 없었다. matchedActivities가 모든 스텝에서 전부 비어 있으면
-     * flatMap 결과가 빈 스트림이 되고, 빈 스트림에 대한 noneMatch는 항상 true를 반환한다
-     * (vacuous truth) — 즉 "사용 가능"으로 잘못 판정된다. DB에 신청 가능한 활동이 아직
-     * 하나도 없을 때(크롤러 미작동·전량 마감 등) Gemini가 activity 텍스트만 있고
-     * activityIds는 비거나 유효하지 않은 응답을 주면, parseGeminiResponse는 이 스텝을
-     * 버리지 않고(텍스트가 있으므로) aiRoadmap=true로 저장한다. 다음날 크롤러가 활동을
-     * 채워 넣어도 이 캐시는 "사용 가능"으로 영구 판정돼, 유저가 스펙을 다시 저장하기
-     * 전까지 실제 DB 활동을 절대 반영하지 못한다 — 위(263~270행) 완전-빈-스텝 케이스와
-     * 같은 자가회복 불가 상태가 "텍스트는 있지만 매칭된 활동이 하나도 없는" 케이스에도
-     * 똑같이 존재했다.
-     */
-    /**
-     * 캐시된 로드맵의 각 스텝 matchedActivities를 DB와 대조해 비활성화(is_active=false)·
-     * 삭제·마감(deadline < today)된 활동을 제거한다. 마감일이 null(상시 모집)인 활동은
-     * 유지한다. 스텝 자체(period·activity 텍스트·reason)는 그대로 두고 matchedActivities만
-     * 걸러낸다 — 전부 제거돼 빈 배열이 되어도 스텝은 남는다.
-     * 타임라인은 최대 3스텝·스텝당 소수의 활동이라 전체 distinct id에 대해 findAllById 1회면 충분하다.
+     * 함수 이름: filterStaleMatchedActivities()
+     * 기능: 캐시된 로드맵의 각 스텝 matchedActivities를 DB와 대조해 비활성화(is_active=false)·
+     *       삭제·마감(deadline < today)된 활동을 제거한다. 마감일이 null(상시 모집)인 활동은
+     *       유지한다. 스텝 자체(period·activity 텍스트·reason)는 그대로 두고 matchedActivities만
+     *       걸러낸다 — 전부 제거돼 빈 배열이 되어도 스텝은 남는다.
+     *       타임라인은 최대 3스텝·스텝당 소수의 활동이라 전체 distinct id에 대해 findAllById 1회면 충분하다.
+     * 파라미터: RoadmapResponse response -> 캐시에서 읽은 로드맵 응답
+     *           LocalDate today -> 마감 여부 판단 기준 날짜
+     * 반환값: RoadmapResponse -> 만료 활동이 제거된 로드맵(제거할 것이 없으면 원본 그대로)
      */
     private RoadmapResponse filterStaleMatchedActivities(RoadmapResponse response, LocalDate today) {
         if (response == null || response.getTimeline() == null || response.getTimeline().isEmpty()) {
@@ -560,10 +608,14 @@ public class RoadmapService {
     }
 
     /**
-     * 필터 후 매칭 활동이 0건인 캐시를 재생성할 가치가 있는지 판단한다 — 현재 DB에 추천
+     * 함수 이름: hasRecommendableCandidates()
+     * 기능: 필터 후 매칭 활동이 0건인 캐시를 재생성할 가치가 있는지 판단한다 — 현재 DB에 추천
      * 가능한(GraduateOnlyActivityFilter까지 적용한) 후보 활동이 하나라도 있어야 재생성 결과가
      * 달라질 수 있다. 후보가 0건이면 재생성해도 매칭 0건이 똑같이 나오므로, 무의미한 Gemini
      * 재호출을 막기 위해 false를 반환해 기존 캐시를 그대로 쓰게 한다.
+     * 파라미터: LocalDate today -> 후보 조회 기준 날짜
+     *           Integer grade -> 사용자 학년(대졸 공채 필터용, null 가능)
+     * 반환값: boolean -> 추천 가능한 후보가 하나라도 있으면 true
      */
     private boolean hasRecommendableCandidates(LocalDate today, Integer grade) {
         List<Activity> candidates = activityRepository.findRecommendableActivities(
@@ -572,6 +624,27 @@ public class RoadmapService {
         return !candidates.isEmpty();
     }
 
+    /**
+     * 함수 이름: hasUsableCachedActivities()
+     * 기능: 캐시된 로드맵에 붙어 있는 실제 DB 활동(matchedActivities)이 아직 유효한지 확인한다.
+     *       마감이 지난 활동이 하나라도 있으면 로드맵을 다시 생성해야 한다.
+     *       (RecommendationService.hasUsableCachedActivities와 같은 목적)
+     *
+     *       ⚠️ RecommendationService 쪽은 !activities.isEmpty()를 먼저 확인하는데, 이쪽엔 그
+     *       빈-목록 가드가 없었다. matchedActivities가 모든 스텝에서 전부 비어 있으면
+     *       flatMap 결과가 빈 스트림이 되고, 빈 스트림에 대한 noneMatch는 항상 true를 반환한다
+     *       (vacuous truth) — 즉 "사용 가능"으로 잘못 판정된다. DB에 신청 가능한 활동이 아직
+     *       하나도 없을 때(크롤러 미작동·전량 마감 등) Gemini가 activity 텍스트만 있고
+     *       activityIds는 비거나 유효하지 않은 응답을 주면, parseGeminiResponse는 이 스텝을
+     *       버리지 않고(텍스트가 있으므로) aiRoadmap=true로 저장한다. 다음날 크롤러가 활동을
+     *       채워 넣어도 이 캐시는 "사용 가능"으로 영구 판정돼, 유저가 스펙을 다시 저장하기
+     *       전까지 실제 DB 활동을 절대 반영하지 못한다 — 위(263~270행) 완전-빈-스텝 케이스와
+     *       같은 자가회복 불가 상태가 "텍스트는 있지만 매칭된 활동이 하나도 없는" 케이스에도
+     *       똑같이 존재했다.
+     * 파라미터: RoadmapResponse response -> 캐시에서 읽은 로드맵(null 가능)
+     *           LocalDate today -> 마감 여부 판단 기준 날짜
+     * 반환값: boolean -> 매칭 활동이 있고 마감된 것이 없으면 true, 비었거나 마감된 활동이 있으면 false
+     */
     private boolean hasUsableCachedActivities(RoadmapResponse response, LocalDate today) {
         if (response == null || response.getTimeline() == null) {
             return false;
@@ -585,6 +658,14 @@ public class RoadmapService {
                         && activity.getDeadline().isBefore(today));
     }
 
+    /**
+     * 함수 이름: isSpecModifiedSince()
+     * 기능: 사용자 스펙 또는 목표 직무가 캐시 생성 시각 이후에 수정됐는지 판단한다. 캐시 생성 시각이 없으면 수정된 것으로 본다.
+     * 파라미터: UserSpec userSpec -> 현재 사용자 스펙(null 가능)
+     *           TargetJob targetJob -> 현재 목표 직무(null 가능)
+     *           LocalDateTime cacheCreatedAt -> 캐시 생성 시각
+     * 반환값: boolean -> 수정됐으면 true
+     */
     private boolean isSpecModifiedSince(UserSpec userSpec, TargetJob targetJob, java.time.LocalDateTime cacheCreatedAt) {
         if (cacheCreatedAt == null) return true;
         if (userSpec != null && userSpec.getUpdatedAt() != null && userSpec.getUpdatedAt().isAfter(cacheCreatedAt)) {
